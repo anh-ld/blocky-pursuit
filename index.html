@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smashy Road</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Righteous&family=Black+Ops+One&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #000;
+        width: 100vw;
+        height: 100vh;
+        font-family: "Righteous", cursive;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #ui-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+      }
+      #score-display {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        color: #219ebc;
+        font-family: "Righteous", cursive;
+        font-size: 36px;
+        text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.2);
+        display: none;
+        -webkit-text-stroke: 0px;
+      }
+      .screen {
+        background: #fff;
+        padding: 30px 40px;
+        text-align: center;
+        color: #000;
+        pointer-events: auto;
+        display: none;
+        transform: scale(0.95);
+        opacity: 0;
+        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        max-width: 400px;
+      }
+      .screen.visible {
+        display: block;
+        transform: scale(1);
+        opacity: 1;
+      }
+      h1 {
+        color: #219ebc;
+        margin: 0 0 10px 0;
+        font-size: 54px;
+        text-transform: uppercase;
+        text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.2);
+        -webkit-text-stroke: 0px;
+      }
+      .subtitle {
+        color: #000;
+        font-size: 18px;
+        margin-bottom: 30px;
+        text-transform: uppercase;
+        font-weight: bold;
+      }
+      .controls-hint {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: 30px;
+      }
+      .key {
+        background: #fff;
+        border: 2px solid rgba(0, 0, 0, 0.1);
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Righteous", cursive;
+        font-size: 18px;
+        color: #023047;
+        box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
+      }
+      button {
+        font-family: "Righteous", cursive;
+        background: #ffb703;
+        color: #023047;
+        border: none;
+        padding: 15px 30px;
+        font-size: 24px;
+        cursor: pointer;
+        transition: all 0.1s ease;
+        box-shadow: 0px 4px 0px #e9c46a;
+        text-transform: uppercase;
+        width: 100%;
+      }
+      button:hover {
+        transform: translateY(2px);
+        box-shadow: 0px 2px 0px #e9c46a;
+        background: #ffc233;
+      }
+      button:active {
+        transform: translateY(4px);
+        box-shadow: 0px 0px 0px #e9c46a;
+      }
+
+      #game-over-screen h1 {
+        color: #e76f51;
+        text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.2);
+        -webkit-text-stroke: 0px;
+      }
+
+      #game-over-screen button {
+        background: #e76f51;
+        color: #fff;
+        box-shadow: 0px 4px 0px #f4a261;
+      }
+      #game-over-screen button:hover {
+        background: #f48a70;
+        box-shadow: 0px 2px 0px #f4a261;
+      }
+      #game-over-screen button:active {
+        box-shadow: 0px 0px 0px #f4a261;
+      }
+
+      #final-score {
+        color: #219ebc;
+        font-family: "Righteous", cursive;
+        font-size: 48px;
+        margin: 0 0 30px 0;
+        text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
+        -webkit-text-stroke: 0px;
+      }
+      .score-label {
+        color: #023047;
+        font-size: 16px;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui-layer">
+      <div id="score-display">00:00</div>
+
+      <div id="start-screen" class="screen visible">
+        <h1>BLOCKY<br />PURSUIT</h1>
+        <div class="subtitle">Evade the authorities</div>
+        <div class="controls-hint">
+          <div class="key">W</div>
+          <div class="key">A</div>
+          <div class="key">S</div>
+          <div class="key">D</div>
+        </div>
+        <button id="start-btn">START ENGINE</button>
+      </div>
+
+      <div id="game-over-screen" class="screen">
+        <h1>BUSTED</h1>
+        <div class="score-label">SURVIVED FOR</div>
+        <div id="final-score">00:00</div>
+        <button id="restart-btn">TRY AGAIN</button>
+      </div>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

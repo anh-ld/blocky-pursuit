@@ -12,5 +12,7 @@ export default defineConfig({
     "btn-danger":
       "btn bg-red-400 text-white hover:translate-y-0.5 active:translate-y-1",
     kbd: "bg-gray-100 w-11 h-11 flex items-center justify-center text-black text-sm font-extrabold",
+    "kbd-sm":
+      "bg-gray-100/80 w-5 h-5 flex items-center justify-center text-black text-[10px] font-bold leading-none",
   },
 });

@@ -97,10 +97,14 @@ export class CityGenerator {
     downtownColors: THREE.MeshStandardMaterial[];
     // Suburbs: warm residential colors
     suburbColors: THREE.MeshStandardMaterial[];
+    window: THREE.MeshStandardMaterial;
+    rooftopAC: THREE.MeshStandardMaterial;
     tree: THREE.MeshStandardMaterial;
     treeDark: THREE.MeshStandardMaterial;
     trunk: THREE.MeshStandardMaterial;
     rock: THREE.MeshStandardMaterial;
+    driveway: THREE.MeshStandardMaterial;
+    lilypad: THREE.MeshStandardMaterial;
     flower: THREE.MeshStandardMaterial[];
   };
   geometries: {
@@ -138,10 +142,21 @@ export class CityGenerator {
         0xffe082, 0xffcc80, // warm yellows
         0xbcaaa4, // brown
       ].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.05, ...flat })),
+      window: new THREE.MeshStandardMaterial({
+        color: 0xbbdefb,
+        emissive: 0x90caf9,
+        emissiveIntensity: 0.3,
+        roughness: 0.1,
+        metalness: 0.4,
+        ...flat,
+      }),
+      rooftopAC: new THREE.MeshStandardMaterial({ color: 0x757575, roughness: 0.9, ...flat }),
       tree: new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.9, ...flat }),
       treeDark: new THREE.MeshStandardMaterial({ color: 0x1b5e20, roughness: 0.9, ...flat }),
       trunk: new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.9, ...flat }),
       rock: new THREE.MeshStandardMaterial({ color: 0x9e9e9e, roughness: 1.0, ...flat }),
+      driveway: new THREE.MeshStandardMaterial({ color: 0xbdbdbd, roughness: 0.9, ...flat }),
+      lilypad: new THREE.MeshStandardMaterial({ color: 0x4caf50, roughness: 0.8, ...flat }),
       flower: [0xe91e63, 0xffeb3b, 0x9c27b0, 0xff5722].map(
         (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, ...flat }),
       ),
@@ -222,7 +237,7 @@ export class CityGenerator {
         tileMesh.receiveShadow = true;
         chunk.group.add(tileMesh);
 
-        // --- Water: add physics wall (cars can't drive through) ---
+        // --- Water: add physics wall and decorations ---
         if (isWaterTile) {
           // Invisible wall to block cars
           const waterShape = new CANNON.Box(new CANNON.Vec3(TILE_SIZE / 2, 2, TILE_SIZE / 2));
@@ -231,6 +246,31 @@ export class CityGenerator {
           waterBody.position.set(worldX, 2, worldZ);
           this.world.addBody(waterBody);
           chunk.bodies.push(waterBody);
+
+          // Lily pads
+          const lilyR = pseudoRandom(globalTileX, globalTileZ, 600);
+          if (lilyR > 0.5) {
+            const count = 1 + Math.floor(lilyR * 3);
+            for (let lp = 0; lp < count; lp++) {
+              const lx = worldX + (pseudoRandom(globalTileX, globalTileZ, 610 + lp) - 0.5) * 7;
+              const lz = worldZ + (pseudoRandom(globalTileX, globalTileZ, 620 + lp) - 0.5) * 7;
+              const size = 0.4 + pseudoRandom(globalTileX, globalTileZ, 630 + lp) * 0.5;
+              const pad = new THREE.Mesh(this.geometries.building, this.materials.lilypad);
+              pad.scale.set(size, 0.05, size);
+              pad.position.set(lx, 0.03, lz);
+              chunk.group.add(pad);
+
+              // Occasional flower on lily pad
+              if (pseudoRandom(globalTileX, globalTileZ, 640 + lp) > 0.6) {
+                const flowerIdx = Math.floor(pseudoRandom(globalTileX, globalTileZ, 650 + lp) * this.materials.flower.length);
+                const f = new THREE.Mesh(this.geometries.building, this.materials.flower[flowerIdx]);
+                f.scale.set(0.2, 0.3, 0.2);
+                f.position.set(lx, 0.15, lz);
+                chunk.group.add(f);
+              }
+            }
+          }
+
           continue;
         }
 
@@ -337,6 +377,9 @@ export class CityGenerator {
       body.position.set(x, height / 2, z);
       this.world.addBody(body);
       chunk.bodies.push(body);
+
+      this.addWindows(chunk, x, z, width, height, depth);
+      this.addRooftopDetail(chunk, x, z, height, width, depth, r4);
     }
     // 15% small tree/planter
     else if (r1 > 0.45) {
@@ -375,6 +418,45 @@ export class CityGenerator {
       body.position.set(x, height / 2, z);
       this.world.addBody(body);
       chunk.bodies.push(body);
+
+      this.addWindows(chunk, x, z, width, height, depth);
+
+      // Pitched roof (triangular prism using ExtrudeGeometry)
+      const roofOverhang = 0.5;
+      const roofW = width / 2 + roofOverhang;
+      const roofH = 1.5 + r2 * 1;
+      const roofShape = new THREE.Shape();
+      roofShape.moveTo(-roofW, 0);
+      roofShape.lineTo(0, roofH);
+      roofShape.lineTo(roofW, 0);
+      roofShape.closePath();
+      const roofGeo = new THREE.ExtrudeGeometry(roofShape, {
+        depth: depth + roofOverhang * 2,
+        bevelEnabled: false,
+      });
+      const roofColorIdx = Math.floor(r4 * 3);
+      const roofColors = [0x8d6e63, 0x795548, 0xa1887f]; // brown roof tones
+      const roofMat = new THREE.MeshStandardMaterial({
+        color: roofColors[roofColorIdx],
+        roughness: 0.8,
+        flatShading: true,
+      });
+      const roofMesh = new THREE.Mesh(roofGeo, roofMat);
+      roofMesh.position.set(x, height, z - depth / 2 - roofOverhang);
+      roofMesh.castShadow = true;
+      chunk.group.add(roofMesh);
+
+      // Door (front face)
+      const door = new THREE.Mesh(this.geometries.building, this.materials.trunk);
+      door.scale.set(0.8, 1.4, 0.15);
+      door.position.set(x, 0.7, z - depth / 2 - 0.08);
+      chunk.group.add(door);
+
+      // Driveway
+      const dw = new THREE.Mesh(this.geometries.building, this.materials.driveway);
+      dw.scale.set(1.5, 0.04, 3);
+      dw.position.set(x, 0.02, z - depth / 2 - 1.5);
+      chunk.group.add(dw);
     }
     // 30% tree
     else if (r1 > 0.5) {
@@ -472,6 +554,88 @@ export class CityGenerator {
       flower.scale.set(0.4, 0.6, 0.4);
       flower.position.set(fx, 0.3, fz);
       chunk.group.add(flower);
+    }
+  }
+
+  // --- Windows on building faces ---
+  addWindows(
+    chunk: { group: THREE.Group; bodies: CANNON.Body[] },
+    x: number,
+    z: number,
+    width: number,
+    height: number,
+    depth: number,
+  ) {
+    const winSize = 0.6;
+    const winDepth = 0.1;
+    const spacingY = 2.5;
+    const spacingH = 2.0;
+
+    // Place windows on all 4 faces
+    const faces: { axis: "x" | "z"; dir: number; faceW: number; faceD: number }[] = [
+      { axis: "z", dir: 1, faceW: width, faceD: depth },   // front
+      { axis: "z", dir: -1, faceW: width, faceD: depth },  // back
+      { axis: "x", dir: 1, faceW: depth, faceD: width },   // right
+      { axis: "x", dir: -1, faceW: depth, faceD: width },  // left
+    ];
+
+    for (const face of faces) {
+      const cols = Math.floor((face.faceW - 1) / spacingH);
+      const rows = Math.floor((height - 1) / spacingY);
+      if (cols < 1 || rows < 1) continue;
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          // Skip some windows for variety
+          const wr = pseudoRandom(Math.floor(x * 10) + col, Math.floor(z * 10) + row, 400 + (face.axis === "x" ? face.dir * 50 : face.dir * 100));
+          if (wr < 0.35) continue;
+
+          const wy = 1.5 + row * spacingY;
+          const wOffset = -((cols - 1) * spacingH) / 2 + col * spacingH;
+
+          const win = new THREE.Mesh(this.geometries.building, this.materials.window);
+          if (face.axis === "z") {
+            win.scale.set(winSize, winSize, winDepth);
+            win.position.set(x + wOffset, wy, z + (face.dir * depth) / 2 + face.dir * 0.05);
+          } else {
+            win.scale.set(winDepth, winSize, winSize);
+            win.position.set(x + (face.dir * face.faceD) / 2 + face.dir * 0.05, wy, z + wOffset);
+          }
+          chunk.group.add(win);
+        }
+      }
+    }
+  }
+
+  // --- Rooftop details (AC units, antennas) ---
+  addRooftopDetail(
+    chunk: { group: THREE.Group; bodies: CANNON.Body[] },
+    x: number,
+    z: number,
+    height: number,
+    width: number,
+    depth: number,
+    r: number,
+  ) {
+    const roofY = height;
+
+    if (r > 0.5) {
+      // AC unit
+      const acW = 0.8 + r * 0.8;
+      const acH = 0.5 + r * 0.4;
+      const ac = new THREE.Mesh(this.geometries.building, this.materials.rooftopAC);
+      ac.scale.set(acW, acH, acW);
+      const offsetX = (r - 0.5) * (width * 0.4);
+      const offsetZ = (pseudoRandom(Math.floor(x), Math.floor(z), 500) - 0.5) * (depth * 0.4);
+      ac.position.set(x + offsetX, roofY + acH / 2, z + offsetZ);
+      chunk.group.add(ac);
+    } else if (r > 0.25) {
+      // Antenna pole
+      const poleH = 1.5 + r * 3;
+      const pole = new THREE.Mesh(this.geometries.building, this.materials.rooftopAC);
+      pole.scale.set(0.15, poleH, 0.15);
+      pole.position.set(x, roofY + poleH / 2, z);
+      chunk.group.add(pole);
     }
   }
 

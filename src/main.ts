@@ -9,7 +9,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb); // Vibrant Sky Blue
 
 // --- Isometric Camera Setup ---
-const aspect = window.innerWidth / window.innerHeight;
+const aspect = 1; // will be set properly after gameArea is measured
 const d = 50; // Zoomed out to show much more of the city and roads
 // Orthographic camera for a true isometric look
 const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
@@ -18,12 +18,13 @@ camera.position.set(50, 50, 50);
 camera.lookAt(scene.position);
 
 // --- Renderer Setup ---
+const gameArea = document.getElementById("game-area") as HTMLElement;
 const renderer = new THREE.WebGLRenderer({ antialias: false });
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(gameArea.clientWidth, gameArea.clientHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.BasicShadowMap;
-document.body.appendChild(renderer.domElement);
+gameArea.appendChild(renderer.domElement);
 
 // --- Lighting Setup ---
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -66,15 +67,19 @@ cityGenerator.update(new THREE.Vector3(0, 0, 0));
 const car = new Car(scene, world);
 
 // Handle Window Resize
-window.addEventListener("resize", () => {
-  const aspect = window.innerWidth / window.innerHeight;
+function resizeRenderer() {
+  const w = gameArea.clientWidth;
+  const h = gameArea.clientHeight;
+  const aspect = w / h;
   camera.left = -d * aspect;
   camera.right = d * aspect;
   camera.top = d;
   camera.bottom = -d;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+  renderer.setSize(w, h);
+}
+resizeRenderer();
+window.addEventListener("resize", resizeRenderer);
 
 // --- Cops Setup ---
 const cops: Cop[] = [];
@@ -93,9 +98,9 @@ const GAME_STATE = {
 let currentState = GAME_STATE.START;
 let survivalTime = 0;
 
-const uiStartScreen = document.getElementById("start-screen") as HTMLElement;
-const uiGameOverScreen = document.getElementById("game-over-screen") as HTMLElement;
-const uiScoreDisplay = document.getElementById("score-display") as HTMLElement;
+const uiGameTitle = document.getElementById("game-title") as HTMLElement;
+const uiTimerDisplay = document.getElementById("timer-display") as HTMLElement;
+const uiGameOverInfo = document.getElementById("game-over-info") as HTMLElement;
 const uiFinalScore = document.getElementById("final-score") as HTMLElement;
 const btnStart = document.getElementById("start-btn") as HTMLElement;
 const btnRestart = document.getElementById("restart-btn") as HTMLElement;
@@ -108,46 +113,42 @@ function formatTime(seconds: number) {
 }
 
 function startGame() {
-  uiStartScreen.classList.remove("panel-visible");
-  uiGameOverScreen.classList.remove("panel-visible");
+  // Hide start elements, show timer
+  uiGameTitle.classList.add("hidden");
+  btnStart.classList.add("hidden");
+  uiGameOverInfo.classList.remove("flex");
+  uiGameOverInfo.classList.add("hidden");
+  uiTimerDisplay.classList.remove("hidden");
+  uiTimerDisplay.innerText = "00:00.00";
 
-  // Small delay to allow CSS transition to play before hiding
-  setTimeout(() => {
-    uiScoreDisplay.classList.remove("hidden");
-    uiScoreDisplay.classList.add("block");
-    uiScoreDisplay.innerText = `00:00.00`;
+  currentState = GAME_STATE.PLAYING;
+  survivalTime = 0;
+  bustedTimer = 0;
 
-    currentState = GAME_STATE.PLAYING;
-    survivalTime = 0;
-    bustedTimer = 0;
+  // Reset Player
+  car.body.position.set(0, 5, 0);
+  car.body.velocity.set(0, 0, 0);
+  car.body.angularVelocity.set(0, 0, 0);
+  car.body.quaternion.set(0, 0, 0, 1);
 
-    // Reset Player
-    car.body.position.set(0, 5, 0);
-    car.body.velocity.set(0, 0, 0);
-    car.body.angularVelocity.set(0, 0, 0);
-    car.body.quaternion.set(0, 0, 0, 1);
+  // Instantly teleport camera to player so it doesn't lerp across the map
+  camera.position.set(50, 55, 50);
 
-    // Instantly teleport camera to player so it doesn't lerp across the map
-    camera.position.set(50, 55, 50);
+  // Clear Cops
+  cops.forEach((cop) => cop.destroy());
+  cops.length = 0;
 
-    // Clear Cops
-    cops.forEach((cop) => cop.destroy());
-    cops.length = 0;
-
-    lastCallTime = performance.now() / 1000;
-    lastCopSpawnTime = lastCallTime;
-  }, 250);
+  lastCallTime = performance.now() / 1000;
+  lastCopSpawnTime = lastCallTime;
 }
 
 function gameOver() {
   currentState = GAME_STATE.GAMEOVER;
-  uiScoreDisplay.classList.remove("block");
-  uiScoreDisplay.classList.add("hidden");
 
-  // Force reflow to ensure transition works
-  void uiGameOverScreen.offsetWidth;
-
-  uiGameOverScreen.classList.add("panel-visible");
+  // Hide timer, show game over info
+  uiTimerDisplay.classList.add("hidden");
+  uiGameOverInfo.classList.remove("hidden");
+  uiGameOverInfo.classList.add("flex");
   uiFinalScore.innerText = formatTime(survivalTime);
 }
 
@@ -212,7 +213,7 @@ function animate(time: number) {
 
     // Update survival time
     survivalTime += dt;
-    uiScoreDisplay.innerText = formatTime(survivalTime);
+    uiTimerDisplay.innerText = formatTime(survivalTime);
 
     // Cop Spawning Logic
     if (timeInSeconds - lastCopSpawnTime > COP_SPAWN_INTERVAL) {

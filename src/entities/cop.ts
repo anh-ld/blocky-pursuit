@@ -40,8 +40,8 @@ export class Cop {
     bodyMesh.receiveShadow = true;
     this.mesh.add(bodyMesh);
 
-    // Cabin
-    const cabinGeo = new THREE.BoxGeometry(unit * 3, unit * 1.5, unit * 4);
+    // Cabin (shifted toward rear so front hood is visible)
+    const cabinGeo = new THREE.BoxGeometry(unit * 3, unit * 1.5, unit * 3);
     const cabinMat = new THREE.MeshStandardMaterial({
       color: cabinColor,
       roughness: 0.3,
@@ -50,12 +50,12 @@ export class Cop {
     });
     const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
     cabinMesh.position.y = unit * 2.25;
-    cabinMesh.position.z = -unit * 0.5;
+    cabinMesh.position.z = unit * 1.5; // rear half
     cabinMesh.castShadow = true;
     cabinMesh.receiveShadow = true;
     this.mesh.add(cabinMesh);
 
-    // Lights
+    // Siren lights (on top of cabin)
     const lightGeo = new THREE.BoxGeometry(unit, unit * 0.5, unit);
     const redLightMat = new THREE.MeshStandardMaterial({
       color: lightRed,
@@ -71,12 +71,49 @@ export class Cop {
     });
 
     const redLight = new THREE.Mesh(lightGeo, redLightMat);
-    redLight.position.set(-unit, unit * 3.25, -unit * 0.5);
+    redLight.position.set(-unit, unit * 3.25, unit * 1.5);
     this.mesh.add(redLight);
 
     const blueLight = new THREE.Mesh(lightGeo, blueLightMat);
-    blueLight.position.set(unit, unit * 3.25, -unit * 0.5);
+    blueLight.position.set(unit, unit * 3.25, unit * 1.5);
     this.mesh.add(blueLight);
+
+    // Front grille
+    const grilleGeo = new THREE.BoxGeometry(unit * 3.2, unit * 0.6, unit * 0.2);
+    const grilleMat = new THREE.MeshStandardMaterial({ color: 0x222222, flatShading: true });
+    const grille = new THREE.Mesh(grilleGeo, grilleMat);
+    grille.position.set(0, unit * 0.9, -unit * 4.1);
+    this.mesh.add(grille);
+
+    // Headlights (front = -Z)
+    const headlightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
+    const headlightMat = new THREE.MeshStandardMaterial({
+      color: 0xffee88,
+      emissive: 0xffee88,
+      emissiveIntensity: 0.8,
+      flatShading: true,
+    });
+    const hlLeft = new THREE.Mesh(headlightGeo, headlightMat);
+    hlLeft.position.set(-unit * 1.5, unit * 1.1, -unit * 4.1);
+    this.mesh.add(hlLeft);
+    const hlRight = new THREE.Mesh(headlightGeo, headlightMat);
+    hlRight.position.set(unit * 1.5, unit * 1.1, -unit * 4.1);
+    this.mesh.add(hlRight);
+
+    // Taillights (rear = +Z, red)
+    const taillightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
+    const taillightMat = new THREE.MeshStandardMaterial({
+      color: 0xff2222,
+      emissive: 0xff2222,
+      emissiveIntensity: 0.6,
+      flatShading: true,
+    });
+    const tlLeft = new THREE.Mesh(taillightGeo, taillightMat);
+    tlLeft.position.set(-unit * 1.5, unit * 1.1, unit * 4.1);
+    this.mesh.add(tlLeft);
+    const tlRight = new THREE.Mesh(taillightGeo, taillightMat);
+    tlRight.position.set(unit * 1.5, unit * 1.1, unit * 4.1);
+    this.mesh.add(tlRight);
 
     // Wheels
     const wheelGeo = new THREE.BoxGeometry(unit, unit, unit);

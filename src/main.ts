@@ -129,7 +129,9 @@ function startGame() {
   car.body.position.set(0, 5, 0);
   car.body.velocity.set(0, 0, 0);
   car.body.angularVelocity.set(0, 0, 0);
-  car.body.quaternion.set(0, 0, 0, 1);
+  car.bounceBackTimer = 0;
+  car.recoveryTimer = 0;
+  car.setRandomDirection();
 
   // Instantly teleport camera to player so it doesn't lerp across the map
   camera.position.set(50, 55, 50);

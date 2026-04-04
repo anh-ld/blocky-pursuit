@@ -6,10 +6,14 @@ export class Car {
   world: CANNON.World;
   mesh: THREE.Group;
   body: CANNON.Body;
-  keys: { forward: boolean; backward: boolean; left: boolean; right: boolean };
+  keys: { left: boolean; right: boolean };
   forwardForce: number;
   maxSpeed: number;
   turnSpeed: number;
+  bounceBackTimer: number;
+  bounceBackDuration: number;
+  recoveryTimer: number;
+  recoveryDuration: number;
 
   constructor(scene: THREE.Scene, world: CANNON.World) {
     this.scene = scene;
@@ -176,31 +180,73 @@ export class Car {
 
     // --- Controls ---
     this.keys = {
-      forward: false,
-      backward: false,
       left: false,
       right: false,
     };
 
     // Tuning parameters
-    this.forwardForce = 150000; // Drastically increased force to make it fast
-    this.maxSpeed = 40; // Cap the speed so it doesn't accelerate infinitely
-    this.turnSpeed = 2.5; // Adjusted turn speed
+    this.forwardForce = 150000;
+    this.maxSpeed = 40;
+    this.turnSpeed = 2.5;
+
+    // Collision bounce-back state
+    this.bounceBackTimer = 0;
+    this.bounceBackDuration = 1.25; // seconds to reverse after collision
+    this.recoveryTimer = 0;
+    this.recoveryDuration = 1.0; // seconds of gentle acceleration after bounce-back
+
+    // Listen for collisions with static objects (buildings, walls, etc.)
+    this.body.addEventListener("collide", (event: { body: CANNON.Body }) => {
+      const other = event.body;
+      // Static bodies (mass 0) that aren't the ground plane (ground has no bounding box shape)
+      if (other.mass === 0 && other.shapes[0] instanceof CANNON.Box) {
+        this.bounceBackTimer = this.bounceBackDuration;
+      }
+    });
 
     this.world.addEventListener("preStep", () => {
-      // Always wake the body up
       this.body.wakeUp();
 
       // Don't allow control while airborne (e.g. initial drop)
       if (this.body.position.y > 1.5) return;
 
-      // 1. Acceleration
-      if (this.keys.forward) {
-        const force = new CANNON.Vec3(0, 0, -this.forwardForce);
+      // 1. Auto-drive with acceleration curve (both directions start from 0)
+      const localVel = new CANNON.Vec3();
+      this.body.vectorToLocalFrame(this.body.velocity, localVel);
+      const forwardSpeed = -localVel.z; // positive = moving forward
+      const maxReverseSpeed = this.maxSpeed * 0.15; // 15% of forward top speed (~6 units)
+
+      if (this.bounceBackTimer > 0) {
+        // Reverse: strong torque at standstill, tapering as it approaches max reverse
+        const reverseSpeed = Math.max(0, -forwardSpeed);
+        const reverseRatio = Math.min(reverseSpeed / maxReverseSpeed, 1);
+        const reverseScale = 0.2 * (1 - reverseRatio * 0.8);
+        const force = new CANNON.Vec3(0, 0, this.forwardForce * reverseScale);
         this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
-      }
-      if (this.keys.backward) {
-        const force = new CANNON.Vec3(0, 0, this.forwardForce);
+
+        // Cap reverse speed
+        if (reverseSpeed > maxReverseSpeed) {
+          localVel.z = maxReverseSpeed;
+          this.body.vectorToWorldFrame(localVel, this.body.velocity);
+        }
+      } else {
+        // Forward: peak torque at low speed, tapering toward top speed
+        let forceScale: number;
+        if (forwardSpeed < 0) {
+          forceScale = 0.8;
+        } else {
+          const speedRatio = Math.min(forwardSpeed / this.maxSpeed, 1);
+          forceScale = 1.0 - speedRatio * 0.7;
+        }
+
+        // Recovery phase: gentle ramp after bounce-back so steering has time to work
+        if (this.recoveryTimer > 0) {
+          const recoveryProgress = 1 - this.recoveryTimer / this.recoveryDuration; // 0→1
+          // Ramp from 15% to 100% over recovery duration
+          forceScale *= 0.15 + 0.85 * recoveryProgress;
+        }
+
+        const force = new CANNON.Vec3(0, 0, -this.forwardForce * forceScale);
         this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
       }
 
@@ -208,11 +254,9 @@ export class Car {
       const localVelocity = new CANNON.Vec3();
       this.body.vectorToLocalFrame(this.body.velocity, localVelocity);
 
-      // Dampen lateral velocity (X) for grip, and forward velocity (Z) for drag
-      localVelocity.x *= 0.85; // 0.85 allows a little drifting but snaps back (grip)
-      localVelocity.z *= 0.98; // Light forward drag
+      localVelocity.x *= 0.85;
+      localVelocity.z *= 0.98;
 
-      // Convert back to world velocity and apply
       this.body.vectorToWorldFrame(localVelocity, this.body.velocity);
 
       // Cap max speed
@@ -221,26 +265,20 @@ export class Car {
         this.body.velocity.scale(this.maxSpeed / speed, this.body.velocity);
       }
 
-      // 3. Steering
-      if (speed > 1.0) {
-        // Only steer if moving
-        // Direction multiplier: 1 if moving forward (local Z is negative), -1 if backward
+      // 3. Steering (full turn power at any speed — car is always auto-driving)
+      if (speed > 0.5) {
         const dir = localVelocity.z < 0 ? 1 : -1;
-
-        // Turn sharpness scales slightly with speed
-        const turnMultiplier = Math.min(speed / 10, 1.0);
 
         let targetTurn = 0;
         if (this.keys.left) {
-          targetTurn = this.turnSpeed * turnMultiplier * dir;
+          targetTurn = this.turnSpeed * dir;
         } else if (this.keys.right) {
           targetTurn = -this.turnSpeed * dir;
         }
 
-        // Lerp angular velocity for smooth, natural steering
         this.body.angularVelocity.y += (targetTurn - this.body.angularVelocity.y) * 0.3;
       } else {
-        this.body.angularVelocity.y *= 0.8; // Dampen rotation when nearly stopped
+        this.body.angularVelocity.y *= 0.8;
       }
     });
 
@@ -254,25 +292,39 @@ export class Car {
 
   handleKeyDown(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
-    // Prevent default scrolling for arrow keys and space
-    if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) {
+    if (["arrowleft", "arrowright", "a", "d", " "].includes(key)) {
       e.preventDefault();
     }
-    if (key === "w" || key === "arrowup") this.keys.forward = true;
-    if (key === "s" || key === "arrowdown") this.keys.backward = true;
     if (key === "a" || key === "arrowleft") this.keys.left = true;
     if (key === "d" || key === "arrowright") this.keys.right = true;
   }
 
   handleKeyUp(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
-    if (key === "w" || key === "arrowup") this.keys.forward = false;
-    if (key === "s" || key === "arrowdown") this.keys.backward = false;
     if (key === "a" || key === "arrowleft") this.keys.left = false;
     if (key === "d" || key === "arrowright") this.keys.right = false;
   }
 
-  update(_dt: number) {
+  /** Set a random facing direction (Y-axis rotation) */
+  setRandomDirection() {
+    const angle = Math.random() * Math.PI * 2;
+    this.body.quaternion.setFromEuler(0, angle, 0);
+  }
+
+  update(dt: number) {
+    // Tick down bounce-back timer; start recovery when it expires
+    if (this.bounceBackTimer > 0) {
+      this.bounceBackTimer -= dt;
+      if (this.bounceBackTimer <= 0) {
+        this.recoveryTimer = this.recoveryDuration;
+      }
+    }
+
+    // Tick down recovery timer
+    if (this.recoveryTimer > 0) {
+      this.recoveryTimer -= dt;
+    }
+
     // Sync visuals
     this.mesh.position.set(this.body.position.x, this.body.position.y, this.body.position.z);
     this.mesh.quaternion.set(

@@ -9,6 +9,10 @@ export class Cop {
   forwardForce: number;
   maxSpeed: number;
   turnSpeed: number;
+  bounceBackTimer: number;
+  bounceBackDuration: number;
+  recoveryTimer: number;
+  recoveryDuration: number;
   targetPosition: THREE.Vector3 | null = null;
   preStepCallback: () => void;
 
@@ -155,24 +159,75 @@ export class Cop {
     world.addBody(this.body);
 
     // Tuning parameters
-    this.forwardForce = 135000; // Scaled up to match player
+    this.forwardForce = 135000;
     this.turnSpeed = 2.0;
-    this.maxSpeed = 35; // Speed limit
+    this.maxSpeed = 35;
+
+    // Collision bounce-back state (same as player car)
+    this.bounceBackTimer = 0;
+    this.bounceBackDuration = 1.25;
+    this.recoveryTimer = 0;
+    this.recoveryDuration = 1.0;
+
+    // Listen for collisions with static objects (buildings, walls, etc.)
+    this.body.addEventListener("collide", (event: { body: CANNON.Body }) => {
+      const other = event.body;
+      if (other.mass === 0 && other.shapes[0] instanceof CANNON.Box) {
+        this.bounceBackTimer = this.bounceBackDuration;
+      }
+    });
+
     this.preStepCallback = () => {
       if (!this.targetPosition) return;
 
-      // Ensure body is awake
       this.body.wakeUp();
 
-      // Custom Arcade Friction (Drift Mechanics)
+      // 1. Auto-drive with acceleration curve (same as player car)
+      const localVel = new CANNON.Vec3();
+      this.body.vectorToLocalFrame(this.body.velocity, localVel);
+      const forwardSpeed = -localVel.z;
+      const maxReverseSpeed = this.maxSpeed * 0.15;
+
+      if (this.bounceBackTimer > 0) {
+        // Reverse: strong torque at standstill, tapering near max reverse
+        const reverseSpeed = Math.max(0, -forwardSpeed);
+        const reverseRatio = Math.min(reverseSpeed / maxReverseSpeed, 1);
+        const reverseScale = 0.2 * (1 - reverseRatio * 0.8);
+        const force = new CANNON.Vec3(0, 0, this.forwardForce * reverseScale);
+        this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
+
+        // Cap reverse speed
+        if (reverseSpeed > maxReverseSpeed) {
+          localVel.z = maxReverseSpeed;
+          this.body.vectorToWorldFrame(localVel, this.body.velocity);
+        }
+      } else {
+        // Forward: peak torque at low speed, tapering toward top speed
+        let forceScale: number;
+        if (forwardSpeed < 0) {
+          forceScale = 0.8;
+        } else {
+          const speedRatio = Math.min(forwardSpeed / this.maxSpeed, 1);
+          forceScale = 1.0 - speedRatio * 0.7;
+        }
+
+        // Recovery phase: gentle ramp after bounce-back
+        if (this.recoveryTimer > 0) {
+          const recoveryProgress = 1 - this.recoveryTimer / this.recoveryDuration;
+          forceScale *= 0.15 + 0.85 * recoveryProgress;
+        }
+
+        const force = new CANNON.Vec3(0, 0, -this.forwardForce * forceScale);
+        this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
+      }
+
+      // 2. Arcade friction (drift mechanics)
       const localVelocity = new CANNON.Vec3();
       this.body.vectorToLocalFrame(this.body.velocity, localVelocity);
 
-      // Dampen lateral velocity (X) for grip, and forward velocity (Z) for drag
       localVelocity.x *= 0.85;
       localVelocity.z *= 0.98;
 
-      // Convert back to world velocity and apply
       this.body.vectorToWorldFrame(localVelocity, this.body.velocity);
 
       // Cap max speed
@@ -181,44 +236,36 @@ export class Cop {
         this.body.velocity.scale(this.maxSpeed / speed, this.body.velocity);
       }
 
-      // Direction vector to target
-      const targetDir = new CANNON.Vec3(
-        this.targetPosition.x - this.body.position.x,
-        0,
-        this.targetPosition.z - this.body.position.z,
-      );
-      targetDir.normalize();
+      // 3. Steering toward player (allowed during bounce-back to redirect)
+      if (speed > 0.5) {
+        const targetDir = new CANNON.Vec3(
+          this.targetPosition.x - this.body.position.x,
+          0,
+          this.targetPosition.z - this.body.position.z,
+        );
+        targetDir.normalize();
 
-      // Forward vector of the cop (local -Z)
-      const forward = new CANNON.Vec3(0, 0, -1);
-      const worldForward = new CANNON.Vec3();
-      this.body.quaternion.vmult(forward, worldForward);
-      worldForward.y = 0;
-      worldForward.normalize();
+        const forward = new CANNON.Vec3(0, 0, -1);
+        const worldForward = new CANNON.Vec3();
+        this.body.quaternion.vmult(forward, worldForward);
+        worldForward.y = 0;
+        worldForward.normalize();
 
-      // Determine if target is to the left or right
-      const cross = new CANNON.Vec3();
-      worldForward.cross(targetDir, cross);
-      const dot = worldForward.dot(targetDir);
+        const cross = new CANNON.Vec3();
+        worldForward.cross(targetDir, cross);
+        const dot = worldForward.dot(targetDir);
 
-      // Apply forward force if below max speed
-      if (this.body.velocity.length() < this.maxSpeed) {
-        const force = new CANNON.Vec3(0, 0, -this.forwardForce);
-        this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
-      }
-
-      // Steering
-      // If the target is somewhat in front (dot > -0.5), steer normally
-      // If it's behind, still try to turn around
-      if (dot < 0.98) {
-        // Not pointing directly at target
-        let targetTurn = 0;
-        if (cross.y > 0) {
-          targetTurn = this.turnSpeed; // Turn left
+        if (dot < 0.98) {
+          let targetTurn = 0;
+          if (cross.y > 0) {
+            targetTurn = this.turnSpeed;
+          } else {
+            targetTurn = -this.turnSpeed;
+          }
+          this.body.angularVelocity.y += (targetTurn - this.body.angularVelocity.y) * 0.3;
         } else {
-          targetTurn = -this.turnSpeed; // Turn right
+          this.body.angularVelocity.y *= 0.8;
         }
-        this.body.angularVelocity.y += (targetTurn - this.body.angularVelocity.y) * 0.3;
       } else {
         this.body.angularVelocity.y *= 0.8;
       }
@@ -227,8 +274,21 @@ export class Cop {
     this.world.addEventListener("preStep", this.preStepCallback);
   }
 
-  update(_dt: number, targetPosition: THREE.Vector3) {
+  update(dt: number, targetPosition: THREE.Vector3) {
     this.targetPosition = targetPosition;
+
+    // Tick down bounce-back timer; start recovery when it expires
+    if (this.bounceBackTimer > 0) {
+      this.bounceBackTimer -= dt;
+      if (this.bounceBackTimer <= 0) {
+        this.recoveryTimer = this.recoveryDuration;
+      }
+    }
+
+    // Tick down recovery timer
+    if (this.recoveryTimer > 0) {
+      this.recoveryTimer -= dt;
+    }
 
     // Sync visuals
     this.mesh.position.set(this.body.position.x, this.body.position.y, this.body.position.z);

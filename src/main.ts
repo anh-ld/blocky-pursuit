@@ -3,6 +3,7 @@ import * as CANNON from "cannon-es";
 import { Car } from "./entities/car";
 import { Cop } from "./entities/cop";
 import { CityGenerator, isRoad } from "./world/city-generator";
+import { isWater, TILE_SIZE } from "./world/terrain";
 
 // --- Scene Setup ---
 const scene = new THREE.Scene();
@@ -101,15 +102,15 @@ let survivalTime = 0;
 const uiGameTitle = document.getElementById("game-title") as HTMLElement;
 const uiTimerDisplay = document.getElementById("timer-display") as HTMLElement;
 const uiGameOverInfo = document.getElementById("game-over-info") as HTMLElement;
-const uiFinalScore = document.getElementById("final-score") as HTMLElement;
+
 const btnStart = document.getElementById("start-btn") as HTMLElement;
 const btnRestart = document.getElementById("restart-btn") as HTMLElement;
+const darkenOverlay = document.getElementById("darken-overlay") as HTMLElement;
 
 function formatTime(seconds: number) {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
+  const secs = Math.floor(seconds);
   const ms = Math.floor((seconds % 1) * 100);
-  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
+  return `${secs}:${ms.toString().padStart(2, "0")}`;
 }
 
 function startGame() {
@@ -119,7 +120,8 @@ function startGame() {
   uiGameOverInfo.classList.remove("flex");
   uiGameOverInfo.classList.add("hidden");
   uiTimerDisplay.classList.remove("hidden");
-  uiTimerDisplay.innerText = "00:00.00";
+  uiTimerDisplay.innerText = "0:00";
+  darkenOverlay.classList.add("opacity-0");
 
   currentState = GAME_STATE.PLAYING;
   survivalTime = 0;
@@ -147,11 +149,10 @@ function startGame() {
 function gameOver() {
   currentState = GAME_STATE.GAMEOVER;
 
-  // Hide timer, show game over info
-  uiTimerDisplay.classList.add("hidden");
+  // Show game over info, darken canvas (keep timer visible)
   uiGameOverInfo.classList.remove("hidden");
   uiGameOverInfo.classList.add("flex");
-  uiFinalScore.innerText = formatTime(survivalTime);
+  darkenOverlay.classList.remove("opacity-0");
 }
 
 btnStart.addEventListener("click", startGame);
@@ -241,6 +242,25 @@ function animate(time: number) {
       // Check if close enough for bust
       if (distToPlayer < 8) {
         isCopNearby = true;
+      }
+    }
+
+    // Water check — car loses, cop dies
+    // Use floor to match tile generation; skip if on road
+    const carTileX = Math.floor(car.body.position.x / TILE_SIZE);
+    const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
+    if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
+      gameOver();
+    }
+
+    for (let i = cops.length - 1; i >= 0; i--) {
+      const cop = cops[i];
+      if (!cop) continue;
+      const copTileX = Math.floor(cop.body.position.x / TILE_SIZE);
+      const copTileZ = Math.floor(cop.body.position.z / TILE_SIZE);
+      if (!isRoad(copTileX, copTileZ) && isWater(copTileX, copTileZ)) {
+        cop.destroy();
+        cops.splice(i, 1);
       }
     }
 

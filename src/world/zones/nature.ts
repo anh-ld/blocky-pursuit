@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
-import { pseudoRandom, TILE_SIZE } from "../terrain";
+import { pseudoRandom } from "../terrain";
 import type { Materials, Geometries } from "../materials";
 import type { ChunkData } from "../city-generator";
 import { addTree, addFlowers } from "../decorators";
@@ -50,13 +50,7 @@ export function placeWaterDecor(
   worldX: number,
   worldZ: number,
 ) {
-  // Physics wall
-  const waterShape = new CANNON.Box(new CANNON.Vec3(TILE_SIZE / 2, 2, TILE_SIZE / 2));
-  const waterBody = new CANNON.Body({ mass: 0 });
-  waterBody.addShape(waterShape);
-  waterBody.position.set(worldX, 2, worldZ);
-  chunk.world.addBody(waterBody);
-  chunk.bodies.push(waterBody);
+  // No physics wall — cars can drive into water (handled by game logic)
 
   // Lily pads
   const lilyR = pseudoRandom(globalTileX, globalTileZ, 600);

@@ -32,7 +32,7 @@
                 </h1>
                 <div
                     id="timer-display"
-                    class="text-amber-400 text-lg font-semibold tracking-widest hidden"
+                    class="text-amber-400 text-base font-semibold tracking-widest hidden"
                 >
                     00:00.00
                 </div>
@@ -40,24 +40,14 @@
 
             <!-- Right side -->
             <div class="flex items-center gap-3">
-                <button
-                    id="start-btn"
-                    class="btn-cta text-sm py-2 px-5 w-auto"
-                >
+                <button id="start-btn" class="btn-cta text-sm py-2 px-5 w-auto">
                     START
                 </button>
                 <div id="game-over-info" class="hidden items-center gap-3">
-                    <span class="text-red-400 text-sm font-extrabold uppercase tracking-wider">
-                        BUSTED
-                    </span>
-                    <span class="text-gray-400 text-xs uppercase font-bold">
-                        Survived
-                    </span>
                     <span
-                        id="final-score"
-                        class="text-amber-400 text-sm font-extrabold tracking-widest"
+                        class="text-red-400 text-sm font-extrabold uppercase tracking-wider"
                     >
-                        00:00
+                        BUSTED
                     </span>
                     <button
                         id="restart-btn"
@@ -71,6 +61,11 @@
 
         <!-- Game area (fills remaining space) -->
         <div id="game-area" class="relative flex-1 overflow-hidden">
+            <!-- Darken overlay for non-interactive states -->
+            <div
+                id="darken-overlay"
+                class="absolute top-0 left-0 w-full h-full bg-black/60 z-5 pointer-events-none transition-opacity duration-300"
+            ></div>
             <!-- UI overlay (absolute within game area) -->
             <div
                 id="ui-layer"

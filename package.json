@@ -1,9 +1,9 @@
 {
-  "name": "smr",
+  "name": "blocky-persuit",
   "type": "module",
   "scripts": {
     "dev": "bun run uno:watch & bun run --hot server.ts",
-    "build": "bun run uno:build && bun build --target=browser --outdir=dist ./src/main.ts",
+    "build": "bun run uno:build && bun build --target=browser --outdir=dist ./src/main.ts && cp src/uno.css index.html dist/ && cd dist && sed -i '' 's|./src/main.ts|./main.js|;s|./src/uno.css|./uno.css|' index.html",
     "uno:build": "unocss \"index.html\" \"src/**/*.ts\" -o src/uno.css",
     "uno:watch": "unocss \"index.html\" \"src/**/*.ts\" -o src/uno.css --watch",
     "format": "oxfmt --write ."

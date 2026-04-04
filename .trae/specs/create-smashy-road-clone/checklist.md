@@ -1,9 +1,0 @@
-- [x] Bun project initialized and development server runs successfully.
-- [x] Three.js scene renders a 3D environment with an isometric camera.
-- [x] Player car can be steered left/right and moves with arcade physics.
-- [x] Car interacts with physics (collisions with buildings/cops).
-- [x] Endless city environment generates continuously as the player drives.
-- [x] Police cars spawn outside the viewport and chase the player.
-- [x] Game ends when the player is caught/trapped by police.
-- [x] Score (time survived) is displayed and updates correctly.
-- [x] Restart functionality works without reloading the page.

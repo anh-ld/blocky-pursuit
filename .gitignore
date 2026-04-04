@@ -4,6 +4,7 @@ node_modules
 # output
 out
 dist
+src/uno.css
 *.tgz
 
 # code coverage
@@ -34,3 +35,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 .trae/**/*
+.claude

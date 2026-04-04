@@ -18,14 +18,10 @@ camera.position.set(50, 50, 50);
 camera.lookAt(scene.position);
 
 // --- Renderer Setup ---
-// Turn off antialias for a sharper, more pixelated/retro feel
 const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setSize(window.innerWidth, window.innerHeight);
-// Limit pixel ratio to 1 for blockier look if desired, or keep device ratio
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-// Enable shadows
 renderer.shadowMap.enabled = true;
-// Hard shadows for pixelated look
 renderer.shadowMap.type = THREE.BasicShadowMap;
 document.body.appendChild(renderer.domElement);
 
@@ -46,6 +42,7 @@ directionalLight.shadow.camera.bottom = -50;
 directionalLight.shadow.camera.near = 0.5;
 directionalLight.shadow.camera.far = 200;
 scene.add(directionalLight);
+scene.add(directionalLight.target);
 
 // --- Cannon-es World Setup ---
 const world = new CANNON.World({
@@ -62,6 +59,8 @@ world.addBody(groundBody);
 
 // --- City Generation ---
 const cityGenerator = new CityGenerator(scene, world);
+// Generate initial chunks around origin for start screen background
+cityGenerator.update(new THREE.Vector3(0, 0, 0));
 
 // --- Player Car ---
 const car = new Car(scene, world);
@@ -109,44 +108,46 @@ function formatTime(seconds: number) {
 }
 
 function startGame() {
-  currentState = GAME_STATE.PLAYING;
-  survivalTime = 0;
-  bustedTimer = 0;
-
-  uiStartScreen.classList.remove("visible");
-  uiGameOverScreen.classList.remove("visible");
+  uiStartScreen.classList.remove("panel-visible");
+  uiGameOverScreen.classList.remove("panel-visible");
 
   // Small delay to allow CSS transition to play before hiding
   setTimeout(() => {
-    uiStartScreen.style.display = "none";
-    uiGameOverScreen.style.display = "none";
-    uiScoreDisplay.style.display = "block";
+    uiScoreDisplay.classList.remove("hidden");
+    uiScoreDisplay.classList.add("block");
     uiScoreDisplay.innerText = `00:00.00`;
-  }, 300);
 
-  // Reset Player
-  car.body.position.set(0, 5, 0);
-  car.body.velocity.set(0, 0, 0);
-  car.body.angularVelocity.set(0, 0, 0);
-  car.body.quaternion.set(0, 0, 0, 1);
+    currentState = GAME_STATE.PLAYING;
+    survivalTime = 0;
+    bustedTimer = 0;
 
-  // Clear Cops
-  cops.forEach((cop) => cop.destroy());
-  cops.length = 0;
+    // Reset Player
+    car.body.position.set(0, 5, 0);
+    car.body.velocity.set(0, 0, 0);
+    car.body.angularVelocity.set(0, 0, 0);
+    car.body.quaternion.set(0, 0, 0, 1);
 
-  lastCallTime = performance.now() / 1000;
-  lastCopSpawnTime = lastCallTime;
+    // Instantly teleport camera to player so it doesn't lerp across the map
+    camera.position.set(50, 55, 50);
+
+    // Clear Cops
+    cops.forEach((cop) => cop.destroy());
+    cops.length = 0;
+
+    lastCallTime = performance.now() / 1000;
+    lastCopSpawnTime = lastCallTime;
+  }, 250);
 }
 
 function gameOver() {
   currentState = GAME_STATE.GAMEOVER;
-  uiScoreDisplay.style.display = "none";
-  uiGameOverScreen.style.display = "block";
+  uiScoreDisplay.classList.remove("block");
+  uiScoreDisplay.classList.add("hidden");
 
   // Force reflow to ensure transition works
   void uiGameOverScreen.offsetWidth;
 
-  uiGameOverScreen.classList.add("visible");
+  uiGameOverScreen.classList.add("panel-visible");
   uiFinalScore.innerText = formatTime(survivalTime);
 }
 
@@ -203,14 +204,9 @@ function animate(time: number) {
   }
   lastCallTime = timeInSeconds;
 
-  // Run physics and update game world even on start screen so player can test controls
-  if (currentState === GAME_STATE.START) {
-    world.step(timeStep, dt, 10);
-  }
-  car.update(dt);
-  cityGenerator.update(car.mesh.position);
-
   if (currentState === GAME_STATE.PLAYING) {
+    car.update(dt);
+    cityGenerator.update(car.mesh.position);
     // Step physics world
     world.step(timeStep, dt, 10);
 
@@ -256,15 +252,21 @@ function animate(time: number) {
     }
   }
 
-  // Camera follow car smoothly
-  const targetPosition = new THREE.Vector3(
+  // Camera follow car
+  camera.position.set(
     car.mesh.position.x + 50,
     car.mesh.position.y + 50,
     car.mesh.position.z + 50,
   );
-  camera.position.lerp(targetPosition, 0.1);
 
-  // Render
+  // Move directional light + shadow camera to follow the player
+  directionalLight.position.set(
+    car.mesh.position.x + 50,
+    100,
+    car.mesh.position.z + 50,
+  );
+  directionalLight.target.position.copy(car.mesh.position);
+
   renderer.render(scene, camera);
 }
 

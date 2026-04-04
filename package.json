@@ -2,8 +2,10 @@
   "name": "smr",
   "type": "module",
   "scripts": {
-    "dev": "bun run --hot server.ts",
-    "build": "bun build --target=browser --outdir=dist ./src/main.ts",
+    "dev": "bun run uno:watch & bun run --hot server.ts",
+    "build": "bun run uno:build && bun build --target=browser --outdir=dist ./src/main.ts",
+    "uno:build": "unocss \"index.html\" \"src/**/*.ts\" -o src/uno.css",
+    "uno:watch": "unocss \"index.html\" \"src/**/*.ts\" -o src/uno.css --watch",
     "format": "oxfmt --write ."
   },
   "dependencies": {
@@ -13,7 +15,10 @@
   "devDependencies": {
     "@types/bun": "1.3.11",
     "@types/three": "0.160.0",
+    "@unocss/cli": "66.6.7",
+    "@unocss/reset": "66.6.7",
     "oxfmt": "0.43.0",
-    "oxlint": "1.58.0"
+    "oxlint": "1.58.0",
+    "unocss": "66.6.7"
   }
 }

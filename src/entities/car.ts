@@ -113,6 +113,9 @@ export class Car {
       // Always wake the body up
       this.body.wakeUp();
 
+      // Don't allow control while airborne (e.g. initial drop)
+      if (this.body.position.y > 1.5) return;
+
       // 1. Acceleration
       if (this.keys.forward) {
         const force = new CANNON.Vec3(0, 0, -this.forwardForce);

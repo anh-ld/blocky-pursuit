@@ -15,12 +15,12 @@ export function placeNature(
   x: number,
   z: number,
 ) {
-  // 45% tree
-  if (r1 > 0.55) {
+  // 33% tree
+  if (r1 > 0.67) {
     addTree(chunk, materials, geometries, x, z, r2, r3, false);
   }
-  // 15% rock
-  else if (r1 > 0.4) {
+  // 10% rock
+  else if (r1 > 0.57) {
     const size = 1 + r2 * 2;
     const mesh = new THREE.Mesh(geometries.building, materials.rock);
     mesh.scale.set(size * 1.2, size * 0.7, size);
@@ -35,8 +35,8 @@ export function placeNature(
     chunk.world.addBody(body);
     chunk.bodies.push(body);
   }
-  // 15% flowers
-  else if (r1 > 0.25) {
+  // 10% flowers
+  else if (r1 > 0.47) {
     addFlowers(chunk, materials, geometries, x, z, r2, r3);
   }
 }

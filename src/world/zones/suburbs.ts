@@ -15,8 +15,8 @@ export function placeSuburbs(
   x: number,
   z: number,
 ) {
-  // 20% house
-  if (r1 > 0.8) {
+  // 15% house
+  if (r1 > 0.85) {
     const height = 2 + r2 * 3;
     const width = 3 + r3 * 4;
     const depth = 3 + r4 * 4;
@@ -76,12 +76,12 @@ export function placeSuburbs(
     dw.position.set(x, 0.02, z - depth / 2 - 1.5);
     chunk.group.add(dw);
   }
-  // 30% tree
-  else if (r1 > 0.5) {
+  // 22% tree
+  else if (r1 > 0.63) {
     addTree(chunk, materials, geometries, x, z, r2, r3, false);
   }
-  // 10% flowers
-  else if (r1 > 0.4) {
+  // 8% flowers
+  else if (r1 > 0.55) {
     addFlowers(chunk, materials, geometries, x, z, r2, r3);
   }
 }

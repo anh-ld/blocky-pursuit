@@ -186,7 +186,7 @@ export class Cop {
       const localVel = new CANNON.Vec3();
       this.body.vectorToLocalFrame(this.body.velocity, localVel);
       const forwardSpeed = -localVel.z;
-      const maxReverseSpeed = this.maxSpeed * 0.15;
+      const maxReverseSpeed = this.maxSpeed * 0.25;
 
       if (this.bounceBackTimer > 0) {
         // Reverse: strong torque at standstill, tapering near max reverse
@@ -225,7 +225,8 @@ export class Cop {
       const localVelocity = new CANNON.Vec3();
       this.body.vectorToLocalFrame(this.body.velocity, localVelocity);
 
-      localVelocity.x *= 0.85;
+      const isRecovering = this.bounceBackTimer > 0 || this.recoveryTimer > 0;
+      localVelocity.x *= isRecovering ? 0.95 : 0.85;
       localVelocity.z *= 0.98;
 
       this.body.vectorToWorldFrame(localVelocity, this.body.velocity);
@@ -236,7 +237,8 @@ export class Cop {
         this.body.velocity.scale(this.maxSpeed / speed, this.body.velocity);
       }
 
-      // 3. Steering toward player (allowed during bounce-back to redirect)
+      // 3. Steering toward player — direct heading rotation
+      this.body.angularVelocity.y = 0;
       if (speed > 0.5) {
         const targetDir = new CANNON.Vec3(
           this.targetPosition.x - this.body.position.x,
@@ -256,18 +258,17 @@ export class Cop {
         const dot = worldForward.dot(targetDir);
 
         if (dot < 0.98) {
-          let targetTurn = 0;
+          let steerAngle = 0;
           if (cross.y > 0) {
-            targetTurn = this.turnSpeed;
+            steerAngle = this.turnSpeed;
           } else {
-            targetTurn = -this.turnSpeed;
+            steerAngle = -this.turnSpeed;
           }
-          this.body.angularVelocity.y += (targetTurn - this.body.angularVelocity.y) * 0.3;
-        } else {
-          this.body.angularVelocity.y *= 0.8;
+
+          const q = new CANNON.Quaternion();
+          q.setFromEuler(0, steerAngle * (1 / 60), 0);
+          this.body.quaternion = this.body.quaternion.mult(q);
         }
-      } else {
-        this.body.angularVelocity.y *= 0.8;
       }
     };
 

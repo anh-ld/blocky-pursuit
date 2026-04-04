@@ -214,7 +214,7 @@ export class Car {
       const localVel = new CANNON.Vec3();
       this.body.vectorToLocalFrame(this.body.velocity, localVel);
       const forwardSpeed = -localVel.z; // positive = moving forward
-      const maxReverseSpeed = this.maxSpeed * 0.15; // 15% of forward top speed (~6 units)
+      const maxReverseSpeed = this.maxSpeed * 0.25; // 15% of forward top speed (~6 units)
 
       if (this.bounceBackTimer > 0) {
         // Reverse: strong torque at standstill, tapering as it approaches max reverse
@@ -254,7 +254,9 @@ export class Car {
       const localVelocity = new CANNON.Vec3();
       this.body.vectorToLocalFrame(this.body.velocity, localVelocity);
 
-      localVelocity.x *= 0.85;
+      // Relax lateral grip during bounce-back/recovery so steering can redirect the car
+      const isRecovering = this.bounceBackTimer > 0 || this.recoveryTimer > 0;
+      localVelocity.x *= isRecovering ? 0.95 : 0.85;
       localVelocity.z *= 0.98;
 
       this.body.vectorToWorldFrame(localVelocity, this.body.velocity);
@@ -265,20 +267,19 @@ export class Car {
         this.body.velocity.scale(this.maxSpeed / speed, this.body.velocity);
       }
 
-      // 3. Steering (full turn power at any speed — car is always auto-driving)
+      // 3. Steering — direct heading rotation (like real steering wheel)
+      //    Fixed rotation rate regardless of speed. Low speed = tight arc, high speed = wide arc.
+      this.body.angularVelocity.y = 0; // disable physics-driven rotation
       if (speed > 0.5) {
         const dir = localVelocity.z < 0 ? 1 : -1;
+        let steerAngle = 0;
+        if (this.keys.left) steerAngle = this.turnSpeed * dir;
+        if (this.keys.right) steerAngle = -this.turnSpeed * dir;
 
-        let targetTurn = 0;
-        if (this.keys.left) {
-          targetTurn = this.turnSpeed * dir;
-        } else if (this.keys.right) {
-          targetTurn = -this.turnSpeed * dir;
-        }
-
-        this.body.angularVelocity.y += (targetTurn - this.body.angularVelocity.y) * 0.3;
-      } else {
-        this.body.angularVelocity.y *= 0.8;
+        // Directly rotate the body's quaternion
+        const q = new CANNON.Quaternion();
+        q.setFromEuler(0, steerAngle * (1 / 60), 0); // per physics step
+        this.body.quaternion = this.body.quaternion.mult(q);
       }
     });
 

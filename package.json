@@ -1,5 +1,10 @@
 {
-  "name": "blocky-persuit",
+  "name": "blocky-pursuit",
+  "author": {
+    "name": "Anh Le",
+    "email": "ledzanh@gmail.com"
+  },
+  "description": "Evade cops in a blocky city — don't get busted. PWA supported. Smashy Road inspired.",
   "type": "module",
   "scripts": {
     "dev": "vite",

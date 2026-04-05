@@ -7,6 +7,30 @@ import { Civilian } from "./entities/civilian";
 import { CityGenerator, isRoad } from "./world/city-generator";
 import { isWater, TILE_SIZE } from "./world/terrain";
 
+// --- PWA Install Prompt (mobile only) ---
+let deferredPrompt: Event | null = null;
+const installBtn = document.getElementById("install-pwa-btn") as HTMLButtonElement | null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (installBtn) installBtn.classList.replace("hidden", "flex");
+});
+installBtn?.addEventListener("click", async () => {
+  if (deferredPrompt) {
+    (deferredPrompt as any).prompt();
+    const { outcome } = await (deferredPrompt as any).userChoice;
+    if (outcome === "accepted" && installBtn) installBtn.classList.replace("flex", "hidden");
+    deferredPrompt = null;
+  } else {
+    installBtn!.textContent = "Use browser menu → Add to Home Screen";
+    setTimeout(() => { installBtn!.textContent = "📲 Install App"; }, 3000);
+  }
+});
+// Hide if already installed as PWA
+if (window.matchMedia("(display-mode: standalone)").matches && installBtn) {
+  installBtn.classList.replace("flex", "hidden");
+}
+
 // --- Scene Setup ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb); // Vibrant Sky Blue

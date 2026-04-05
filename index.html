@@ -20,7 +20,7 @@
         <!-- Top Bar (in flow, pushes canvas down) -->
         <div
             id="top-bar"
-            class="flex items-center justify-between px-5 py-3 bg-gray-900 shrink-0"
+            class="flex flex-wrap gap-2 items-center justify-between px-5 py-3 bg-gray-900 shrink-0"
         >
             <!-- Left side -->
             <div class="flex items-center gap-3">
@@ -30,11 +30,40 @@
                 >
                     blocky persuit
                 </h1>
+                <!-- HUD: shown during gameplay -->
+                <div id="hud" class="hidden flex items-center gap-3">
+                    <!-- HP Bar -->
+                    <div
+                        class="w-25 h-3.5 bg-gray-700 relative overflow-hidden"
+                    >
+                        <div
+                            id="hp-bar-fill"
+                            class="h-full bg-green-400 transition-all duration-200"
+                        ></div>
+                    </div>
+                    <!-- Score -->
+                    <div class="flex items-center gap-1">
+                        <span class="text-gray-400 text-xs font-semibold"
+                            >SCORE</span
+                        >
+                        <span
+                            id="score-display"
+                            class="text-amber-400 text-sm font-extrabold tracking-wider"
+                            >0</span
+                        >
+                    </div>
+                    <!-- Level -->
+                    <span
+                        id="level-display"
+                        class="text-orange-500 text-xs font-extrabold tracking-widest"
+                        >LV 1</span
+                    >
+                </div>
                 <div
                     id="timer-display"
-                    class="text-amber-400 text-base font-semibold tracking-widest hidden"
+                    class="text-gray-400 text-xs font-semibold tracking-widest hidden"
                 >
-                    00:00.00
+                    0:00
                 </div>
             </div>
 
@@ -45,6 +74,7 @@
                 </button>
                 <div id="game-over-info" class="hidden items-center gap-3">
                     <span
+                        id="game-over-reason"
                         class="text-red-400 text-sm font-extrabold uppercase tracking-wider"
                     >
                         BUSTED
@@ -66,6 +96,51 @@
                 id="darken-overlay"
                 class="absolute top-0 left-0 w-full h-full bg-black/60 z-5 pointer-events-none transition-opacity duration-300"
             ></div>
+            <!-- How to Play overlay (shown on start screen) -->
+            <div
+                id="how-to-play"
+                class="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
+            >
+                <div
+                    class="bg-black/50 text-gray-300 px-4 py-3 flex flex-col gap-3 text-xs font-normal tracking-wide"
+                >
+                    <span
+                        class="text-amber-400 font-extrabold uppercase tracking-widest text-center"
+                        >How to Play</span
+                    >
+                    <div class="flex items-center gap-2">
+                        <div class="flex gap-1 shrink-0">
+                            <span class="kbd-sm">A</span>
+                            <span class="kbd-sm">D</span>
+                        </div>
+                        <span class="text-gray-400">Steer left / right</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm leading-none shrink-0">🚗</span>
+                        <span class="text-gray-400"
+                            >Car drives automatically</span
+                        >
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm leading-none shrink-0">🚔</span>
+                        <span class="text-gray-400"
+                            >Evade cops — don't get busted!</span
+                        >
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm leading-none shrink-0">🌊</span>
+                        <span class="text-gray-400"
+                            >Avoid water, lure cops in for bonus</span
+                        >
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm leading-none shrink-0">⚡</span>
+                        <span class="text-gray-400"
+                            >Drive fast on roads to score</span
+                        >
+                    </div>
+                </div>
+            </div>
             <!-- UI overlay (absolute within game area) -->
             <div
                 id="ui-layer"
@@ -74,7 +149,7 @@
                 <!-- Bottom-left controls guide -->
                 <div
                     id="controls-guide"
-                    class="self-end px-4 py-2 mb-4 mr-4 bg-black/50 text-gray-300 text-xs font-semibold tracking-wide flex items-center gap-2"
+                    class="self-end px-4 py-2 mb-4 mr-4 bg-black/50 text-gray-300 text-xs font-normal tracking-wide flex items-center gap-2"
                 >
                     <div class="flex gap-1">
                         <span class="kbd-sm">A</span>

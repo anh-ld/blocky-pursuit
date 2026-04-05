@@ -1,6 +1,25 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 
+export interface CopLevelConfig {
+  mass: number;
+  speed: number;
+  ramSpeed: number; // burst speed when close to player
+  turnSpeed: number;
+  forwardForce: number;
+  predictAhead: number; // seconds to predict player position (0 = no prediction)
+  flank: boolean; // whether this cop tries to flank
+}
+
+// Player: maxSpeed=40, mass=100
+export const COP_LEVEL_CONFIGS: Record<number, CopLevelConfig> = {
+  1: { mass: 100, speed: 44, ramSpeed: 52, turnSpeed: 2.2, forwardForce: 160000, predictAhead: 0.5, flank: false },
+  2: { mass: 115, speed: 46, ramSpeed: 55, turnSpeed: 2.5, forwardForce: 175000, predictAhead: 0.8, flank: false },
+  3: { mass: 130, speed: 48, ramSpeed: 58, turnSpeed: 2.8, forwardForce: 190000, predictAhead: 1.2, flank: true },
+  4: { mass: 160, speed: 50, ramSpeed: 62, turnSpeed: 3.0, forwardForce: 210000, predictAhead: 1.5, flank: true },
+  5: { mass: 200, speed: 52, ramSpeed: 65, turnSpeed: 3.2, forwardForce: 230000, predictAhead: 1.8, flank: true },
+};
+
 export class Cop {
   scene: THREE.Scene;
   world: CANNON.World;
@@ -14,11 +33,20 @@ export class Cop {
   recoveryTimer: number;
   recoveryDuration: number;
   targetPosition: THREE.Vector3 | null = null;
+  targetVelocity: CANNON.Vec3 | null = null;
+  level: number;
+  config: CopLevelConfig;
+  flankSide: number; // +1 or -1
+  damageCooldown: number; // seconds until this cop can deal damage again
   preStepCallback: () => void;
 
-  constructor(scene: THREE.Scene, world: CANNON.World, position: THREE.Vector3) {
+  constructor(scene: THREE.Scene, world: CANNON.World, position: THREE.Vector3, level: number = 1) {
     this.scene = scene;
     this.world = world;
+    this.level = Math.max(1, Math.min(5, level));
+    this.config = COP_LEVEL_CONFIGS[this.level];
+    this.flankSide = Math.random() < 0.5 ? 1 : -1;
+    this.damageCooldown = 0;
 
     // Voxel dimensions
     const unit = 0.5;
@@ -142,7 +170,7 @@ export class Cop {
     // --- Physics (Cannon-es) ---
     const shape = new CANNON.Box(new CANNON.Vec3(unit * 2, unit * 1.5, unit * 4));
     this.body = new CANNON.Body({
-      mass: 100, // Reduced mass to match player
+      mass: this.config.mass,
       position: new CANNON.Vec3(position.x, position.y, position.z),
       linearDamping: 0.1,
       angularDamping: 0.9,
@@ -158,10 +186,10 @@ export class Cop {
 
     world.addBody(this.body);
 
-    // Tuning parameters
-    this.forwardForce = 135000;
-    this.turnSpeed = 2.0;
-    this.maxSpeed = 35;
+    // Tuning parameters from level config
+    this.forwardForce = this.config.forwardForce;
+    this.turnSpeed = this.config.turnSpeed;
+    this.maxSpeed = this.config.speed;
 
     // Collision bounce-back state (same as player car)
     this.bounceBackTimer = 0;
@@ -182,68 +210,95 @@ export class Cop {
 
       this.body.wakeUp();
 
-      // 1. Auto-drive with acceleration curve (same as player car)
+      // Determine distance to player for ram boost
+      const dxToPlayer = this.targetPosition.x - this.body.position.x;
+      const dzToPlayer = this.targetPosition.z - this.body.position.z;
+      const distToPlayer = Math.sqrt(dxToPlayer * dxToPlayer + dzToPlayer * dzToPlayer);
+      // Ram mode: boost speed when within 25 units
+      const isRamming = distToPlayer < 25;
+      const activeMaxSpeed = isRamming ? this.config.ramSpeed : this.maxSpeed;
+      const activeForce = isRamming ? this.forwardForce * 1.4 : this.forwardForce;
+
+      // 1. Auto-drive with acceleration curve
       const localVel = new CANNON.Vec3();
       this.body.vectorToLocalFrame(this.body.velocity, localVel);
       const forwardSpeed = -localVel.z;
-      const maxReverseSpeed = this.maxSpeed * 0.25;
+      const maxReverseSpeed = activeMaxSpeed * 0.25;
 
       if (this.bounceBackTimer > 0) {
-        // Reverse: strong torque at standstill, tapering near max reverse
         const reverseSpeed = Math.max(0, -forwardSpeed);
         const reverseRatio = Math.min(reverseSpeed / maxReverseSpeed, 1);
-        const reverseScale = 0.2 * (1 - reverseRatio * 0.8);
-        const force = new CANNON.Vec3(0, 0, this.forwardForce * reverseScale);
+        const reverseScale = 0.3 * (1 - reverseRatio * 0.8);
+        const force = new CANNON.Vec3(0, 0, activeForce * reverseScale);
         this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
 
-        // Cap reverse speed
         if (reverseSpeed > maxReverseSpeed) {
           localVel.z = maxReverseSpeed;
           this.body.vectorToWorldFrame(localVel, this.body.velocity);
         }
       } else {
-        // Forward: peak torque at low speed, tapering toward top speed
         let forceScale: number;
         if (forwardSpeed < 0) {
-          forceScale = 0.8;
+          forceScale = 1.0; // stronger acceleration from standstill
         } else {
-          const speedRatio = Math.min(forwardSpeed / this.maxSpeed, 1);
-          forceScale = 1.0 - speedRatio * 0.7;
+          const speedRatio = Math.min(forwardSpeed / activeMaxSpeed, 1);
+          forceScale = 1.0 - speedRatio * 0.6;
         }
 
-        // Recovery phase: gentle ramp after bounce-back
         if (this.recoveryTimer > 0) {
           const recoveryProgress = 1 - this.recoveryTimer / this.recoveryDuration;
-          forceScale *= 0.15 + 0.85 * recoveryProgress;
+          forceScale *= 0.3 + 0.7 * recoveryProgress;
         }
 
-        const force = new CANNON.Vec3(0, 0, -this.forwardForce * forceScale);
+        const force = new CANNON.Vec3(0, 0, -activeForce * forceScale);
         this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
       }
 
-      // 2. Arcade friction (drift mechanics)
+      // 2. Arcade friction — tighter grip so cops corner better
       const localVelocity = new CANNON.Vec3();
       this.body.vectorToLocalFrame(this.body.velocity, localVelocity);
 
       const isRecovering = this.bounceBackTimer > 0 || this.recoveryTimer > 0;
-      localVelocity.x *= isRecovering ? 0.95 : 0.85;
+      localVelocity.x *= isRecovering ? 0.92 : 0.8; // tighter lateral grip
       localVelocity.z *= 0.98;
 
       this.body.vectorToWorldFrame(localVelocity, this.body.velocity);
 
       // Cap max speed
       const speed = this.body.velocity.length();
-      if (speed > this.maxSpeed) {
-        this.body.velocity.scale(this.maxSpeed / speed, this.body.velocity);
+      if (speed > activeMaxSpeed) {
+        this.body.velocity.scale(activeMaxSpeed / speed, this.body.velocity);
       }
 
-      // 3. Steering toward player — direct heading rotation
+      // 3. Steering toward player — with prediction and flanking
       this.body.angularVelocity.y = 0;
       if (speed > 0.5) {
+        // Calculate target point: base position + velocity prediction
+        let aimX = this.targetPosition.x;
+        let aimZ = this.targetPosition.z;
+
+        // Predict where player will be
+        if (this.config.predictAhead > 0 && this.targetVelocity) {
+          aimX += this.targetVelocity.x * this.config.predictAhead;
+          aimZ += this.targetVelocity.z * this.config.predictAhead;
+        }
+
+        // Flanking: offset aim perpendicular to player's heading
+        if (this.config.flank && this.targetVelocity) {
+          const tvLen = Math.sqrt(this.targetVelocity.x ** 2 + this.targetVelocity.z ** 2);
+          if (tvLen > 1) {
+            const perpX = -this.targetVelocity.z / tvLen;
+            const perpZ = this.targetVelocity.x / tvLen;
+            const flankDist = 12;
+            aimX += perpX * flankDist * this.flankSide;
+            aimZ += perpZ * flankDist * this.flankSide;
+          }
+        }
+
         const targetDir = new CANNON.Vec3(
-          this.targetPosition.x - this.body.position.x,
+          aimX - this.body.position.x,
           0,
-          this.targetPosition.z - this.body.position.z,
+          aimZ - this.body.position.z,
         );
         targetDir.normalize();
 
@@ -275,8 +330,12 @@ export class Cop {
     this.world.addEventListener("preStep", this.preStepCallback);
   }
 
-  update(dt: number, targetPosition: THREE.Vector3) {
+  update(dt: number, targetPosition: THREE.Vector3, targetVelocity?: CANNON.Vec3) {
     this.targetPosition = targetPosition;
+    this.targetVelocity = targetVelocity || null;
+
+    // Tick down damage cooldown
+    if (this.damageCooldown > 0) this.damageCooldown -= dt;
 
     // Tick down bounce-back timer; start recovery when it expires
     if (this.bounceBackTimer > 0) {

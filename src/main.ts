@@ -84,11 +84,30 @@ window.addEventListener("resize", resizeRenderer);
 
 // --- Cops Setup ---
 const cops: Cop[] = [];
-const MAX_COPS = 5;
-const COP_SPAWN_INTERVAL = 5; // seconds
-let lastCopSpawnTime = 0;
 let bustedTimer = 0;
-const BUSTED_TIME_THRESHOLD = 2; // seconds
+const BUSTED_TIME_THRESHOLD = 3; // seconds stopped
+const BUSTED_COP_COUNT = 2; // 2 cops nearby is enough
+
+// --- Level System ---
+interface LevelDef {
+  maxCops: number;
+  spawnInterval: number;
+  scoreThreshold: number;
+}
+const LEVEL_DEFS: LevelDef[] = [
+  { maxCops: 3, spawnInterval: 4, scoreThreshold: 0 },     // Level 1 — medium start
+  { maxCops: 5, spawnInterval: 3, scoreThreshold: 100 },    // Level 2 — ~10s in
+  { maxCops: 6, spawnInterval: 2.5, scoreThreshold: 300 },  // Level 3 — ~30s
+  { maxCops: 7, spawnInterval: 2, scoreThreshold: 600 },    // Level 4 — ~55s
+  { maxCops: 8, spawnInterval: 1.5, scoreThreshold: 1000 }, // Level 5 — ~80s
+];
+
+let currentLevel = 1;
+let lastCopSpawnTime = 0;
+
+function getLevelDef(): LevelDef {
+  return LEVEL_DEFS[currentLevel - 1];
+}
 
 // --- Game State & UI ---
 const GAME_STATE = {
@@ -98,14 +117,28 @@ const GAME_STATE = {
 };
 let currentState = GAME_STATE.START;
 let survivalTime = 0;
+let carHP = 100;
+let score = 0;
+let lastScoreTileX = -9999;
+let lastScoreTileZ = -9999;
+let speedStreakTimer = 0;
+const SPEED_STREAK_THRESHOLD = 5; // seconds at high speed to trigger heal
+const SPEED_STREAK_MIN_RATIO = 0.9; // 90% of max speed — requires near-perfect driving
 
 const uiGameTitle = document.getElementById("game-title") as HTMLElement;
 const uiTimerDisplay = document.getElementById("timer-display") as HTMLElement;
 const uiGameOverInfo = document.getElementById("game-over-info") as HTMLElement;
+const uiGameOverReason = document.getElementById("game-over-reason") as HTMLElement;
+
+const uiHPBar = document.getElementById("hp-bar-fill") as HTMLElement;
+const uiScoreDisplay = document.getElementById("score-display") as HTMLElement;
+const uiLevelDisplay = document.getElementById("level-display") as HTMLElement;
+const uiHUD = document.getElementById("hud") as HTMLElement;
 
 const btnStart = document.getElementById("start-btn") as HTMLElement;
 const btnRestart = document.getElementById("restart-btn") as HTMLElement;
 const darkenOverlay = document.getElementById("darken-overlay") as HTMLElement;
+const howToPlay = document.getElementById("how-to-play") as HTMLElement;
 
 function formatTime(seconds: number) {
   const secs = Math.floor(seconds);
@@ -113,19 +146,45 @@ function formatTime(seconds: number) {
   return `${secs}:${ms.toString().padStart(2, "0")}`;
 }
 
+const HP_COLOR_CLASSES = ['bg-green-400', 'bg-yellow-400', 'bg-red-400'];
+let lastHPColorClass = HP_COLOR_CLASSES[0];
+
+function updateHUD() {
+  uiHPBar.style.width = `${Math.max(0, carHP)}%`;
+
+  // Color shifts via class swap: green > yellow > red
+  const newClass = carHP > 60 ? HP_COLOR_CLASSES[0] : carHP > 30 ? HP_COLOR_CLASSES[1] : HP_COLOR_CLASSES[2];
+  if (newClass !== lastHPColorClass) {
+    uiHPBar.classList.remove(lastHPColorClass);
+    uiHPBar.classList.add(newClass);
+    lastHPColorClass = newClass;
+  }
+
+  uiScoreDisplay.innerText = `${Math.floor(score)}`;
+  uiLevelDisplay.innerText = `LV ${currentLevel}`;
+  uiTimerDisplay.innerText = formatTime(survivalTime);
+}
+
 function startGame() {
-  // Hide start elements, show timer
+  // Hide start elements, show HUD
   uiGameTitle.classList.add("hidden");
   btnStart.classList.add("hidden");
+  howToPlay.classList.add("hidden");
   uiGameOverInfo.classList.remove("flex");
   uiGameOverInfo.classList.add("hidden");
+  uiHUD.classList.remove("hidden");
   uiTimerDisplay.classList.remove("hidden");
-  uiTimerDisplay.innerText = "0:00";
   darkenOverlay.classList.add("opacity-0");
 
   currentState = GAME_STATE.PLAYING;
   survivalTime = 0;
   bustedTimer = 0;
+  carHP = 100;
+  score = 0;
+  currentLevel = 1;
+  lastScoreTileX = -9999;
+  lastScoreTileZ = -9999;
+  speedStreakTimer = 0;
 
   // Reset Player
   car.body.position.set(0, 5, 0);
@@ -142,14 +201,15 @@ function startGame() {
   cops.forEach((cop) => cop.destroy());
   cops.length = 0;
 
+  updateHUD();
   lastCallTime = performance.now() / 1000;
   lastCopSpawnTime = lastCallTime;
 }
 
-function gameOver() {
+function gameOver(reason: string = "BUSTED") {
   currentState = GAME_STATE.GAMEOVER;
 
-  // Show game over info, darken canvas (keep timer visible)
+  uiGameOverReason.innerText = reason;
   uiGameOverInfo.classList.remove("hidden");
   uiGameOverInfo.classList.add("flex");
   darkenOverlay.classList.remove("opacity-0");
@@ -159,7 +219,8 @@ btnStart.addEventListener("click", startGame);
 btnRestart.addEventListener("click", startGame);
 
 function spawnCop(playerPosition: THREE.Vector3) {
-  if (cops.length >= MAX_COPS) return;
+  const levelDef = getLevelDef();
+  if (cops.length >= levelDef.maxCops) return;
 
   // Spawn out of camera view (distance ~40-60)
   const distance = 40 + Math.random() * 20;
@@ -190,7 +251,7 @@ function spawnCop(playerPosition: THREE.Vector3) {
   }
 
   const pos = new THREE.Vector3(tileX * TILE_SIZE, 5, tileZ * TILE_SIZE);
-  const cop = new Cop(scene, world, pos);
+  const cop = new Cop(scene, world, pos, currentLevel);
   cops.push(cop);
 }
 
@@ -216,63 +277,147 @@ function animate(time: number) {
 
     // Update survival time
     survivalTime += dt;
-    uiTimerDisplay.innerText = formatTime(survivalTime);
 
-    // Cop Spawning Logic
-    if (timeInSeconds - lastCopSpawnTime > COP_SPAWN_INTERVAL) {
+    // --- Level Progression ---
+    const prevLevel = currentLevel;
+    for (let lv = LEVEL_DEFS.length; lv >= 1; lv--) {
+      if (score >= LEVEL_DEFS[lv - 1].scoreThreshold) {
+        if (lv > currentLevel) {
+          currentLevel = lv;
+        }
+        break;
+      }
+    }
+    // Level-up heal: +15 HP per level gained
+    if (currentLevel > prevLevel) {
+      carHP = Math.min(100, carHP + 15);
+    }
+
+    // --- Score: distance on road tiles ---
+    const scoreTileX = Math.floor(car.body.position.x / TILE_SIZE);
+    const scoreTileZ = Math.floor(car.body.position.z / TILE_SIZE);
+    if (scoreTileX !== lastScoreTileX || scoreTileZ !== lastScoreTileZ) {
+      if (isRoad(scoreTileX, scoreTileZ)) {
+        // Speed multiplier: 1x at speed 0, up to 2x at maxSpeed
+        const speedRatio = Math.min(car.body.velocity.length() / car.maxSpeed, 1);
+        const speedMult = 1 + speedRatio;
+        score += 1.5 * speedMult;
+      }
+      lastScoreTileX = scoreTileX;
+      lastScoreTileZ = scoreTileZ;
+    }
+
+    // --- Cop Spawning Logic ---
+    const levelDef = getLevelDef();
+    if (timeInSeconds - lastCopSpawnTime > levelDef.spawnInterval) {
       spawnCop(car.mesh.position);
       lastCopSpawnTime = timeInSeconds;
     }
 
-    // Update Cops and Check Trapping Logic
-    let isCopNearby = false;
+    // --- Update Cops, Check Collisions & Proximity ---
+    let nearbyCoCount = 0;
     for (let i = cops.length - 1; i >= 0; i--) {
       const cop = cops[i];
       if (!cop) continue;
-      cop.update(dt, car.mesh.position);
+      cop.update(dt, car.mesh.position, car.body.velocity);
+
+      const distToPlayer = cop.body.position.distanceTo(car.body.position);
 
       // Despawn cops that are too far
-      const distToPlayer = cop.body.position.distanceTo(car.body.position);
       if (distToPlayer > 100) {
         cop.destroy();
         cops.splice(i, 1);
         continue;
       }
 
-      // Check if close enough for bust
+      // --- Collision damage ---
+      if (distToPlayer < 5 && cop.damageCooldown <= 0) {
+        // Relative impact speed
+        const relVel = new CANNON.Vec3();
+        car.body.velocity.vsub(cop.body.velocity, relVel);
+        const impactSpeed = relVel.length();
+
+        if (impactSpeed > 3) {
+          // damage = base + (copMass / playerMass) * impactSpeed * multiplier
+          const massRatio = cop.config.mass / 100; // player mass is 100
+          const damage = 2 + massRatio * impactSpeed * 0.3;
+          carHP -= damage;
+          cop.damageCooldown = 1.0; // 1 second cooldown per cop
+        }
+      } else if (distToPlayer < 12) {
+        // Near-miss bonus: cop close but no collision
+        // (scored passively via speed multiplier on road tiles)
+      }
+
+      // Count cops close enough for busted check
       if (distToPlayer < 8) {
-        isCopNearby = true;
+        nearbyCoCount++;
       }
     }
 
-    // Water check — car loses, cop dies
-    // Use floor to match tile generation; skip if on road
+    // --- HP check ---
+    if (carHP <= 0) {
+      carHP = 0;
+      gameOver("WRECKED");
+    }
+
+    // --- Water check ---
     const carTileX = Math.floor(car.body.position.x / TILE_SIZE);
     const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
     if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
-      gameOver();
+      gameOver("DROWNED");
     }
 
+    // Cops die in water — bonus score
     for (let i = cops.length - 1; i >= 0; i--) {
       const cop = cops[i];
       if (!cop) continue;
       const copTileX = Math.floor(cop.body.position.x / TILE_SIZE);
       const copTileZ = Math.floor(cop.body.position.z / TILE_SIZE);
       if (!isRoad(copTileX, copTileZ) && isWater(copTileX, copTileZ)) {
+        score += 30; // bonus for cop falling in water
+        carHP = Math.min(100, carHP + 10); // heal for luring cop into water
         cop.destroy();
         cops.splice(i, 1);
       }
     }
 
-    // Busted Logic
-    if (isCopNearby && car.body.velocity.length() < 2) {
+    // --- Busted Logic (need 2+ cops nearby AND stopped for 3s) ---
+    if (nearbyCoCount >= BUSTED_COP_COUNT && car.body.velocity.length() < 2) {
       bustedTimer += dt;
       if (bustedTimer > BUSTED_TIME_THRESHOLD) {
-        gameOver();
+        gameOver("BUSTED");
       }
     } else {
-      bustedTimer = Math.max(0, bustedTimer - dt);
+      bustedTimer = Math.max(0, bustedTimer - dt * 2); // decays faster
     }
+
+    // --- Speed streak heal: +5 HP after 5s at 80%+ max speed ---
+    if (car.body.velocity.length() >= car.maxSpeed * SPEED_STREAK_MIN_RATIO) {
+      speedStreakTimer += dt;
+      if (speedStreakTimer >= SPEED_STREAK_THRESHOLD) {
+        carHP = Math.min(100, carHP + 5);
+        speedStreakTimer = 0; // reset so it can trigger again
+      }
+    } else {
+      speedStreakTimer = 0;
+    }
+
+    // --- Passive HP regen: +1 HP/s when no cop within 30 units ---
+    if (nearbyCoCount === 0 && carHP < 100) {
+      let anyCopClose = false;
+      for (const cop of cops) {
+        if (cop.body.position.distanceTo(car.body.position) < 30) {
+          anyCopClose = true;
+          break;
+        }
+      }
+      if (!anyCopClose) {
+        carHP = Math.min(100, carHP + 1 * dt);
+      }
+    }
+
+    updateHUD();
   }
 
   // Camera follow car

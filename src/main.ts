@@ -1,3 +1,4 @@
+import "virtual:uno.css";
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { Car } from "./entities/car";
@@ -26,6 +27,8 @@ renderer.setSize(gameArea.clientWidth, gameArea.clientHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.BasicShadowMap;
+renderer.domElement.style.display = "block";
+renderer.domElement.style.touchAction = "none";
 gameArea.appendChild(renderer.domElement);
 
 // --- Lighting Setup ---

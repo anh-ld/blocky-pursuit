@@ -82,6 +82,7 @@ function resizeRenderer() {
 }
 resizeRenderer();
 window.addEventListener("resize", resizeRenderer);
+window.addEventListener("orientationchange", () => setTimeout(resizeRenderer, 100));
 
 // --- Civilians Setup ---
 const civilians: Civilian[] = [];
@@ -134,7 +135,6 @@ const SPEED_STREAK_MIN_RATIO = 0.9; // 90% of max speed — requires near-perfec
 
 const uiGameTitle = document.getElementById("game-title") as HTMLElement;
 const uiTimerDisplay = document.getElementById("timer-display") as HTMLElement;
-const uiGameOverInfo = document.getElementById("game-over-info") as HTMLElement;
 const uiGameOverReason = document.getElementById("game-over-reason") as HTMLElement;
 
 const uiHPBar = document.getElementById("hp-bar-fill") as HTMLElement;
@@ -144,6 +144,10 @@ const uiHUD = document.getElementById("hud") as HTMLElement;
 
 const btnStart = document.getElementById("start-btn") as HTMLElement;
 const btnRestart = document.getElementById("restart-btn") as HTMLElement;
+const mobileBtnStart = document.getElementById("mobile-start-btn") as HTMLElement;
+const mobileBtnRestart = document.getElementById("mobile-restart-btn") as HTMLElement;
+const mobileCta = document.getElementById("mobile-cta") as HTMLElement;
+const mobileControls = document.getElementById("mobile-controls") as HTMLElement;
 const darkenOverlay = document.getElementById("darken-overlay") as HTMLElement;
 const howToPlay = document.getElementById("how-to-play") as HTMLElement;
 
@@ -173,14 +177,20 @@ function updateHUD() {
 }
 
 function startGame() {
-  // Hide start elements, show HUD
+  // Hide start/game-over elements, show HUD
   uiGameTitle.classList.add("hidden");
   btnStart.classList.add("hidden");
+  btnRestart.classList.add("hidden");
+  uiGameOverReason.classList.add("hidden");
+  mobileBtnStart.classList.add("hidden");
+  mobileBtnRestart.classList.add("hidden");
+  mobileCta.classList.add("hidden");
   howToPlay.classList.add("hidden");
-  uiGameOverInfo.classList.remove("flex");
-  uiGameOverInfo.classList.add("hidden");
   uiHUD.classList.remove("hidden");
   uiTimerDisplay.classList.remove("hidden");
+  // Show mobile touch controls
+  mobileControls.classList.remove("hidden");
+  mobileControls.classList.add("flex");
   darkenOverlay.classList.add("opacity-0");
 
   currentState = GAME_STATE.PLAYING;
@@ -221,14 +231,27 @@ function startGame() {
 function gameOver(reason: string = "BUSTED") {
   currentState = GAME_STATE.GAMEOVER;
 
+  // Show reason in top-right (both desktop & mobile)
   uiGameOverReason.innerText = reason;
-  uiGameOverInfo.classList.remove("hidden");
-  uiGameOverInfo.classList.add("flex");
+  uiGameOverReason.classList.remove("hidden");
+
+  // Desktop: show retry in top bar
+  btnRestart.classList.remove("hidden");
+
+  // Mobile: hide controls, show retry CTA at bottom center
+  mobileControls.classList.add("hidden");
+  mobileControls.classList.remove("flex");
+  mobileBtnRestart.classList.remove("hidden");
+  mobileCta.classList.remove("hidden");
+  mobileCta.classList.add("flex");
+
   darkenOverlay.classList.remove("opacity-0");
 }
 
 btnStart.addEventListener("click", startGame);
 btnRestart.addEventListener("click", startGame);
+mobileBtnStart.addEventListener("click", startGame);
+mobileBtnRestart.addEventListener("click", startGame);
 
 function spawnCop(playerPosition: THREE.Vector3, playerVelocity: CANNON.Vec3) {
   const levelDef = getLevelDef();

@@ -289,6 +289,52 @@ export class Car {
   initControls() {
     window.addEventListener("keydown", (e) => this.handleKeyDown(e));
     window.addEventListener("keyup", (e) => this.handleKeyUp(e));
+    this.initTouchControls();
+  }
+
+  initTouchControls() {
+    const btnLeft = document.getElementById("touch-left");
+    const btnRight = document.getElementById("touch-right");
+    if (!btnLeft || !btnRight) return;
+
+    // Track which touch IDs are active on each button
+    const activeTouches = { left: new Set<number>(), right: new Set<number>() };
+
+    const bind = (btn: HTMLElement, key: "left" | "right") => {
+      btn.addEventListener("touchstart", (e: TouchEvent) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          activeTouches[key].add(e.changedTouches[i].identifier);
+        }
+        this.keys[key] = true;
+      }, { passive: false });
+
+      const release = (e: TouchEvent) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          activeTouches[key].delete(e.changedTouches[i].identifier);
+        }
+        if (activeTouches[key].size === 0) {
+          this.keys[key] = false;
+        }
+      };
+
+      btn.addEventListener("touchend", release, { passive: false });
+      btn.addEventListener("touchcancel", release, { passive: false });
+    };
+
+    bind(btnLeft, "left");
+    bind(btnRight, "right");
+
+    // Safety: release all keys if all touches end globally (finger slides off button)
+    window.addEventListener("touchend", (e: TouchEvent) => {
+      if (e.touches.length === 0) {
+        activeTouches.left.clear();
+        activeTouches.right.clear();
+        this.keys.left = false;
+        this.keys.right = false;
+      }
+    });
   }
 
   handleKeyDown(e: KeyboardEvent) {

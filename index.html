@@ -2,7 +2,10 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
         <title>Blocky Pursuit</title>
         <link rel="stylesheet" href="./src/uno.css" />
         <style>
@@ -13,17 +16,18 @@
             }
             canvas {
                 display: block;
+                touch-action: none;
             }
         </style>
     </head>
-    <body class="w-screen h-screen font-sans select-none flex flex-col">
+    <body class="w-screen h-dvh font-sans select-none flex flex-col">
         <!-- Top Bar (in flow, pushes canvas down) -->
         <div
             id="top-bar"
-            class="flex flex-wrap gap-2 items-center justify-between px-5 py-3 bg-gray-900 shrink-0"
+            class="flex flex-wrap gap-2 items-center justify-between px-5 h-13 bg-gray-900 shrink-0"
         >
             <!-- Left side -->
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
                 <h1
                     id="game-title"
                     class="text-orange-500 text-lg font-extrabold uppercase tracking-widest m-0 leading-none uppercase"
@@ -31,7 +35,7 @@
                     blocky persuit
                 </h1>
                 <!-- HUD: shown during gameplay -->
-                <div id="hud" class="hidden flex items-center gap-3">
+                <div id="hud" class="hidden flex items-center gap-2">
                     <!-- HP Bar -->
                     <div
                         class="w-25 h-3.5 bg-gray-700 relative overflow-hidden"
@@ -68,20 +72,22 @@
             </div>
 
             <!-- Right side -->
-            <div class="flex items-center gap-3">
-                <button id="start-btn" class="btn-cta text-sm py-2 px-5 w-auto">
-                    START
-                </button>
-                <div id="game-over-info" class="hidden items-center gap-3">
-                    <span
-                        id="game-over-reason"
-                        class="text-red-400 text-sm font-extrabold uppercase tracking-wider"
-                    >
-                        BUSTED
-                    </span>
+            <div class="flex items-center gap-2">
+                <!-- Game over reason (both desktop & mobile, always top-right) -->
+                <span
+                    id="game-over-reason"
+                    class="hidden text-red-400 text-sm font-extrabold uppercase tracking-wider"
+                >
+                    BUSTED
+                </span>
+                <!-- Desktop CTA only (container hidden on mobile) -->
+                <div id="desktop-cta" class="hidden md:flex items-center gap-2">
+                    <button id="start-btn" class="btn-cta text-sm py-2 px-5 w-auto">
+                        START
+                    </button>
                     <button
                         id="restart-btn"
-                        class="btn-danger text-sm py-2 px-5 w-auto"
+                        class="hidden btn-danger text-sm py-2 px-5 w-auto"
                     >
                         RETRY
                     </button>
@@ -109,11 +115,17 @@
                         >How to Play</span
                     >
                     <div class="flex items-center gap-2">
-                        <div class="flex gap-1 shrink-0">
+                        <div class="flex gap-1 shrink-0 hidden md:flex">
                             <span class="kbd-sm">A</span>
                             <span class="kbd-sm">D</span>
                         </div>
-                        <span class="text-gray-400">Steer left / right</span>
+                        <span class="shrink-0 md:hidden text-sm">👆</span>
+                        <span class="text-gray-400 hidden md:inline"
+                            >Steer left / right</span
+                        >
+                        <span class="text-gray-400 md:hidden"
+                            >Tap buttons to steer</span
+                        >
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="text-sm leading-none shrink-0">🚗</span>
@@ -146,10 +158,10 @@
                 id="ui-layer"
                 class="absolute top-0 left-0 w-full h-full pointer-events-none z-10 flex flex-col justify-end"
             >
-                <!-- Bottom-left controls guide -->
+                <!-- Bottom-left controls guide (desktop) -->
                 <div
                     id="controls-guide"
-                    class="self-end px-4 py-2 mb-4 mr-4 bg-black/50 text-gray-300 text-xs font-normal tracking-wide flex items-center gap-2"
+                    class="self-end px-4 py-2 mb-4 mr-4 bg-black/50 text-gray-300 text-xs font-normal tracking-wide hidden md:flex items-center gap-2"
                 >
                     <div class="flex gap-1">
                         <span class="kbd-sm">A</span>
@@ -158,6 +170,44 @@
                     <span class="text-gray-500">or</span>
                     <span class="text-gray-400">← →</span>
                     <span class="text-gray-400">to steer</span>
+                </div>
+                <!-- Mobile CTA (bottom center, shown when not in-game) -->
+                <div
+                    id="mobile-cta"
+                    class="flex md:hidden w-full justify-center pb-6 pointer-events-auto"
+                >
+                    <button
+                        id="mobile-start-btn"
+                        class="btn-cta text-sm py-2 px-6 w-auto"
+                    >
+                        START
+                    </button>
+                    <button
+                        id="mobile-restart-btn"
+                        class="hidden btn-danger text-sm py-2 px-6 w-auto"
+                    >
+                        RETRY
+                    </button>
+                </div>
+                <!-- Mobile touch controls (shown only in-game) -->
+                <div
+                    id="mobile-controls"
+                    class="hidden md:hidden w-full justify-between px-4 pb-4 pointer-events-auto"
+                >
+                    <button
+                        id="touch-left"
+                        class="w-18 h-18 bg-amber-400/80 active:bg-amber-300 flex items-center justify-center text-gray-900 text-3xl font-extrabold select-none"
+                        style="touch-action: manipulation"
+                    >
+                        ←
+                    </button>
+                    <button
+                        id="touch-right"
+                        class="w-18 h-18 bg-amber-400/80 active:bg-amber-300 flex items-center justify-center text-gray-900 text-3xl font-extrabold select-none"
+                        style="touch-action: manipulation"
+                    >
+                        →
+                    </button>
                 </div>
             </div>
         </div>

@@ -140,7 +140,7 @@ const LEVEL_DEFS: ILevelDef[] = [
 let currentLevel = 1;
 let lastCopSpawnTime = 0;
 
-function getILevelDef(): ILevelDef {
+function getLevelDef(): ILevelDef {
   return LEVEL_DEFS[currentLevel - 1];
 }
 
@@ -236,6 +236,27 @@ function hideLeaderboard() {
 leaderboardBtn.addEventListener("click", showLeaderboard);
 leaderboardBackBtn.addEventListener("click", hideLeaderboard);
 
+// --- Feedback ---
+const feedbackPanel = document.getElementById("feedback-panel") as HTMLElement;
+const feedbackBtn = document.getElementById("feedback-btn") as HTMLElement;
+const feedbackBackBtn = document.getElementById("feedback-back-btn") as HTMLElement;
+
+function showFeedback() {
+  howToPlay.classList.add("hidden");
+  leaderboardPanel.classList.add("hidden");
+  feedbackPanel.classList.remove("hidden");
+}
+
+function hideFeedback() {
+  feedbackPanel.classList.add("hidden");
+  if (currentState === GAME_STATE.START) {
+    howToPlay.classList.remove("hidden");
+  }
+}
+
+feedbackBtn.addEventListener("click", showFeedback);
+feedbackBackBtn.addEventListener("click", hideFeedback);
+
 // --- Game State & UI ---
 const GAME_STATE = {
   START: 0,
@@ -312,7 +333,8 @@ function startGame() {
   mobileControls.classList.add("flex");
   darkenOverlay.classList.add("opacity-0");
   currentState = GAME_STATE.PLAYING;
-  hideLeaderboard();
+  leaderboardPanel.classList.add("hidden");
+  feedbackPanel.classList.add("hidden");
   survivalTime = 0;
   bustedTimer = 0;
   carHP = 100;
@@ -376,7 +398,7 @@ mobileBtnStart.addEventListener("click", startGame);
 mobileBtnRestart.addEventListener("click", startGame);
 
 function spawnCop(playerPosition: THREE.Vector3, playerVelocity: CANNON.Vec3) {
-  const levelDef = getILevelDef();
+  const levelDef = getLevelDef();
   if (cops.length >= levelDef.maxCops) return;
 
   // Spawn out of camera view (distance ~40-60)
@@ -540,7 +562,7 @@ function animate(time: number) {
     }
 
     // --- Cop Spawning Logic ---
-    const levelDef = getILevelDef();
+    const levelDef = getLevelDef();
     if (timeInSeconds - lastCopSpawnTime > levelDef.spawnInterval) {
       spawnCop(car.mesh.position, car.body.velocity);
       lastCopSpawnTime = timeInSeconds;

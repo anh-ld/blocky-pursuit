@@ -152,6 +152,11 @@
                         id="leaderboard-btn"
                         class="w-full mt-1 py-1.5 bg-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30 transition-colors pointer-events-auto"
                     >Leaderboard</button>
+                    <!-- Feedback button -->
+                    <button
+                        id="feedback-btn"
+                        class="w-full mt-1 py-1.5 bg-violet-500/20 text-violet-400 text-xs font-bold uppercase tracking-wider border border-violet-500/30 cursor-pointer hover:bg-violet-500/30 transition-colors pointer-events-auto"
+                    >Feedback</button>
                     <!-- Mobile-only: Install PWA button -->
                     <button
                         id="install-pwa-btn"
@@ -187,6 +192,40 @@
                     </div>
                     <button
                         id="leaderboard-back-btn"
+                        class="btn mt-3 bg-gray-700 text-gray-300 text-xs py-2 hover:bg-gray-600 hover:translate-y-0.5 active:translate-y-1"
+                    >BACK</button>
+                </div>
+            </div>
+            <!-- Feedback overlay (hidden by default, toggled by button) -->
+            <div
+                id="feedback-panel"
+                class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none hidden"
+            >
+                <div class="bg-black/80 border border-violet-500/40 p-5 w-64 pointer-events-auto">
+                    <div class="text-violet-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">
+                        Feedback
+                    </div>
+                    <form
+                        id="feedback-form"
+                        name="feedback"
+                        method="POST"
+                        data-netlify="true"
+                        action="/"
+                        class="flex flex-col gap-2"
+                    >
+                        <textarea
+                            name="message"
+                            required
+                            placeholder="What do you think? Bugs, ideas, anything..."
+                            class="w-full h-24 bg-gray-800 border border-gray-600 text-gray-200 text-xs p-2 resize-none focus:outline-none focus:border-violet-500"
+                        ></textarea>
+                        <button
+                            type="submit"
+                            class="w-full py-1.5 bg-violet-500/30 text-violet-300 text-xs font-bold uppercase tracking-wider border border-violet-500/40 cursor-pointer hover:bg-violet-500/40 transition-colors"
+                        >Send</button>
+                    </form>
+                    <button
+                        id="feedback-back-btn"
                         class="btn mt-3 bg-gray-700 text-gray-300 text-xs py-2 hover:bg-gray-600 hover:translate-y-0.5 active:translate-y-1"
                     >BACK</button>
                 </div>

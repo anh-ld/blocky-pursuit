@@ -230,13 +230,25 @@ function gameOver(reason: string = "BUSTED") {
 btnStart.addEventListener("click", startGame);
 btnRestart.addEventListener("click", startGame);
 
-function spawnCop(playerPosition: THREE.Vector3) {
+function spawnCop(playerPosition: THREE.Vector3, playerVelocity: CANNON.Vec3) {
   const levelDef = getLevelDef();
   if (cops.length >= levelDef.maxCops) return;
 
   // Spawn out of camera view (distance ~40-60)
   const distance = 40 + Math.random() * 20;
-  const angle = Math.random() * Math.PI * 2;
+
+  // 60% of the time, spawn AHEAD of the player's travel direction
+  // This prevents the "infinite straight road" exploit
+  let angle: number;
+  const speed = playerVelocity.length();
+  if (speed > 5 && Math.random() < 0.6) {
+    // Player's heading angle
+    const headingAngle = Math.atan2(playerVelocity.z, playerVelocity.x);
+    // Spawn within a ±45° cone ahead
+    angle = headingAngle + (Math.random() - 0.5) * (Math.PI / 2);
+  } else {
+    angle = Math.random() * Math.PI * 2;
+  }
 
   let x = playerPosition.x + Math.cos(angle) * distance;
   let z = playerPosition.z + Math.sin(angle) * distance;
@@ -385,7 +397,7 @@ function animate(time: number) {
     // --- Cop Spawning Logic ---
     const levelDef = getLevelDef();
     if (timeInSeconds - lastCopSpawnTime > levelDef.spawnInterval) {
-      spawnCop(car.mesh.position);
+      spawnCop(car.mesh.position, car.body.velocity);
       lastCopSpawnTime = timeInSeconds;
     }
 

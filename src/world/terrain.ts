@@ -48,19 +48,52 @@ export function isWater(globalTileX: number, globalTileZ: number): boolean {
   return false;
 }
 
-export function isRoad(globalTileX: number, globalTileZ: number): boolean {
-  if (globalTileX === 0 || globalTileZ === 0) return true;
+// Periodic roadblocks: break infinite straight roads every ~40 tiles
+// Returns true if this tile is a blocked gap in an otherwise straight road
+function isRoadBlocked(globalTileX: number, globalTileZ: number): boolean {
+  // Check if this X-position is a blockage point for horizontal roads (roads that run along X)
+  // Use a segment of ~20 tiles; each segment has one blockage position
+  const segX = Math.floor(globalTileX / 40);
+  const blockPosInSegX = Math.floor(pseudoRandom(segX, 0, 400) * 40);
+  const isBlockedX = (((globalTileX % 40) + 40) % 40) === blockPosInSegX;
 
+  // Same for vertical roads (roads that run along Z)
+  const segZ = Math.floor(globalTileZ / 40);
+  const blockPosInSegZ = Math.floor(pseudoRandom(0, segZ, 401) * 40);
+  const isBlockedZ = (((globalTileZ % 40) + 40) % 40) === blockPosInSegZ;
+
+  return isBlockedX || isBlockedZ;
+}
+
+export function isRoad(globalTileX: number, globalTileZ: number): boolean {
   const zone = getZone(globalTileX, globalTileZ);
   const rRoadX = pseudoRandom(globalTileX, 0, 10);
   const rRoadZ = pseudoRandom(0, globalTileZ, 11);
 
-  switch (zone) {
-    case Zone.DOWNTOWN:
-      return rRoadX > 0.55 || rRoadZ > 0.55;
-    case Zone.SUBURBS:
-      return rRoadX > 0.75 || rRoadZ > 0.75;
-    case Zone.NATURE:
-      return rRoadX > 0.9 || rRoadZ > 0.9;
+  let road = false;
+  if (globalTileX === 0 || globalTileZ === 0) {
+    road = true;
+  } else {
+    switch (zone) {
+      case Zone.DOWNTOWN:
+        road = rRoadX > 0.55 || rRoadZ > 0.55;
+        break;
+      case Zone.SUBURBS:
+        road = rRoadX > 0.75 || rRoadZ > 0.75;
+        break;
+      case Zone.NATURE:
+        road = rRoadX > 0.9 || rRoadZ > 0.9;
+        break;
+    }
   }
+
+  if (!road) return false;
+
+  // Don't block intersections (tiles where both an X-road and Z-road cross)
+  // Only block straight stretches
+  const isXRoad = globalTileX === 0 || rRoadX > (zone === Zone.DOWNTOWN ? 0.55 : zone === Zone.SUBURBS ? 0.75 : 0.9);
+  const isZRoad = globalTileZ === 0 || rRoadZ > (zone === Zone.DOWNTOWN ? 0.55 : zone === Zone.SUBURBS ? 0.75 : 0.9);
+  if (isXRoad && isZRoad) return true; // intersection — never block
+
+  return !isRoadBlocked(globalTileX, globalTileZ);
 }

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { Car } from "./entities/car";
 import { Cop } from "./entities/cop";
+import { Civilian } from "./entities/civilian";
 import { CityGenerator, isRoad } from "./world/city-generator";
 import { isWater, TILE_SIZE } from "./world/terrain";
 
@@ -81,6 +82,12 @@ function resizeRenderer() {
 }
 resizeRenderer();
 window.addEventListener("resize", resizeRenderer);
+
+// --- Civilians Setup ---
+const civilians: Civilian[] = [];
+const MAX_CIVILIANS = 8;
+const CIVILIAN_SPAWN_INTERVAL = 2; // seconds
+let lastCivilianSpawnTime = 0;
 
 // --- Cops Setup ---
 const cops: Cop[] = [];
@@ -187,7 +194,7 @@ function startGame() {
   speedStreakTimer = 0;
 
   // Reset Player
-  car.body.position.set(0, 5, 0);
+  car.body.position.set(0, 1, 0);
   car.body.velocity.set(0, 0, 0);
   car.body.angularVelocity.set(0, 0, 0);
   car.bounceBackTimer = 0;
@@ -201,9 +208,14 @@ function startGame() {
   cops.forEach((cop) => cop.destroy());
   cops.length = 0;
 
+  // Clear Civilians
+  civilians.forEach((c) => c.destroy());
+  civilians.length = 0;
+
   updateHUD();
   lastCallTime = performance.now() / 1000;
   lastCopSpawnTime = lastCallTime;
+  lastCivilianSpawnTime = lastCallTime;
 }
 
 function gameOver(reason: string = "BUSTED") {
@@ -250,9 +262,45 @@ function spawnCop(playerPosition: THREE.Vector3) {
     if (foundRoad) break;
   }
 
-  const pos = new THREE.Vector3(tileX * TILE_SIZE, 5, tileZ * TILE_SIZE);
+  const pos = new THREE.Vector3(tileX * TILE_SIZE, 1, tileZ * TILE_SIZE);
   const cop = new Cop(scene, world, pos, currentLevel);
   cops.push(cop);
+}
+
+function spawnCivilian(playerPosition: THREE.Vector3) {
+  if (civilians.length >= MAX_CIVILIANS) return;
+
+  const distance = 30 + Math.random() * 20;
+  const angle = Math.random() * Math.PI * 2;
+
+  let x = playerPosition.x + Math.cos(angle) * distance;
+  let z = playerPosition.z + Math.sin(angle) * distance;
+
+  const TS = 10;
+  let tileX = Math.floor(x / TS);
+  let tileZ = Math.floor(z / TS);
+
+  let foundRoad = false;
+  for (let r = 0; r < 5; r++) {
+    for (let dx = -r; dx <= r; dx++) {
+      for (let dz = -r; dz <= r; dz++) {
+        if (isRoad(tileX + dx, tileZ + dz)) {
+          tileX += dx;
+          tileZ += dz;
+          foundRoad = true;
+          break;
+        }
+      }
+      if (foundRoad) break;
+    }
+    if (foundRoad) break;
+  }
+
+  if (!foundRoad) return;
+
+  // Spawn at tile center
+  const pos = new THREE.Vector3(tileX * TS + TS / 2, 1, tileZ * TS + TS / 2);
+  civilians.push(new Civilian(scene, world, pos));
 }
 
 // --- Game Loop ---
@@ -305,6 +353,33 @@ function animate(time: number) {
       }
       lastScoreTileX = scoreTileX;
       lastScoreTileZ = scoreTileZ;
+    }
+
+    // --- Civilian Spawning ---
+    if (timeInSeconds - lastCivilianSpawnTime > CIVILIAN_SPAWN_INTERVAL) {
+      spawnCivilian(car.mesh.position);
+      lastCivilianSpawnTime = timeInSeconds;
+    }
+
+    // --- Update Civilians ---
+    for (let i = civilians.length - 1; i >= 0; i--) {
+      const civ = civilians[i];
+      if (!civ) continue;
+      civ.update(dt);
+
+      const distToPlayer = civ.body.position.distanceTo(car.body.position);
+
+      // Despawn far civilians
+      if (distToPlayer > 80) {
+        civ.destroy();
+        civilians.splice(i, 1);
+        continue;
+      }
+
+      // Stun on collision with player
+      if (distToPlayer < 5 && civ.stunTimer <= 0) {
+        civ.stun();
+      }
     }
 
     // --- Cop Spawning Logic ---
@@ -366,6 +441,18 @@ function animate(time: number) {
     const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
     if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
       gameOver("DROWNED");
+    }
+
+    // Civilians die in water — just remove
+    for (let i = civilians.length - 1; i >= 0; i--) {
+      const civ = civilians[i];
+      if (!civ) continue;
+      const civTileX = Math.floor(civ.body.position.x / TILE_SIZE);
+      const civTileZ = Math.floor(civ.body.position.z / TILE_SIZE);
+      if (!isRoad(civTileX, civTileZ) && isWater(civTileX, civTileZ)) {
+        civ.destroy();
+        civilians.splice(i, 1);
+      }
     }
 
     // Cops die in water — bonus score

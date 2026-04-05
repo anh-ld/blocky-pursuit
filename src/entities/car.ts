@@ -160,7 +160,7 @@ export class Car {
     const shape = new CANNON.Box(new CANNON.Vec3(unit * 2, unit * 1.5, unit * 4));
     this.body = new CANNON.Body({
       mass: 100, // Reduced mass for better acceleration
-      position: new CANNON.Vec3(0, 5, 0),
+      position: new CANNON.Vec3(0, 1, 0),
       linearDamping: 0.1, // Reduced damping so it coasts faster
       angularDamping: 0.9,
       sleepSpeedLimit: 0.1, // Don't sleep unless completely stopped

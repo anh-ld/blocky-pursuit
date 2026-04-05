@@ -1,14 +1,14 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { CHUNK_SIZE, TILE_SIZE, TILES_PER_CHUNK, Zone, pseudoRandom, getZone, isRoad, isWater } from "./terrain";
-import { createMaterials, createGeometries, type Materials, type Geometries } from "./materials";
+import { createMaterials, createGeometries, type IMaterials, type IGeometries } from "./materials";
 import { placeDowntown } from "./zones/downtown";
 import { placeSuburbs } from "./zones/suburbs";
 import { placeNature, placeWaterDecor } from "./zones/nature";
 
 export { isRoad } from "./terrain";
 
-export type ChunkData = {
+export type IChunkData = {
   group: THREE.Group;
   bodies: CANNON.Body[];
   world: CANNON.World;
@@ -17,9 +17,9 @@ export type ChunkData = {
 export class CityGenerator {
   scene: THREE.Scene;
   world: CANNON.World;
-  chunks: Map<string, ChunkData>;
-  materials: Materials;
-  geometries: Geometries;
+  chunks: Map<string, IChunkData>;
+  materials: IMaterials;
+  geometries: IGeometries;
 
   constructor(scene: THREE.Scene, world: CANNON.World) {
     this.scene = scene;
@@ -57,7 +57,7 @@ export class CityGenerator {
   }
 
   generateChunk(chunkX: number, chunkZ: number) {
-    const chunk: ChunkData = {
+    const chunk: IChunkData = {
       group: new THREE.Group(),
       bodies: [],
       world: this.world,
@@ -139,7 +139,7 @@ export class CityGenerator {
     this.chunks.set(`${chunkX},${chunkZ}`, chunk);
   }
 
-  addRoadMarkings(chunk: ChunkData, tileX: number, tileZ: number, worldX: number, worldZ: number) {
+  addRoadMarkings(chunk: IChunkData, tileX: number, tileZ: number, worldX: number, worldZ: number) {
     const roadN = isRoad(tileX, tileZ - 1);
     const roadS = isRoad(tileX, tileZ + 1);
     const roadE = isRoad(tileX + 1, tileZ);
@@ -162,7 +162,7 @@ export class CityGenerator {
     }
   }
 
-  unloadChunk(key: string, chunk: ChunkData) {
+  unloadChunk(key: string, chunk: IChunkData) {
     this.scene.remove(chunk.group);
     for (const body of chunk.bodies) {
       this.world.removeBody(body);

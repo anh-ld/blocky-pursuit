@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 
-export interface CopLevelConfig {
+export interface ICopLevelConfig {
   mass: number;
   speed: number;
   ramSpeed: number; // burst speed when close to player
@@ -12,7 +12,7 @@ export interface CopLevelConfig {
 }
 
 // Player: maxSpeed=40, mass=100
-export const COP_LEVEL_CONFIGS: Record<number, CopLevelConfig> = {
+export const COP_LEVEL_CONFIGS: Record<number, ICopLevelConfig> = {
   1: { mass: 100, speed: 44, ramSpeed: 52, turnSpeed: 2.2, forwardForce: 160000, predictAhead: 0.5, flank: false },
   2: { mass: 115, speed: 46, ramSpeed: 55, turnSpeed: 2.5, forwardForce: 175000, predictAhead: 0.8, flank: false },
   3: { mass: 130, speed: 48, ramSpeed: 58, turnSpeed: 2.8, forwardForce: 190000, predictAhead: 1.2, flank: true },
@@ -35,7 +35,7 @@ export class Cop {
   targetPosition: THREE.Vector3 | null = null;
   targetVelocity: CANNON.Vec3 | null = null;
   level: number;
-  config: CopLevelConfig;
+  config: ICopLevelConfig;
   flankSide: number; // +1 or -1
   damageCooldown: number; // seconds until this cop can deal damage again
   preStepCallback: () => void;

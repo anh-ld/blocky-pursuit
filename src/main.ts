@@ -124,12 +124,12 @@ const BUSTED_TIME_THRESHOLD = 3; // seconds stopped
 const BUSTED_COP_COUNT = 2; // 2 cops nearby is enough
 
 // --- Level System ---
-interface LevelDef {
+interface ILevelDef {
   maxCops: number;
   spawnInterval: number;
   scoreThreshold: number;
 }
-const LEVEL_DEFS: LevelDef[] = [
+const LEVEL_DEFS: ILevelDef[] = [
   { maxCops: 3, spawnInterval: 4, scoreThreshold: 0 },     // Level 1 — medium start
   { maxCops: 5, spawnInterval: 3, scoreThreshold: 100 },    // Level 2 — ~10s in
   { maxCops: 6, spawnInterval: 2.5, scoreThreshold: 300 },  // Level 3 — ~30s
@@ -140,7 +140,7 @@ const LEVEL_DEFS: LevelDef[] = [
 let currentLevel = 1;
 let lastCopSpawnTime = 0;
 
-function getLevelDef(): LevelDef {
+function getILevelDef(): ILevelDef {
   return LEVEL_DEFS[currentLevel - 1];
 }
 
@@ -376,7 +376,7 @@ mobileBtnStart.addEventListener("click", startGame);
 mobileBtnRestart.addEventListener("click", startGame);
 
 function spawnCop(playerPosition: THREE.Vector3, playerVelocity: CANNON.Vec3) {
-  const levelDef = getLevelDef();
+  const levelDef = getILevelDef();
   if (cops.length >= levelDef.maxCops) return;
 
   // Spawn out of camera view (distance ~40-60)
@@ -540,7 +540,7 @@ function animate(time: number) {
     }
 
     // --- Cop Spawning Logic ---
-    const levelDef = getLevelDef();
+    const levelDef = getILevelDef();
     if (timeInSeconds - lastCopSpawnTime > levelDef.spawnInterval) {
       spawnCop(car.mesh.position, car.body.velocity);
       lastCopSpawnTime = timeInSeconds;

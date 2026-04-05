@@ -1,13 +1,13 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { pseudoRandom } from "./terrain";
-import type { Materials, Geometries } from "./materials";
-import type { ChunkData } from "./city-generator";
+import type { IMaterials, IGeometries } from "./materials";
+import type { IChunkData } from "./city-generator";
 
 export function addTree(
-  chunk: ChunkData,
-  materials: Materials,
-  geometries: Geometries,
+  chunk: IChunkData,
+  materials: IMaterials,
+  geometries: IGeometries,
   x: number,
   z: number,
   r2: number,
@@ -39,9 +39,9 @@ export function addTree(
 }
 
 export function addFlowers(
-  chunk: ChunkData,
-  materials: Materials,
-  geometries: Geometries,
+  chunk: IChunkData,
+  materials: IMaterials,
+  geometries: IGeometries,
   x: number,
   z: number,
   r2: number,
@@ -61,9 +61,9 @@ export function addFlowers(
 }
 
 export function addWindows(
-  chunk: ChunkData,
-  geometries: Geometries,
-  materials: Materials,
+  chunk: IChunkData,
+  geometries: IGeometries,
+  materials: IMaterials,
   x: number,
   z: number,
   width: number,
@@ -114,9 +114,9 @@ export function addWindows(
 }
 
 export function addRooftopDetail(
-  chunk: ChunkData,
-  geometries: Geometries,
-  materials: Materials,
+  chunk: IChunkData,
+  geometries: IGeometries,
+  materials: IMaterials,
   x: number,
   z: number,
   height: number,

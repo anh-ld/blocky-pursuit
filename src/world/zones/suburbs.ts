@@ -1,13 +1,13 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
-import type { Materials, Geometries } from "../materials";
-import type { ChunkData } from "../city-generator";
+import type { IMaterials, IGeometries } from "../materials";
+import type { IChunkData } from "../city-generator";
 import { addTree, addFlowers, addWindows } from "../decorators";
 
 export function placeSuburbs(
-  chunk: ChunkData,
-  materials: Materials,
-  geometries: Geometries,
+  chunk: IChunkData,
+  materials: IMaterials,
+  geometries: IGeometries,
   r1: number,
   r2: number,
   r3: number,

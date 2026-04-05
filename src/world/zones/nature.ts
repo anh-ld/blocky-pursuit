@@ -1,14 +1,14 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { pseudoRandom } from "../terrain";
-import type { Materials, Geometries } from "../materials";
-import type { ChunkData } from "../city-generator";
+import type { IMaterials, IGeometries } from "../materials";
+import type { IChunkData } from "../city-generator";
 import { addTree, addFlowers } from "../decorators";
 
 export function placeNature(
-  chunk: ChunkData,
-  materials: Materials,
-  geometries: Geometries,
+  chunk: IChunkData,
+  materials: IMaterials,
+  geometries: IGeometries,
   r1: number,
   r2: number,
   r3: number,
@@ -42,9 +42,9 @@ export function placeNature(
 }
 
 export function placeWaterDecor(
-  chunk: ChunkData,
-  materials: Materials,
-  geometries: Geometries,
+  chunk: IChunkData,
+  materials: IMaterials,
+  geometries: IGeometries,
   globalTileX: number,
   globalTileZ: number,
   worldX: number,

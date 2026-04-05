@@ -48,7 +48,7 @@ export function createMaterials() {
   };
 }
 
-export type Materials = ReturnType<typeof createMaterials>;
+export type IMaterials = ReturnType<typeof createMaterials>;
 
 export function createGeometries() {
   return {
@@ -57,4 +57,4 @@ export function createGeometries() {
   };
 }
 
-export type Geometries = ReturnType<typeof createGeometries>;
+export type IGeometries = ReturnType<typeof createGeometries>;

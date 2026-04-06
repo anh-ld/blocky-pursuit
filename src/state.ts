@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { attempt } from "es-toolkit";
 import { loadProgress, saveProgress } from "./entities/car-skins";
 
 export type IScreen = "howToPlay" | "leaderboard" | "feedback" | "garage" | "none";
@@ -13,6 +14,7 @@ export type IActions = {
   startGame: () => void;
   installPwa: () => void;
   selectSkin: (skinId: string) => void;
+  toggleSound: () => void;
 };
 
 // --- Game state signals (written by main.ts game loop, read by UI) ---
@@ -74,9 +76,15 @@ export const leaderboardEntries = signal<ILeaderboardEntry[]>([]);
 export const leaderboardLoading = signal(true);
 export const canInstallPwa = signal(false);
 
+// Mute state — initialized from localStorage so the button reflects the
+// persisted preference even before the AudioContext is created.
+const [, _storedMute] = attempt(() => localStorage.getItem("bp:muted"));
+export const audioMuted = signal(_storedMute === "1");
+
 // --- Actions wired by main.ts ---
 export const actions: IActions = {
   startGame: () => {},
   installPwa: () => {},
   selectSkin: () => {},
+  toggleSound: () => {},
 };

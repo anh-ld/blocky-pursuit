@@ -1,4 +1,4 @@
-import { gameState, survivalTime, actions } from "../state";
+import { gameState, survivalTime } from "../state";
 import { Hud } from "./hud";
 
 function formatTime(seconds: number) {
@@ -29,15 +29,6 @@ export function TopBar() {
         )}
       </div>
 
-      <div class="flex items-center gap-2">
-        <div class="hidden md:flex items-center gap-2">
-          {start && (
-            <button class="btn-cta text-sm py-2 px-5 w-auto" onClick={() => actions.startGame()}>
-              START
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

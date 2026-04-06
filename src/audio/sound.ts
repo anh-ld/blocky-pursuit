@@ -1,14 +1,16 @@
-// Procedural audio system using Web Audio API. Zero asset weight.
-// All sounds are generated from oscillators + noise on the fly.
+// Web Audio sound system. Engine uses pre-recorded MP3 samples crossfaded
+// by speed (technique borrowed from pmndrs/racing-game, MIT licensed).
+// Other sounds are generated procedurally from oscillators + noise.
 
-type AudioCtx = AudioContext;
+import { attempt, attemptAsync } from "es-toolkit";
 
-let ctx: AudioCtx | null = null;
+const MASTER_VOL = 0.4;
+const STORAGE_KEY = "bp:muted";
+
+let ctx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let muted = false;
-// Engine = two looped MP3s crossfaded by speed (technique borrowed from
-// https://github.com/pmndrs/racing-game — MIT licensed). The MP3 files are
-// also from that repo (public/sounds/engine.mp3 + accelerate.mp3).
+
 let engineBuffers: { idle: AudioBuffer; rev: AudioBuffer } | null = null;
 let engineLoadPromise: Promise<void> | null = null;
 let engineNodes: {
@@ -25,22 +27,29 @@ let sirenNodes: {
   toggleInterval: number;
 } | null = null;
 
-const STORAGE_KEY = "bp:muted";
+type IWindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext };
 
 export function initAudio() {
   if (ctx) return;
-  try {
-    ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    masterGain = ctx.createGain();
-    masterGain.gain.value = 0.4;
-    masterGain.connect(ctx.destination);
-    muted = localStorage.getItem(STORAGE_KEY) === "1";
-    if (muted && masterGain) masterGain.gain.value = 0;
-    // Kick off engine sample preload (fire-and-forget)
-    loadEngineBuffers();
-  } catch {
-    // Audio not supported — silently ignore
-  }
+  const [err, created] = attempt(() => {
+    const Ctor = window.AudioContext || (window as IWindowWithWebkitAudio).webkitAudioContext;
+    if (!Ctor) throw new Error("Web Audio not supported");
+    const audioCtx = new Ctor();
+    const gain = audioCtx.createGain();
+    gain.gain.value = MASTER_VOL;
+    gain.connect(audioCtx.destination);
+    return { audioCtx, gain };
+  });
+  if (err || !created) return; // Audio not supported — silently ignore
+  ctx = created.audioCtx;
+  masterGain = created.gain;
+
+  const [, stored] = attempt(() => localStorage.getItem(STORAGE_KEY));
+  muted = stored === "1";
+  if (muted) masterGain.gain.value = 0;
+
+  // Kick off engine sample preload (fire-and-forget)
+  loadEngineBuffers();
 }
 
 export function isMuted(): boolean {
@@ -49,14 +58,29 @@ export function isMuted(): boolean {
 
 export function toggleMute(): boolean {
   muted = !muted;
-  if (masterGain) masterGain.gain.value = muted ? 0 : 0.4;
-  try { localStorage.setItem(STORAGE_KEY, muted ? "1" : "0"); } catch {}
+  if (masterGain) masterGain.gain.value = muted ? 0 : MASTER_VOL;
+  attempt(() => localStorage.setItem(STORAGE_KEY, muted ? "1" : "0"));
   return muted;
 }
 
 // --- Helpers ---
 function now(): number {
   return ctx ? ctx.currentTime : 0;
+}
+
+/**
+ * Stop (if a source) and disconnect a list of audio nodes. Web Audio
+ * throws if a source is double-stopped or a node is already disconnected;
+ * those errors are intentionally swallowed.
+ */
+function safeDispose(...nodes: (AudioNode | null | undefined)[]) {
+  for (const node of nodes) {
+    if (!node) continue;
+    if ("stop" in node && typeof (node as AudioScheduledSourceNode).stop === "function") {
+      attempt(() => (node as AudioScheduledSourceNode).stop());
+    }
+    attempt(() => node.disconnect());
+  }
 }
 
 function envelope(gain: GainNode, attack: number, peak: number, decay: number) {
@@ -77,28 +101,20 @@ function noiseBuffer(duration: number): AudioBuffer | null {
   return buf;
 }
 
-// --- Engine: pre-recorded sample crossfade (pmndrs/racing-game technique) ---
-// Two looping samples — one idle, one high-rev — are crossfaded by speed,
-// and both are pitch-shifted via playbackRate to match the throttle.
-//
-// The previous procedural attempts (oscillators, filtered noise) all
-// sounded synthetic because synthesis cannot reproduce the spectral
-// complexity of a real combustion engine. Samples can.
+// --- Engine ---
 
 async function fetchBuffer(url: string): Promise<AudioBuffer | null> {
   if (!ctx) return null;
-  try {
+  const [err, buf] = await attemptAsync(async () => {
     const res = await fetch(url);
-    if (!res.ok) {
-      console.warn(`[audio] failed to fetch ${url}: ${res.status}`);
-      return null;
-    }
-    const arr = await res.arrayBuffer();
-    return await ctx.decodeAudioData(arr);
-  } catch (e) {
-    console.warn(`[audio] failed to load ${url}`, e);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return ctx!.decodeAudioData(await res.arrayBuffer());
+  });
+  if (err) {
+    console.warn(`[audio] failed to load ${url}`, err);
     return null;
   }
+  return buf;
 }
 
 // Returns a promise that resolves AFTER the buffers are loaded (or null if
@@ -142,10 +158,12 @@ function buildEngineNodes() {
   revGain.gain.value = 0;
   bus.gain.value = 1.3;
 
-  // Native playback rate at idle so the sound character matches the raw
-  // file. setEngineSpeed will only push it slightly higher with speed.
+  // Starting playback rates match the setEngineSpeed baselines so the
+  // first frame doesn't pop. NOTE: rev sample (accelerate.mp3) is a
+  // high-RPM recording and is intentionally played SLOWER than native
+  // (per pmndrs/racing-game) — playing it faster sounds chipmunky.
   idleSrc.playbackRate.value = 1.0;
-  revSrc.playbackRate.value = 1.0;
+  revSrc.playbackRate.value = 0.55;
 
   idleSrc.connect(idleGain);
   revSrc.connect(revGain);
@@ -180,17 +198,26 @@ export function setEngineSpeed(speedRatio: number) {
   if (!ctx || !engineNodes) return;
   const t = now();
 
-  // Pure 0..1 crossfade — engine bus handles overall volume.
+  // Volumes — modeled on pmndrs/racing-game:
+  //   idle = 1 - speed/max          (max 1.0 at standstill, 0 at top speed)
+  //   rev  = 0.6 * speed/max        (max 0.6 at top speed — kept LOWER than
+  //                                  idle's max because our accelerate.mp3
+  //                                  is naturally louder than engine.mp3,
+  //                                  unlike racing-game where the opposite
+  //                                  is true and they multiply by 2)
   const idleVol = 1 - speedRatio;
-  const revVol = speedRatio;
+  const revVol = speedRatio * 0.6;
   engineNodes.idleGain.gain.setTargetAtTime(idleVol, t, 0.08);
   engineNodes.revGain.gain.setTargetAtTime(revVol, t, 0.08);
 
-  // Modest pitch shift: 1.0 → 1.3. Stays close to native playback so
-  // the engine keeps its real character; just slightly higher RPM with
-  // speed. Wider ranges (1.35→1.7) sounded chipmunky and unnatural.
-  const idleRate = 1.0 + speedRatio * 0.25;
-  const revRate = 1.05 + speedRatio * 0.25;
+  // Playback rates — modeled on pmndrs/racing-game (engine = rpm+1, rev = rpm+0.5):
+  //   idle: 1.0x → 1.30x  (idle.mp3 is a low-RPM recording, sped up slightly)
+  //   rev:  0.55x → 0.85x (accelerate.mp3 is a HIGH-RPM recording,
+  //                        intentionally SLOWED so it doesn't sound chipmunky)
+  // The rev sample being slowed below 1.0 is the key racing-game insight
+  // I missed earlier — without this it sounded like an angry mosquito.
+  const idleRate = 1.0 + speedRatio * 0.3;
+  const revRate = 0.55 + speedRatio * 0.3;
   engineNodes.idleSrc.playbackRate.setTargetAtTime(idleRate, t, 0.08);
   engineNodes.revSrc.playbackRate.setTargetAtTime(revRate, t, 0.08);
 }
@@ -199,13 +226,7 @@ export function stopEngine() {
   engineWanted = false;
   if (!engineNodes) return;
   const n = engineNodes;
-  try { n.idleSrc.stop(); } catch {}
-  try { n.revSrc.stop(); } catch {}
-  try { n.idleSrc.disconnect(); } catch {}
-  try { n.revSrc.disconnect(); } catch {}
-  try { n.idleGain.disconnect(); } catch {}
-  try { n.revGain.disconnect(); } catch {}
-  try { n.bus.disconnect(); } catch {}
+  safeDispose(n.idleSrc, n.revSrc, n.idleGain, n.revGain, n.bus);
   engineNodes = null;
 }
 
@@ -250,10 +271,7 @@ export function setSirenVolume(intensity: number) {
 export function stopSiren() {
   if (!sirenNodes) return;
   clearInterval(sirenNodes.toggleInterval);
-  try { sirenNodes.osc.stop(); } catch {}
-  try { sirenNodes.osc.disconnect(); } catch {}
-  try { sirenNodes.filter.disconnect(); } catch {}
-  try { sirenNodes.gain.disconnect(); } catch {}
+  safeDispose(sirenNodes.osc, sirenNodes.filter, sirenNodes.gain);
   sirenNodes = null;
 }
 
@@ -308,68 +326,53 @@ export function playSplash() {
   src.start();
 }
 
-export function playPickup() {
+type IArpeggioOpts = {
+  notes: number[];
+  type: OscillatorType;
+  spacing: number; // seconds between note onsets
+  attack: number;
+  peak: number;
+  decay: number;
+};
+
+/** Schedule a sequence of staggered tone bursts on the master bus. */
+function playArpeggio(opts: IArpeggioOpts) {
   if (!ctx || !masterGain) return;
-  const t = now();
-  // Two-note arpeggio for a "ding!" — much more satisfying than a single sweep
-  const notes = [880, 1320];
-  notes.forEach((f, i) => {
-    const o = ctx!.createOscillator();
-    const g = ctx!.createGain();
-    o.type = "triangle";
-    o.frequency.value = f;
-    const start = t + i * 0.06;
+  const t0 = now();
+  for (let i = 0; i < opts.notes.length; i++) {
+    const start = t0 + i * opts.spacing;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = opts.type;
+    o.frequency.value = opts.notes[i];
     g.gain.setValueAtTime(0.0001, start);
-    g.gain.exponentialRampToValueAtTime(0.6, start + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+    g.gain.exponentialRampToValueAtTime(opts.peak, start + opts.attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + opts.attack + opts.decay);
     o.connect(g);
-    g.connect(masterGain!);
+    g.connect(masterGain);
     o.start(start);
-    o.stop(start + 0.2);
-  });
+    o.stop(start + opts.attack + opts.decay + 0.02);
+  }
+}
+
+export function playPickup() {
+  // Two-note "ding!"
+  playArpeggio({ notes: [880, 1320], type: "triangle", spacing: 0.06, attack: 0.01, peak: 0.6, decay: 0.18 });
 }
 
 export function playLevelUp() {
-  if (!ctx || !masterGain) return;
-  const t = now();
-  const notes = [523, 659, 784, 1047]; // C E G C
-  notes.forEach((f, i) => {
-    const o = ctx!.createOscillator();
-    const g = ctx!.createGain();
-    o.type = "square";
-    o.frequency.value = f;
-    g.gain.setValueAtTime(0.0001, t + i * 0.08);
-    g.gain.exponentialRampToValueAtTime(0.5, t + i * 0.08 + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.08 + 0.2);
-    o.connect(g);
-    g.connect(masterGain!);
-    o.start(t + i * 0.08);
-    o.stop(t + i * 0.08 + 0.22);
-  });
+  // C E G C — major arpeggio
+  playArpeggio({ notes: [523, 659, 784, 1047], type: "square", spacing: 0.08, attack: 0.02, peak: 0.5, decay: 0.2 });
 }
 
 export function playGameOver() {
-  if (!ctx || !masterGain) return;
-  const t = now();
-  const notes = [523, 466, 392, 311]; // C Bb G Eb (descending)
-  notes.forEach((f, i) => {
-    const o = ctx!.createOscillator();
-    const g = ctx!.createGain();
-    o.type = "sawtooth";
-    o.frequency.value = f;
-    g.gain.setValueAtTime(0.0001, t + i * 0.15);
-    g.gain.exponentialRampToValueAtTime(0.55, t + i * 0.15 + 0.03);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.15 + 0.4);
-    o.connect(g);
-    g.connect(masterGain!);
-    o.start(t + i * 0.15);
-    o.stop(t + i * 0.15 + 0.45);
-  });
+  // C Bb G Eb — descending sting
+  playArpeggio({ notes: [523, 466, 392, 311], type: "sawtooth", spacing: 0.15, attack: 0.03, peak: 0.55, decay: 0.4 });
 }
 
 // Resume audio context after user gesture (mobile autoplay policy)
 export function resumeAudio() {
-  if (ctx && ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
+  if (ctx?.state === "suspended") {
+    attemptAsync(() => ctx!.resume());
   }
 }

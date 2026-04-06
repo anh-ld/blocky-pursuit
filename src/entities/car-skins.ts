@@ -1,6 +1,8 @@
 // Unlockable car skins. Color + small stat tweak.
 // Unlock conditions are evaluated against persisted player progress.
 
+import { attempt } from "es-toolkit";
+
 export type ICarSkin = {
   id: string;
   name: string;
@@ -111,24 +113,29 @@ export type IProgress = {
 
 const KEY = "bp:progress";
 
+const DEFAULT_PROGRESS: IProgress = {
+  best: 0,
+  totalRuns: 0,
+  copsDrowned: 0,
+  selectedSkin: "redstar",
+};
+
 export function loadProgress(): IProgress {
-  try {
+  const [, parsed] = attempt(() => {
     const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const p = JSON.parse(raw);
-      return {
-        best: p.best || 0,
-        totalRuns: p.totalRuns || 0,
-        copsDrowned: p.copsDrowned || 0,
-        selectedSkin: p.selectedSkin || "redstar",
-      };
-    }
-  } catch {}
-  return { best: 0, totalRuns: 0, copsDrowned: 0, selectedSkin: "redstar" };
+    return raw ? (JSON.parse(raw) as Partial<IProgress>) : null;
+  });
+  if (!parsed) return { ...DEFAULT_PROGRESS };
+  return {
+    best: parsed.best || 0,
+    totalRuns: parsed.totalRuns || 0,
+    copsDrowned: parsed.copsDrowned || 0,
+    selectedSkin: parsed.selectedSkin || "redstar",
+  };
 }
 
 export function saveProgress(p: IProgress) {
-  try { localStorage.setItem(KEY, JSON.stringify(p)); } catch {}
+  attempt(() => localStorage.setItem(KEY, JSON.stringify(p)));
 }
 
 export function isUnlocked(skin: ICarSkin, p: IProgress): boolean {

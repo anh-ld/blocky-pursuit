@@ -1,3 +1,4 @@
+import { attemptAsync } from "es-toolkit";
 import {
   score,
   bestScore,
@@ -18,13 +19,13 @@ function formatTime(seconds: number) {
 async function shareRun() {
   const text = `I scored ${Math.floor(score.value)} in Blocky Pursuit — survived ${formatTime(survivalTime.value)} as ${playerName.value}. Can you beat me?`;
   const url = window.location.href;
-  try {
+  await attemptAsync(async () => {
     if (navigator.share) {
       await navigator.share({ title: "Blocky Pursuit", text, url });
     } else {
       await navigator.clipboard.writeText(`${text} ${url}`);
     }
-  } catch {}
+  });
 }
 
 export function GameOver() {

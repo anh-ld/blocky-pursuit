@@ -24,6 +24,8 @@ import {
   playPickup,
   playLevelUp,
   playGameOver,
+  toggleMute,
+  isMuted,
 } from "./audio/sound";
 import {
   initEffects,
@@ -54,6 +56,7 @@ import {
   setSelectedSkin,
   incrementRuns,
   addDrownedCops,
+  audioMuted,
 } from "./state";
 import { fetchLeaderboard, submitScore, getPlayerName } from "./api";
 
@@ -65,10 +68,14 @@ render(h(App, null), appRoot);
 playerName.value = getPlayerName();
 
 // --- PWA Install Prompt (mobile only) ---
-let deferredPrompt: any = null;
+type IBeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+let deferredPrompt: IBeforeInstallPromptEvent | null = null;
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
-  deferredPrompt = e;
+  deferredPrompt = e as IBeforeInstallPromptEvent;
   canInstallPwa.value = true;
 });
 if (window.matchMedia("(display-mode: standalone)").matches) {
@@ -283,6 +290,14 @@ function gameOver(reason: string = "BUSTED") {
 }
 
 actions.startGame = startGame;
+
+actions.toggleSound = () => {
+  // Ensure ctx exists so toggleMute can act on the master gain
+  initAudio();
+  resumeAudio();
+  toggleMute();
+  audioMuted.value = isMuted();
+};
 
 // --- Pickup spawn helper (snap to a road tile near player) ---
 function spawnPickup(playerPosition: THREE.Vector3) {

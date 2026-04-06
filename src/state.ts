@@ -18,6 +18,7 @@ export type IActions = {
   selectSkin: (skinId: string) => void;
   toggleSound: () => void;
   setWeather: (w: IWeather) => void;
+  togglePause: () => void;
 };
 
 // --- Game state signals (written by main.ts game loop, read by UI) ---
@@ -102,4 +103,5 @@ export const actions: IActions = {
   selectSkin: () => {},
   toggleSound: () => {},
   setWeather: () => {},
+  togglePause: () => {},
 };

@@ -1,4 +1,4 @@
-import { gameState, survivalTime } from "../state";
+import { gameState, survivalTime, actions } from "../state";
 import { Hud } from "./hud";
 
 function formatTime(seconds: number) {
@@ -10,6 +10,7 @@ function formatTime(seconds: number) {
 export function TopBar() {
   const state = gameState.value;
   const playing = state === "playing";
+  const paused = state === "paused";
   const over = state === "gameover";
   const start = state === "start";
 
@@ -21,14 +22,31 @@ export function TopBar() {
             blocky pursuit
           </h1>
         )}
-        {(playing || over) && <Hud />}
-        {(playing || over) && (
+        {(playing || paused || over) && <Hud />}
+        {(playing || paused || over) && (
           <div class="text-gray-400 text-xs font-semibold tracking-widest">
             {formatTime(survivalTime.value)}
           </div>
         )}
       </div>
-
+      {(playing || paused) && (
+        <button
+          aria-label={paused ? "Resume" : "Pause"}
+          onClick={() => actions.togglePause()}
+          class="w-8 h-8 text-amber-400 cursor-pointer flex items-center justify-center"
+        >
+          {paused ? (
+            <svg width="16" height="16" viewBox="0 0 12 12" fill="currentColor">
+              <path d="M2 1 L10 6 L2 11 Z" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 12 12" fill="currentColor">
+              <rect x="2" y="1" width="3" height="10" />
+              <rect x="7" y="1" width="3" height="10" />
+            </svg>
+          )}
+        </button>
+      )}
     </div>
   );
 }

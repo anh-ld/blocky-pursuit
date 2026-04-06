@@ -197,6 +197,11 @@ function resumeGame() {
   startBgm();
 }
 
+actions.togglePause = () => {
+  if (currentState === "playing") pauseGame();
+  else if (currentState === "paused") resumeGame();
+};
+
 window.addEventListener("keydown", (e) => {
   if (e.code !== "Space" && e.key !== " ") return;
   if (currentState === "playing") {

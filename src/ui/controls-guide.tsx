@@ -3,13 +3,14 @@ import { WEATHERS } from "../world/weather";
 import { getSkin } from "../entities/car-skins";
 
 export function ControlsGuide() {
-  if (gameState.value !== "playing") return null;
+  const state = gameState.value;
+  if (state !== "playing" && state !== "paused") return null;
   const muted = audioMuted.value;
   const currentWeather = weather.value;
   const skin = getSkin(selectedSkin.value);
 
   return (
-    <div class="self-end mb-4 mr-4 flex items-stretch gap-2 hidden md:flex">
+    <div class={`self-end mb-4 mr-4 h-9 items-stretch gap-2 ${state === "paused" ? "flex" : "hidden md:flex"}`}>
       <div class="px-3 bg-black/50 text-xs font-normal tracking-wide flex items-center">
         <span
           class="font-bold"
@@ -41,7 +42,7 @@ export function ControlsGuide() {
       >
         ♪
       </button>
-      <div class="px-4 py-2 bg-black/50 text-gray-300 text-xs font-normal tracking-wide flex items-center gap-2">
+      <div class="px-4 py-2 bg-black/50 text-gray-300 text-xs font-normal tracking-wide hidden md:flex items-center gap-2">
         <div class="flex gap-1">
           <span class="kbd-sm">A</span>
           <span class="kbd-sm">D</span>

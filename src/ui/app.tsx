@@ -32,7 +32,8 @@ export function App() {
               <span class="text-amber-400 font-extrabold uppercase tracking-widest">
                 Paused
               </span>
-              <span class="text-gray-400">Press SPACE to resume</span>
+              <span class="text-gray-400 hidden md:inline">Press SPACE to resume</span>
+              <span class="text-gray-400 md:hidden">Tap play to resume</span>
             </div>
           </div>
         )}

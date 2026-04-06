@@ -4,6 +4,28 @@ import { TILE_SIZE, isRoad } from "../world/terrain";
 
 const CIVILIAN_COLORS = [0x4caf50, 0x2196f3, 0xffeb3b, 0xffffff, 0x9c27b0, 0xff9800];
 
+// --- Shared materials (color-independent ones; body/cabin/stripe stay per-instance) ---
+const matProps = { roughness: 0.8, flatShading: true } as const;
+const CIV_GLASS_MAT = new THREE.MeshStandardMaterial({
+  color: 0xaaddee,
+  roughness: 0.2,
+  flatShading: true,
+  metalness: 0.6,
+});
+const CIV_HEADLIGHT_MAT = new THREE.MeshStandardMaterial({
+  color: 0xffee88,
+  emissive: 0xffee88,
+  emissiveIntensity: 0.8,
+  flatShading: true,
+});
+const CIV_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
+  color: 0xff2222,
+  emissive: 0xff2222,
+  emissiveIntensity: 0.6,
+  flatShading: true,
+});
+const CIV_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x111111, ...matProps });
+
 export class Civilian {
   scene: THREE.Scene;
   world: CANNON.World;
@@ -23,8 +45,6 @@ export class Civilian {
     this.mesh = new THREE.Group();
 
     const bodyColor = CIVILIAN_COLORS[Math.floor(Math.random() * CIVILIAN_COLORS.length)];
-    const wheelColor = 0x111111;
-    const matProps = { roughness: 0.8, flatShading: true };
 
     // Darker shade for trim/stripe
     const trimColor = new THREE.Color(bodyColor).multiplyScalar(0.7).getHex();
@@ -64,65 +84,46 @@ export class Civilian {
     this.mesh.add(bottomStripe);
 
     // Windshield (front window)
-    const glassMat = new THREE.MeshStandardMaterial({
-      color: 0xaaddee,
-      roughness: 0.2,
-      flatShading: true,
-      metalness: 0.6,
-    });
     const windshieldGeo = new THREE.BoxGeometry(unit * 3, unit * 1.4, unit * 0.2);
-    const windshield = new THREE.Mesh(windshieldGeo, glassMat);
+    const windshield = new THREE.Mesh(windshieldGeo, CIV_GLASS_MAT);
     windshield.position.set(0, unit * 2.8, -unit * 2.3);
     this.mesh.add(windshield);
 
     // Side windows
     const sideWinGeo = new THREE.BoxGeometry(unit * 0.15, unit * 1, unit * 1.2);
-    const sideWinL = new THREE.Mesh(sideWinGeo, glassMat);
+    const sideWinL = new THREE.Mesh(sideWinGeo, CIV_GLASS_MAT);
     sideWinL.position.set(-unit * 1.85, unit * 2.8, -unit * 1.2);
     this.mesh.add(sideWinL);
-    const sideWinR = new THREE.Mesh(sideWinGeo, glassMat);
+    const sideWinR = new THREE.Mesh(sideWinGeo, CIV_GLASS_MAT);
     sideWinR.position.set(unit * 1.85, unit * 2.8, -unit * 1.2);
     this.mesh.add(sideWinR);
 
     // Rear window
     const rearWinGeo = new THREE.BoxGeometry(unit * 2.4, unit * 1, unit * 0.15);
-    const rearWin = new THREE.Mesh(rearWinGeo, glassMat);
+    const rearWin = new THREE.Mesh(rearWinGeo, CIV_GLASS_MAT);
     rearWin.position.set(0, unit * 2.8, unit * 3.3);
     this.mesh.add(rearWin);
 
     // Headlights
     const headlightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
-    const headlightMat = new THREE.MeshStandardMaterial({
-      color: 0xffee88,
-      emissive: 0xffee88,
-      emissiveIntensity: 0.8,
-      flatShading: true,
-    });
-    const hlLeft = new THREE.Mesh(headlightGeo, headlightMat);
+    const hlLeft = new THREE.Mesh(headlightGeo, CIV_HEADLIGHT_MAT);
     hlLeft.position.set(-unit * 1.5, unit * 1.1, -unit * 4.1);
     this.mesh.add(hlLeft);
-    const hlRight = new THREE.Mesh(headlightGeo, headlightMat);
+    const hlRight = new THREE.Mesh(headlightGeo, CIV_HEADLIGHT_MAT);
     hlRight.position.set(unit * 1.5, unit * 1.1, -unit * 4.1);
     this.mesh.add(hlRight);
 
     // Taillights
     const taillightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
-    const taillightMat = new THREE.MeshStandardMaterial({
-      color: 0xff2222,
-      emissive: 0xff2222,
-      emissiveIntensity: 0.6,
-      flatShading: true,
-    });
-    const tlLeft = new THREE.Mesh(taillightGeo, taillightMat);
+    const tlLeft = new THREE.Mesh(taillightGeo, CIV_TAILLIGHT_MAT);
     tlLeft.position.set(-unit * 1.5, unit * 1.1, unit * 4.1);
     this.mesh.add(tlLeft);
-    const tlRight = new THREE.Mesh(taillightGeo, taillightMat);
+    const tlRight = new THREE.Mesh(taillightGeo, CIV_TAILLIGHT_MAT);
     tlRight.position.set(unit * 1.5, unit * 1.1, unit * 4.1);
     this.mesh.add(tlRight);
 
     // Wheels
     const wheelGeo = new THREE.BoxGeometry(unit, unit, unit);
-    const wheelMat = new THREE.MeshStandardMaterial({ color: wheelColor, ...matProps });
     const wheelPositions: [number, number, number][] = [
       [-unit * 2.5, unit * 0.5, unit * 2.5],
       [unit * 2.5, unit * 0.5, unit * 2.5],
@@ -130,9 +131,8 @@ export class Civilian {
       [unit * 2.5, unit * 0.5, -unit * 2.5],
     ];
     wheelPositions.forEach((pos) => {
-      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+      const wheel = new THREE.Mesh(wheelGeo, CIV_WHEEL_MAT);
       wheel.position.set(pos[0], pos[1], pos[2]);
-      wheel.castShadow = true;
       this.mesh.add(wheel);
     });
 

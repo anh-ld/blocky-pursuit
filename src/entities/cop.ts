@@ -1,6 +1,43 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 
+// --- Shared materials (one set for all cop instances) ---
+const UNIT = 0.5;
+const matProps = { roughness: 0.8, flatShading: true } as const;
+const COP_BODY_MAT = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, ...matProps });
+const COP_CABIN_MAT = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  roughness: 0.3,
+  flatShading: true,
+  metalness: 0.5,
+});
+const COP_RED_LIGHT_MAT = new THREE.MeshStandardMaterial({
+  color: 0xff1111,
+  emissive: 0xff1111,
+  emissiveIntensity: 1.0,
+  flatShading: true,
+});
+const COP_BLUE_LIGHT_MAT = new THREE.MeshStandardMaterial({
+  color: 0x1111ff,
+  emissive: 0x1111ff,
+  emissiveIntensity: 1.0,
+  flatShading: true,
+});
+const COP_GRILLE_MAT = new THREE.MeshStandardMaterial({ color: 0x222222, flatShading: true });
+const COP_HEADLIGHT_MAT = new THREE.MeshStandardMaterial({
+  color: 0xffee88,
+  emissive: 0xffee88,
+  emissiveIntensity: 0.8,
+  flatShading: true,
+});
+const COP_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
+  color: 0xff2222,
+  emissive: 0xff2222,
+  emissiveIntensity: 0.6,
+  flatShading: true,
+});
+const COP_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x111111, ...matProps });
+
 export type ICopLevelConfig = {
   mass: number;
   speed: number;
@@ -49,107 +86,60 @@ export class Cop {
     this.damageCooldown = 0;
 
     // Voxel dimensions
-    const unit = 0.5;
+    const unit = UNIT;
 
     // --- Visuals (Three.js) ---
     this.mesh = new THREE.Group();
 
-    // Colors
-    const bodyColor = 0x1a237e; // Dark blue
-    const cabinColor = 0xffffff; // White roof
-    const lightRed = 0xff1111;
-    const lightBlue = 0x1111ff;
-    const wheelColor = 0x111111;
-
-    const matProps = { roughness: 0.8, flatShading: true };
-
     // Chassis (Body)
     const bodyGeo = new THREE.BoxGeometry(unit * 4, unit, unit * 8);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, ...matProps });
-    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+    const bodyMesh = new THREE.Mesh(bodyGeo, COP_BODY_MAT);
     bodyMesh.position.y = unit;
-    bodyMesh.castShadow = true;
-    bodyMesh.receiveShadow = true;
     this.mesh.add(bodyMesh);
 
     // Cabin (shifted toward rear so front hood is visible)
     const cabinGeo = new THREE.BoxGeometry(unit * 3, unit * 1.5, unit * 3);
-    const cabinMat = new THREE.MeshStandardMaterial({
-      color: cabinColor,
-      roughness: 0.3,
-      flatShading: true,
-      metalness: 0.5,
-    });
-    const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
+    const cabinMesh = new THREE.Mesh(cabinGeo, COP_CABIN_MAT);
     cabinMesh.position.y = unit * 2.25;
     cabinMesh.position.z = unit * 1.5; // rear half
-    cabinMesh.castShadow = true;
-    cabinMesh.receiveShadow = true;
     this.mesh.add(cabinMesh);
 
     // Siren lights (on top of cabin)
     const lightGeo = new THREE.BoxGeometry(unit, unit * 0.5, unit);
-    const redLightMat = new THREE.MeshStandardMaterial({
-      color: lightRed,
-      emissive: lightRed,
-      emissiveIntensity: 1.0,
-      flatShading: true,
-    });
-    const blueLightMat = new THREE.MeshStandardMaterial({
-      color: lightBlue,
-      emissive: lightBlue,
-      emissiveIntensity: 1.0,
-      flatShading: true,
-    });
-
-    const redLight = new THREE.Mesh(lightGeo, redLightMat);
+    const redLight = new THREE.Mesh(lightGeo, COP_RED_LIGHT_MAT);
     redLight.position.set(-unit, unit * 3.25, unit * 1.5);
     this.mesh.add(redLight);
 
-    const blueLight = new THREE.Mesh(lightGeo, blueLightMat);
+    const blueLight = new THREE.Mesh(lightGeo, COP_BLUE_LIGHT_MAT);
     blueLight.position.set(unit, unit * 3.25, unit * 1.5);
     this.mesh.add(blueLight);
 
     // Front grille
     const grilleGeo = new THREE.BoxGeometry(unit * 3.2, unit * 0.6, unit * 0.2);
-    const grilleMat = new THREE.MeshStandardMaterial({ color: 0x222222, flatShading: true });
-    const grille = new THREE.Mesh(grilleGeo, grilleMat);
+    const grille = new THREE.Mesh(grilleGeo, COP_GRILLE_MAT);
     grille.position.set(0, unit * 0.9, -unit * 4.1);
     this.mesh.add(grille);
 
     // Headlights (front = -Z)
     const headlightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
-    const headlightMat = new THREE.MeshStandardMaterial({
-      color: 0xffee88,
-      emissive: 0xffee88,
-      emissiveIntensity: 0.8,
-      flatShading: true,
-    });
-    const hlLeft = new THREE.Mesh(headlightGeo, headlightMat);
+    const hlLeft = new THREE.Mesh(headlightGeo, COP_HEADLIGHT_MAT);
     hlLeft.position.set(-unit * 1.5, unit * 1.1, -unit * 4.1);
     this.mesh.add(hlLeft);
-    const hlRight = new THREE.Mesh(headlightGeo, headlightMat);
+    const hlRight = new THREE.Mesh(headlightGeo, COP_HEADLIGHT_MAT);
     hlRight.position.set(unit * 1.5, unit * 1.1, -unit * 4.1);
     this.mesh.add(hlRight);
 
     // Taillights (rear = +Z, red)
     const taillightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
-    const taillightMat = new THREE.MeshStandardMaterial({
-      color: 0xff2222,
-      emissive: 0xff2222,
-      emissiveIntensity: 0.6,
-      flatShading: true,
-    });
-    const tlLeft = new THREE.Mesh(taillightGeo, taillightMat);
+    const tlLeft = new THREE.Mesh(taillightGeo, COP_TAILLIGHT_MAT);
     tlLeft.position.set(-unit * 1.5, unit * 1.1, unit * 4.1);
     this.mesh.add(tlLeft);
-    const tlRight = new THREE.Mesh(taillightGeo, taillightMat);
+    const tlRight = new THREE.Mesh(taillightGeo, COP_TAILLIGHT_MAT);
     tlRight.position.set(unit * 1.5, unit * 1.1, unit * 4.1);
     this.mesh.add(tlRight);
 
     // Wheels
     const wheelGeo = new THREE.BoxGeometry(unit, unit, unit);
-    const wheelMat = new THREE.MeshStandardMaterial({ color: wheelColor, ...matProps });
 
     const wheelPositions: [number, number, number][] = [
       [-unit * 2.5, unit * 0.5, unit * 2.5], // Front Left
@@ -159,9 +149,8 @@ export class Cop {
     ];
 
     wheelPositions.forEach((pos) => {
-      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+      const wheel = new THREE.Mesh(wheelGeo, COP_WHEEL_MAT);
       wheel.position.set(pos[0], pos[1], pos[2]);
-      wheel.castShadow = true;
       this.mesh.add(wheel);
     });
 

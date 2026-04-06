@@ -7,6 +7,8 @@ import { Cop } from "./entities/cop";
 import { Civilian } from "./entities/civilian";
 import { CityGenerator, isRoad } from "./world/city-generator";
 import { isWater, TILE_SIZE } from "./world/terrain";
+import { LEVEL_DEFS, getLevelDef } from "./systems/leveling";
+import { spawnCop, spawnCivilian } from "./systems/spawning";
 import { App } from "./ui/app";
 import {
   gameState,
@@ -66,8 +68,7 @@ const gameArea = document.getElementById("game-area") as HTMLElement;
 const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setSize(gameArea.clientWidth, gameArea.clientHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.BasicShadowMap;
+renderer.shadowMap.enabled = false;
 renderer.domElement.style.display = "block";
 renderer.domElement.style.touchAction = "none";
 gameArea.appendChild(renderer.domElement);
@@ -78,16 +79,6 @@ scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
 directionalLight.position.set(50, 100, 50);
-directionalLight.castShadow = true;
-directionalLight.shadow.mapSize.width = 2048;
-directionalLight.shadow.mapSize.height = 2048;
-// Ensure shadow camera covers the game area
-directionalLight.shadow.camera.left = -50;
-directionalLight.shadow.camera.right = 50;
-directionalLight.shadow.camera.top = 50;
-directionalLight.shadow.camera.bottom = -50;
-directionalLight.shadow.camera.near = 0.5;
-directionalLight.shadow.camera.far = 200;
 scene.add(directionalLight);
 scene.add(directionalLight.target);
 
@@ -141,25 +132,8 @@ const BUSTED_TIME_THRESHOLD = 3; // seconds stopped
 const BUSTED_COP_COUNT = 2; // 2 cops nearby is enough
 
 // --- Level System ---
-type ILevelDef = {
-  maxCops: number;
-  spawnInterval: number;
-  scoreThreshold: number;
-};
-const LEVEL_DEFS: ILevelDef[] = [
-  { maxCops: 3, spawnInterval: 4, scoreThreshold: 0 },     // Level 1 — medium start
-  { maxCops: 5, spawnInterval: 3, scoreThreshold: 100 },    // Level 2 — ~10s in
-  { maxCops: 6, spawnInterval: 2.5, scoreThreshold: 300 },  // Level 3 — ~30s
-  { maxCops: 7, spawnInterval: 2, scoreThreshold: 600 },    // Level 4 — ~55s
-  { maxCops: 8, spawnInterval: 1.5, scoreThreshold: 1000 }, // Level 5 — ~80s
-];
-
 let currentLevel = 1;
 let lastCopSpawnTime = 0;
-
-function getLevelDef(): ILevelDef {
-  return LEVEL_DEFS[currentLevel - 1];
-}
 
 // --- Game state (local mirrors of signals for hot loop) ---
 let currentState: "start" | "playing" | "gameover" = "start";
@@ -228,91 +202,6 @@ function gameOver(reason: string = "BUSTED") {
 
 actions.startGame = startGame;
 
-function spawnCop(playerPosition: THREE.Vector3, playerVelocity: CANNON.Vec3) {
-  const levelDef = getLevelDef();
-  if (cops.length >= levelDef.maxCops) return;
-
-  // Spawn out of camera view (distance ~40-60)
-  const distance = 40 + Math.random() * 20;
-
-  // 60% of the time, spawn AHEAD of the player's travel direction
-  // This prevents the "infinite straight road" exploit
-  let angle: number;
-  const speed = playerVelocity.length();
-  if (speed > 5 && Math.random() < 0.6) {
-    // Player's heading angle
-    const headingAngle = Math.atan2(playerVelocity.z, playerVelocity.x);
-    // Spawn within a ±45° cone ahead
-    angle = headingAngle + (Math.random() - 0.5) * (Math.PI / 2);
-  } else {
-    angle = Math.random() * Math.PI * 2;
-  }
-
-  let x = playerPosition.x + Math.cos(angle) * distance;
-  let z = playerPosition.z + Math.sin(angle) * distance;
-
-  // Snap to nearest road
-  const TILE_SIZE = 10;
-  let tileX = Math.round(x / TILE_SIZE);
-  let tileZ = Math.round(z / TILE_SIZE);
-
-  let foundRoad = false;
-  for (let r = 0; r < 5; r++) {
-    for (let dx = -r; dx <= r; dx++) {
-      for (let dz = -r; dz <= r; dz++) {
-        if (isRoad(tileX + dx, tileZ + dz)) {
-          tileX += dx;
-          tileZ += dz;
-          foundRoad = true;
-          break;
-        }
-      }
-      if (foundRoad) break;
-    }
-    if (foundRoad) break;
-  }
-
-  const pos = new THREE.Vector3(tileX * TILE_SIZE, 1, tileZ * TILE_SIZE);
-  const cop = new Cop(scene, world, pos, currentLevel);
-  cops.push(cop);
-}
-
-function spawnCivilian(playerPosition: THREE.Vector3) {
-  if (civilians.length >= MAX_CIVILIANS) return;
-
-  const distance = 30 + Math.random() * 20;
-  const angle = Math.random() * Math.PI * 2;
-
-  let x = playerPosition.x + Math.cos(angle) * distance;
-  let z = playerPosition.z + Math.sin(angle) * distance;
-
-  const TS = 10;
-  let tileX = Math.floor(x / TS);
-  let tileZ = Math.floor(z / TS);
-
-  let foundRoad = false;
-  for (let r = 0; r < 5; r++) {
-    for (let dx = -r; dx <= r; dx++) {
-      for (let dz = -r; dz <= r; dz++) {
-        if (isRoad(tileX + dx, tileZ + dz)) {
-          tileX += dx;
-          tileZ += dz;
-          foundRoad = true;
-          break;
-        }
-      }
-      if (foundRoad) break;
-    }
-    if (foundRoad) break;
-  }
-
-  if (!foundRoad) return;
-
-  // Spawn at tile center
-  const pos = new THREE.Vector3(tileX * TS + TS / 2, 1, tileZ * TS + TS / 2);
-  civilians.push(new Civilian(scene, world, pos));
-}
-
 // --- Game Loop ---
 const timeStep = 1 / 60;
 let lastCallTime: number | null = null;
@@ -323,7 +212,8 @@ function animate(time: number) {
   const timeInSeconds = time / 1000;
   let dt = timeStep;
   if (lastCallTime) {
-    dt = timeInSeconds - lastCallTime;
+    // Cap dt so a tab refocus / long pause can't blow up physics
+    dt = Math.min(timeInSeconds - lastCallTime, 1 / 30);
   }
   lastCallTime = timeInSeconds;
 
@@ -367,7 +257,13 @@ function animate(time: number) {
 
     // --- Civilian Spawning ---
     if (timeInSeconds - lastCivilianSpawnTime > CIVILIAN_SPAWN_INTERVAL) {
-      spawnCivilian(car.mesh.position);
+      spawnCivilian({
+        scene,
+        world,
+        civilians,
+        maxCivilians: MAX_CIVILIANS,
+        playerPosition: car.mesh.position,
+      });
       lastCivilianSpawnTime = timeInSeconds;
     }
 
@@ -393,9 +289,17 @@ function animate(time: number) {
     }
 
     // --- Cop Spawning Logic ---
-    const levelDef = getLevelDef();
+    const levelDef = getLevelDef(currentLevel);
     if (timeInSeconds - lastCopSpawnTime > levelDef.spawnInterval) {
-      spawnCop(car.mesh.position, car.body.velocity);
+      spawnCop({
+        scene,
+        world,
+        cops,
+        maxCops: levelDef.maxCops,
+        level: currentLevel,
+        playerPosition: car.mesh.position,
+        playerVelocity: car.body.velocity,
+      });
       lastCopSpawnTime = timeInSeconds;
     }
 

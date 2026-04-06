@@ -9,6 +9,9 @@ export function HowToPlay() {
   const openFeedback = () => {
     screen.value = "feedback";
   };
+  const openGarage = () => {
+    screen.value = "garage";
+  };
 
   return (
     <div class="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
@@ -42,6 +45,12 @@ export function HowToPlay() {
           <span class="text-gray-400">Drive fast on roads to score</span>
         </div>
 
+        <button
+          onClick={openGarage}
+          class="w-full mt-1 py-1.5 bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors pointer-events-auto"
+        >
+          Garage
+        </button>
         <button
           onClick={openLeaderboard}
           class="w-full mt-1 py-1.5 bg-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30 transition-colors pointer-events-auto"

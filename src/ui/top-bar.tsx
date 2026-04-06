@@ -1,4 +1,4 @@
-import { gameState, gameOverReason, survivalTime, actions } from "../state";
+import { gameState, survivalTime, actions } from "../state";
 import { Hud } from "./hud";
 
 function formatTime(seconds: number) {
@@ -30,20 +30,10 @@ export function TopBar() {
       </div>
 
       <div class="flex items-center gap-2">
-        {over && (
-          <span class="text-red-400 text-sm font-extrabold uppercase tracking-wider">
-            {gameOverReason.value}
-          </span>
-        )}
         <div class="hidden md:flex items-center gap-2">
           {start && (
             <button class="btn-cta text-sm py-2 px-5 w-auto" onClick={() => actions.startGame()}>
               START
-            </button>
-          )}
-          {over && (
-            <button class="btn-danger text-sm py-2 px-5 w-auto" onClick={() => actions.startGame()}>
-              RETRY
             </button>
           )}
         </div>

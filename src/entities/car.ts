@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
+import { getSkin } from "./car-skins";
 
 export class Car {
   scene: THREE.Scene;
@@ -9,13 +10,16 @@ export class Car {
   keys: { left: boolean; right: boolean };
   forwardForce: number;
   maxSpeed: number;
+  baseMaxSpeed: number;
   turnSpeed: number;
   bounceBackTimer: number;
   bounceBackDuration: number;
   recoveryTimer: number;
   recoveryDuration: number;
+  bodyMat: THREE.MeshStandardMaterial;
+  cabinMat: THREE.MeshStandardMaterial;
 
-  constructor(scene: THREE.Scene, world: CANNON.World) {
+  constructor(scene: THREE.Scene, world: CANNON.World, skinId: string = "redstar") {
     this.scene = scene;
     this.world = world;
 
@@ -25,9 +29,10 @@ export class Car {
     // --- Visuals (Three.js) ---
     this.mesh = new THREE.Group();
 
-    // Colors
-    const bodyColor = 0xd32f2f; // Red
-    const cabinColor = 0xffffff; // White roof
+    // Colors (from skin)
+    const skin = getSkin(skinId);
+    const bodyColor = skin.bodyColor;
+    const cabinColor = skin.cabinColor;
     const wheelColor = 0x111111;
 
     // Materials setup with flatShading for pixelated/low-poly look
@@ -36,6 +41,7 @@ export class Car {
     // Chassis (Body)
     const bodyGeo = new THREE.BoxGeometry(unit * 4, unit, unit * 8);
     const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, ...matProps });
+    this.bodyMat = bodyMat;
     const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
     bodyMesh.position.y = unit;
     bodyMesh.castShadow = true;
@@ -50,6 +56,7 @@ export class Car {
       flatShading: true,
       metalness: 0.5,
     });
+    this.cabinMat = cabinMat;
     const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
     cabinMesh.position.y = unit * 2.25;
     cabinMesh.position.z = unit * 1.5; // rear half
@@ -184,9 +191,10 @@ export class Car {
       right: false,
     };
 
-    // Tuning parameters
-    this.forwardForce = 150000;
-    this.maxSpeed = 40;
+    // Tuning parameters (with skin bonuses)
+    this.forwardForce = 150000 + skin.forceBonus;
+    this.baseMaxSpeed = 40 + skin.speedBonus;
+    this.maxSpeed = this.baseMaxSpeed;
     this.turnSpeed = 2.5;
 
     // Collision bounce-back state
@@ -350,6 +358,16 @@ export class Car {
     const key = e.key.toLowerCase();
     if (key === "a" || key === "arrowleft") this.keys.left = false;
     if (key === "d" || key === "arrowright") this.keys.right = false;
+  }
+
+  /** Apply a new skin without rebuilding the mesh. */
+  applySkin(skinId: string) {
+    const skin = getSkin(skinId);
+    this.bodyMat.color.setHex(skin.bodyColor);
+    this.cabinMat.color.setHex(skin.cabinColor);
+    this.forwardForce = 150000 + skin.forceBonus;
+    this.baseMaxSpeed = 40 + skin.speedBonus;
+    this.maxSpeed = this.baseMaxSpeed;
   }
 
   /** Set a random facing direction (Y-axis rotation) */

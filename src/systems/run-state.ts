@@ -60,6 +60,11 @@ export class RunState {
   distance = 0;
   lastCarX = 0;
   lastCarZ = 0;
+  // Score breakdown — accumulated alongside `score` so game-over can show
+  // tile vs combo vs cop contributions.
+  tileScore = 0;
+  comboScore = 0;
+  copScore = 0;
 
   /**
    * Advance current level if score crosses the next threshold.
@@ -86,7 +91,9 @@ export class RunState {
       const speedRatio = Math.min(car.body.velocity.length() / car.maxSpeed, 1);
       const speedMult = 1 + speedRatio;
       const comboMult = Math.min(1 + this.comboCount * COMBO_MULT_PER_COUNT, COMBO_MULT_MAX);
-      this.score += SCORE_BASE_TILE * speedMult * comboMult;
+      const earned = SCORE_BASE_TILE * speedMult * comboMult;
+      this.score += earned;
+      this.tileScore += earned;
     }
     this.lastScoreTileX = tx;
     this.lastScoreTileZ = tz;
@@ -130,6 +137,9 @@ export class RunState {
     this.distance = 0;
     this.lastCarX = car.body.position.x;
     this.lastCarZ = car.body.position.z;
+    this.tileScore = 0;
+    this.comboScore = 0;
+    this.copScore = 0;
   }
 
   /** Push hot-loop values into the Preact signals so the UI updates. */

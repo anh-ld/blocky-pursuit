@@ -12,7 +12,11 @@ import {
   runTopSpeed,
   runBiggestCombo,
   runDistance,
+  runTileScore,
+  runComboScore,
+  runCopScore,
 } from "../state";
+import { haptics } from "../audio/haptics";
 
 function formatTime(seconds: number) {
   const secs = Math.floor(seconds);
@@ -39,10 +43,17 @@ export function GameOver() {
     WRECKED: "WRECKED",
     DROWNED: "DROWNED",
   };
+  const tile = Math.floor(runTileScore.value);
+  const cmb = Math.floor(runComboScore.value);
+  const cop = Math.floor(runCopScore.value);
+  const handleRetry = () => {
+    haptics.pickup();
+    actions.startGame();
+  };
 
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/85 border-2 border-red-500/60 px-6 py-5 w-72 pointer-events-auto flex flex-col items-center gap-3">
+      <div class="bg-black/85 border-2 border-red-500/60 px-6 py-5 w-72 pointer-events-auto flex flex-col items-center gap-3 animate-game-over-in">
         <div class="text-red-400 text-xs font-extrabold uppercase tracking-[0.3em]">
           {reasonText[reason] || reason}
         </div>
@@ -90,8 +101,23 @@ export function GameOver() {
             <span class="text-gray-200 font-extrabold tabular-nums">{Math.round(runDistance.value)}m</span>
           </div>
         </div>
+        {/* Score breakdown — shows the player *how* they earned the total */}
+        <div class="w-full pt-2 border-t border-gray-700/60 flex flex-col gap-0.5 text-[10px] uppercase tracking-widest">
+          <div class="flex justify-between">
+            <span class="text-gray-500">Tile</span>
+            <span class="text-amber-300 font-extrabold tabular-nums">{tile.toLocaleString()}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Combo</span>
+            <span class="text-pink-400 font-extrabold tabular-nums">{cmb.toLocaleString()}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Cops</span>
+            <span class="text-cyan-300 font-extrabold tabular-nums">{cop.toLocaleString()}</span>
+          </div>
+        </div>
         <button
-          onClick={() => actions.startGame()}
+          onClick={handleRetry}
           class="w-full mt-2 py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
         >
           RETRY

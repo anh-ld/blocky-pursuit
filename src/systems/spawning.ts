@@ -3,6 +3,7 @@ import * as CANNON from "cannon-es";
 import { Cop } from "../entities/cop";
 import { Civilian } from "../entities/civilian";
 import { isRoad } from "../world/city-generator";
+import { COP_SPAWN_DIST_MIN, COP_SPAWN_DIST_RANGE } from "../constants";
 
 const TILE_SIZE = 10;
 
@@ -20,8 +21,8 @@ export function spawnCop(args: ISpawnCopArgs) {
   const { scene, world, cops, maxCops, level, playerPosition, playerVelocity } = args;
   if (cops.length >= maxCops) return;
 
-  // Spawn out of camera view (distance ~40-60)
-  const distance = 40 + Math.random() * 20;
+  // Spawn out of camera view
+  const distance = COP_SPAWN_DIST_MIN + Math.random() * COP_SPAWN_DIST_RANGE;
 
   // 60% of the time, spawn AHEAD of the player's travel direction
   // This prevents the "infinite straight road" exploit

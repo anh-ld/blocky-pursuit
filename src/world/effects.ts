@@ -88,6 +88,7 @@ let particles: IParticle[] = [];
 const PARTICLE_GEO = new THREE.BoxGeometry(0.3, 0.3, 0.3);
 const SPARK_MAT = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
 const SPLASH_MAT = new THREE.MeshBasicMaterial({ color: 0x66ccff });
+const SPEED_LINE_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const CONFETTI_MATS = [
   new THREE.MeshBasicMaterial({ color: 0xff4466 }),
   new THREE.MeshBasicMaterial({ color: 0xffcc22 }),
@@ -168,6 +169,29 @@ export function spawnSplash(x: number, y: number, z: number) {
   emit(x, y, z, SPLASH_MAT, 16, 6, 0.7);
 }
 
+/**
+ * Streaky white particles trailing behind the car at peak speed. Cheap
+ * "I'm flying" cue — uses the existing pool, no extra geometry/material.
+ * Caller passes the car's heading so streaks can launch backward along it.
+ */
+export function spawnSpeedLine(x: number, y: number, z: number, headingX: number, headingZ: number) {
+  if (!particleScene) return;
+  // Start the streak slightly behind the car, kick it backward fast so it
+  // shoots past the camera. Tiny vertical jitter keeps them from stacking.
+  const back = -8;
+  const ok = acquire(
+    x + headingX * 0.5,
+    y + 0.5 + (Math.random() - 0.5) * 0.6,
+    z + headingZ * 0.5,
+    SPEED_LINE_MAT,
+    headingX * back,
+    0,
+    headingZ * back,
+    0.25,
+  );
+  if (!ok) return;
+}
+
 export function spawnConfetti(x: number, y: number, z: number) {
   if (!particleScene) return;
   for (let i = 0; i < 20; i++) {
@@ -228,6 +252,23 @@ function updateRings(dt: number) {
     // share opacity scaling and only briefly overlap.
     (r.mesh.material as THREE.MeshBasicMaterial).opacity = 1 - t;
   }
+}
+
+/**
+ * Hide every active particle and release its slot. Called from startGame()
+ * so debris from the previous run's death moment doesn't bleed into the
+ * fresh run. Rings (one-shot allocations) are also cleared.
+ */
+export function clearParticles() {
+  for (const p of particles) {
+    if (!p.active) continue;
+    p.mesh.visible = false;
+    p.active = false;
+  }
+  if (particleScene) {
+    for (const r of rings) particleScene.remove(r.mesh);
+  }
+  rings.length = 0;
 }
 
 export function updateEffects(dt: number) {

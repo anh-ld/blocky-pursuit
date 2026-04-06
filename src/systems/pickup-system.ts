@@ -9,6 +9,7 @@ import { playPickup } from "../audio/sound";
 import { haptics } from "../audio/haptics";
 import type { RunState, IGameContext } from "./run-state";
 import type { CopSystem } from "./cop-system";
+import { shouldShowPickupTip, markPickupTipSeen } from "./tutorial";
 import {
   PICKUP_MAX,
   PICKUP_SPAWN_INTERVAL,
@@ -17,6 +18,8 @@ import {
   PICKUP_COLLECT_DIST,
   PICKUP_MAGNET_RANGE,
   PICKUP_MAGNET_PULL,
+  PICKUP_SPAWN_DIST_MIN,
+  PICKUP_SPAWN_DIST_RANGE,
   NITRO_DURATION,
   NITRO_SPEED_MULT,
   EMP_RING_RADIUS,
@@ -61,7 +64,7 @@ export class PickupSystem {
   /** Snap a fresh pickup to a road tile near the player. */
   private spawnNear(playerPosition: THREE.Vector3) {
     if (this.pickups.length >= PICKUP_MAX) return;
-    const distance = 25 + Math.random() * 20;
+    const distance = PICKUP_SPAWN_DIST_MIN + Math.random() * PICKUP_SPAWN_DIST_RANGE;
     const angle = Math.random() * Math.PI * 2;
     const x = playerPosition.x + Math.cos(angle) * distance;
     const z = playerPosition.z + Math.sin(angle) * distance;
@@ -128,15 +131,27 @@ export class PickupSystem {
           run.nitroTimer = NITRO_DURATION;
           car.setNitroMultiplier(NITRO_SPEED_MULT);
           spawnPopup(p.position.x, 2, p.position.z, "⚡ NITRO", "#ffdd44");
+          if (shouldShowPickupTip("nitro")) {
+            markPickupTipSeen("nitro");
+            spawnPopup(p.position.x, 3.5, p.position.z, "Speed boost for 3s!", "#ffffff", 2.4, 12);
+          }
         } else if (p.kind === "shield") {
           run.shieldActive = true;
           spawnPopup(p.position.x, 2, p.position.z, "🛡 SHIELD", "#66ddff");
+          if (shouldShowPickupTip("shield")) {
+            markPickupTipSeen("shield");
+            spawnPopup(p.position.x, 3.5, p.position.z, "Blocks one cop hit", "#ffffff", 2.4, 12);
+          }
         } else if (p.kind === "emp") {
           spawnRing(car.body.position.x, car.body.position.y, car.body.position.z, EMP_RING_RADIUS);
           spawnPopup(car.body.position.x, 3, car.body.position.z, "💥 EMP", "#66ddff");
           const kills = cops.empBlast(car, run);
           if (kills > 0) {
             spawnPopup(car.body.position.x, 5, car.body.position.z, `+${kills * SCORE_EMP_KILL}`, "#ffcc22");
+          }
+          if (shouldShowPickupTip("emp")) {
+            markPickupTipSeen("emp");
+            spawnPopup(car.body.position.x, 6.5, car.body.position.z, "Wipes nearby cops", "#ffffff", 2.4, 12);
           }
           triggerShake(0.6);
         }

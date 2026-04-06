@@ -67,6 +67,20 @@ export function spawnPopup(
   popups.push({ sprite, texture, vy, age: 0, life });
 }
 
+/**
+ * Tear down every active popup. Called from startGame() so a rage-restart
+ * mid-combo doesn't carry stale "x5" / pickup labels into the next run.
+ */
+export function clearPopups() {
+  if (!popupScene) return;
+  for (const p of popups) {
+    popupScene.remove(p.sprite);
+    p.texture.dispose();
+    (p.sprite.material as THREE.SpriteMaterial).dispose();
+  }
+  popups.length = 0;
+}
+
 export function updatePopups(dt: number) {
   if (!popupScene) return;
   for (let i = popups.length - 1; i >= 0; i--) {

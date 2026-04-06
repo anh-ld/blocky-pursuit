@@ -40,6 +40,11 @@ export const runDrowned = signal(0);
 export const runTopSpeed = signal(0);
 export const runBiggestCombo = signal(0);
 export const runDistance = signal(0);
+// Score breakdown so the game-over panel can show players *how* they earned
+// the final number — drives the strategy lever for the next run.
+export const runTileScore = signal(0);
+export const runComboScore = signal(0);
+export const runCopScore = signal(0);
 
 // --- Persistent progress (best, runs, drowned cops, selected skin) ---
 const _initialProgress = loadProgress();

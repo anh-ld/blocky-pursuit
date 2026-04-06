@@ -58,6 +58,19 @@ const COP_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
 });
 const COP_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x111111, ...matProps });
 
+// Per-step scratch — reused across every cop's preStep callback. Safe
+// because physics steps process cops sequentially within a single thread,
+// and none of these values need to outlive a single preStep call.
+const _localVel = new CANNON.Vec3();
+const _force = new CANNON.Vec3();
+const _targetDir = new CANNON.Vec3();
+const _worldForward = new CANNON.Vec3();
+const _cross = new CANNON.Vec3();
+const _q = new CANNON.Quaternion();
+// Constants — never mutated, so a single shared instance is fine.
+const COP_FORWARD = new CANNON.Vec3(0, 0, -1);
+const COP_FORCE_OFFSET = new CANNON.Vec3(0, 0, 0);
+
 // Drive both shared siren-light materials from a single time source so all
 // cops on screen stay in phase. Called once per frame from main.ts.
 export function updateCopLights(time: number) {
@@ -242,21 +255,20 @@ export class Cop {
       const activeForce = isRamming ? this.forwardForce * 1.4 : this.forwardForce;
 
       // 1. Auto-drive with acceleration curve
-      const localVel = new CANNON.Vec3();
-      this.body.vectorToLocalFrame(this.body.velocity, localVel);
-      const forwardSpeed = -localVel.z;
+      this.body.vectorToLocalFrame(this.body.velocity, _localVel);
+      const forwardSpeed = -_localVel.z;
       const maxReverseSpeed = activeMaxSpeed * 0.25;
 
       if (this.bounceBackTimer > 0) {
         const reverseSpeed = Math.max(0, -forwardSpeed);
         const reverseRatio = Math.min(reverseSpeed / maxReverseSpeed, 1);
         const reverseScale = 0.3 * (1 - reverseRatio * 0.8);
-        const force = new CANNON.Vec3(0, 0, activeForce * reverseScale);
-        this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
+        _force.set(0, 0, activeForce * reverseScale);
+        this.body.applyLocalForce(_force, COP_FORCE_OFFSET);
 
         if (reverseSpeed > maxReverseSpeed) {
-          localVel.z = maxReverseSpeed;
-          this.body.vectorToWorldFrame(localVel, this.body.velocity);
+          _localVel.z = maxReverseSpeed;
+          this.body.vectorToWorldFrame(_localVel, this.body.velocity);
         }
       } else {
         let forceScale: number;
@@ -272,19 +284,20 @@ export class Cop {
           forceScale *= 0.3 + 0.7 * recoveryProgress;
         }
 
-        const force = new CANNON.Vec3(0, 0, -activeForce * forceScale);
-        this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
+        _force.set(0, 0, -activeForce * forceScale);
+        this.body.applyLocalForce(_force, COP_FORCE_OFFSET);
       }
 
-      // 2. Arcade friction — tighter grip so cops corner better
-      const localVelocity = new CANNON.Vec3();
-      this.body.vectorToLocalFrame(this.body.velocity, localVelocity);
+      // 2. Arcade friction — tighter grip so cops corner better.
+      // Reuse _localVel — it was last written above but we want a fresh
+      // read after applyLocalForce which can mutate body.velocity.
+      this.body.vectorToLocalFrame(this.body.velocity, _localVel);
 
       const isRecovering = this.bounceBackTimer > 0 || this.recoveryTimer > 0;
-      localVelocity.x *= isRecovering ? 0.92 : 0.8; // tighter lateral grip
-      localVelocity.z *= 0.98;
+      _localVel.x *= isRecovering ? 0.92 : 0.8; // tighter lateral grip
+      _localVel.z *= 0.98;
 
-      this.body.vectorToWorldFrame(localVelocity, this.body.velocity);
+      this.body.vectorToWorldFrame(_localVel, this.body.velocity);
 
       // Cap max speed
       const speed = this.body.velocity.length();
@@ -317,34 +330,30 @@ export class Cop {
           }
         }
 
-        const targetDir = new CANNON.Vec3(
+        _targetDir.set(
           aimX - this.body.position.x,
           0,
           aimZ - this.body.position.z,
         );
-        targetDir.normalize();
+        _targetDir.normalize();
 
-        const forward = new CANNON.Vec3(0, 0, -1);
-        const worldForward = new CANNON.Vec3();
-        this.body.quaternion.vmult(forward, worldForward);
-        worldForward.y = 0;
-        worldForward.normalize();
+        this.body.quaternion.vmult(COP_FORWARD, _worldForward);
+        _worldForward.y = 0;
+        _worldForward.normalize();
 
-        const cross = new CANNON.Vec3();
-        worldForward.cross(targetDir, cross);
-        const dot = worldForward.dot(targetDir);
+        _worldForward.cross(_targetDir, _cross);
+        const dot = _worldForward.dot(_targetDir);
 
         if (dot < 0.98) {
           let steerAngle = 0;
-          if (cross.y > 0) {
+          if (_cross.y > 0) {
             steerAngle = this.turnSpeed;
           } else {
             steerAngle = -this.turnSpeed;
           }
 
-          const q = new CANNON.Quaternion();
-          q.setFromEuler(0, steerAngle * (1 / 60), 0);
-          this.body.quaternion = this.body.quaternion.mult(q);
+          _q.setFromEuler(0, steerAngle * (1 / 60), 0);
+          this.body.quaternion = this.body.quaternion.mult(_q);
         }
       }
     };

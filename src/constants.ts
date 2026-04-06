@@ -56,6 +56,15 @@ export const PICKUP_MAX_AGE = 25;
 export const PICKUP_COLLECT_DIST = 3.5;
 export const PICKUP_MAGNET_RANGE = 6;
 export const PICKUP_MAGNET_PULL = 4; // units/sec toward player
+// Spawn band: pickup drops between MIN..(MIN+RANGE) units from the player
+export const PICKUP_SPAWN_DIST_MIN = 25;
+export const PICKUP_SPAWN_DIST_RANGE = 20;
+
+// --- Cop spawning ---
+// Spawn band: cops appear between MIN..(MIN+RANGE) units from the player,
+// outside camera view but close enough to engage within a few seconds
+export const COP_SPAWN_DIST_MIN = 40;
+export const COP_SPAWN_DIST_RANGE = 20;
 export const NITRO_DURATION = 3;
 export const NITRO_SPEED_MULT = 1.55;
 // EMP kill range and visual ring are tuned independently — keep them

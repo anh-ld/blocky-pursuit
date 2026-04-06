@@ -36,13 +36,15 @@ import {
   spawnSplash,
   spawnSparks,
   spawnConfetti,
+  spawnSpeedLine,
+  clearParticles,
   updateEffects,
   updateTimeSlow,
   getTimeSlowFactor,
   triggerScreenFlash,
   triggerShake,
 } from "./world/effects";
-import { initPopups, spawnPopup, updatePopups } from "./world/popups";
+import { initPopups, spawnPopup, updatePopups, clearPopups } from "./world/popups";
 import { initSkids, spawnSkid, updateSkids, clearSkids } from "./world/skids";
 import {
   applyWeather,
@@ -68,6 +70,9 @@ import {
   runTopSpeed,
   runBiggestCombo,
   runDistance,
+  runTileScore,
+  runComboScore,
+  runCopScore,
   selectedSkin,
   setSelectedSkin,
   incrementRuns,
@@ -308,6 +313,8 @@ function startGame() {
   spawnTimersRebased = false;
 
   clearSkids();
+  clearPopups();
+  clearParticles();
 
   // Audio: kick everything on
   initAudio();
@@ -351,6 +358,9 @@ function gameOver(reason: string = "BUSTED") {
   runTopSpeed.value = run.topSpeed;
   runBiggestCombo.value = run.biggestCombo;
   runDistance.value = run.distance;
+  runTileScore.value = run.tileScore;
+  runComboScore.value = run.comboScore;
+  runCopScore.value = run.copScore;
 
   // Submit score in the background — doesn't block the panel.
   submitScore(playerName.value, run.score).then(() => fetchLeaderboard());
@@ -499,6 +509,25 @@ function tickPlaying(dt: number, timeInSeconds: number) {
     const offZ = -Math.sin(heading) * 1.25;
     spawnSkid(_rearWorld.x + offX, _rearWorld.z + offZ, heading);
     spawnSkid(_rearWorld.x - offX, _rearWorld.z - offZ, heading);
+  }
+
+  // --- Speed lines: peak-speed nitro flourish ---
+  // Only when both nitro is active AND the car is at 80%+ of its boosted
+  // top speed. Two streaks per frame is enough to read without saturating
+  // the particle pool during long boosts.
+  if (run.nitroTimer > 0 && car.body.velocity.length() > car.maxSpeed * 0.8) {
+    const heading = Math.atan2(
+      2 * (car.body.quaternion.w * car.body.quaternion.y),
+      1 - 2 * car.body.quaternion.y * car.body.quaternion.y,
+    );
+    // Note: yaw extraction above gives the direction the car faces in the
+    // XZ plane. Forward in cannon-local-space is -Z, so heading→world is
+    // (sin h, _, -cos h) — but this car uses (cos h, _, -sin h) elsewhere
+    // for skids, so reuse the same convention for visual consistency.
+    const fx = -Math.cos(heading);
+    const fz = Math.sin(heading);
+    spawnSpeedLine(car.body.position.x, car.body.position.y, car.body.position.z, fx, fz);
+    spawnSpeedLine(car.body.position.x, car.body.position.y, car.body.position.z, fx, fz);
   }
 
   run.syncHud();

@@ -77,6 +77,7 @@ export class CopSystem {
       if (c.body.position.distanceTo(car.body.position) < EMP_KILL_RADIUS) {
         spawnConfetti(c.body.position.x, c.body.position.y + 2, c.body.position.z);
         run.score += SCORE_EMP_KILL;
+        run.copScore += SCORE_EMP_KILL;
         run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_EMP_KILL);
         run.drownedThisRun++;
         kills++;
@@ -129,7 +130,9 @@ export class CopSystem {
         run.comboTimer = COMBO_DECAY;
         if (run.comboCount > run.biggestCombo) run.biggestCombo = run.comboCount;
         // Tiny instant reward so the combo feels alive
-        run.score += run.comboCount * COMBO_INSTANT_REWARD_PER_COUNT;
+        const comboReward = run.comboCount * COMBO_INSTANT_REWARD_PER_COUNT;
+        run.score += comboReward;
+        run.comboScore += comboReward;
         // First-ever combo: explain the mechanic so new players discover the
         // game's main score lever instead of stumbling into it by accident.
         if (run.comboCount === 1 && shouldShowComboTip()) {
@@ -210,6 +213,7 @@ export class CopSystem {
       const tz = Math.floor(cop.body.position.z / TILE_SIZE);
       if (!isRoad(tx, tz) && isWater(tx, tz)) {
         run.score += SCORE_DROWNED_COP;
+        run.copScore += SCORE_DROWNED_COP;
         run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_DROWNED_COP);
         run.drownedThisRun++;
         playSplash();

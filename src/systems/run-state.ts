@@ -3,6 +3,7 @@ import type * as CANNON from "cannon-es";
 import type { Car } from "../entities/car";
 import { isRoad, TILE_SIZE } from "../world/terrain";
 import { LEVEL_DEFS } from "./leveling";
+import { MAX_HP, SCORE_BASE_TILE, COMBO_MULT_PER_COUNT, COMBO_MULT_MAX } from "../constants";
 
 // Bootstrap context shared by every system constructor. Held for the
 // lifetime of the app — these references never change after init.
@@ -28,7 +29,7 @@ export const COMBO_DECAY = 3.0;
 // reset on each startGame(). Systems read/write its fields directly.
 export class RunState {
   // Status
-  hp = 100;
+  hp = MAX_HP;
   score = 0;
   level = 1;
   survivalTime = 0;
@@ -84,8 +85,8 @@ export class RunState {
     if (isRoad(tx, tz)) {
       const speedRatio = Math.min(car.body.velocity.length() / car.maxSpeed, 1);
       const speedMult = 1 + speedRatio;
-      const comboMult = Math.min(1 + this.comboCount * 0.1, 3);
-      this.score += 1.5 * speedMult * comboMult;
+      const comboMult = Math.min(1 + this.comboCount * COMBO_MULT_PER_COUNT, COMBO_MULT_MAX);
+      this.score += SCORE_BASE_TILE * speedMult * comboMult;
     }
     this.lastScoreTileX = tx;
     this.lastScoreTileZ = tz;
@@ -110,7 +111,7 @@ export class RunState {
   }
 
   reset(car: Car) {
-    this.hp = 100;
+    this.hp = MAX_HP;
     this.score = 0;
     this.level = 1;
     this.survivalTime = 0;
@@ -141,6 +142,6 @@ export class RunState {
     shieldUp.value = this.shieldActive;
     combo.value = this.comboCount;
     comboTimerRatio.value = Math.max(0, this.comboTimer / COMBO_DECAY);
-    comboMultiplier.value = Math.min(1 + this.comboCount * 0.1, 3);
+    comboMultiplier.value = Math.min(1 + this.comboCount * COMBO_MULT_PER_COUNT, COMBO_MULT_MAX);
   }
 }

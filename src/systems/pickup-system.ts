@@ -9,11 +9,19 @@ import { playPickup } from "../audio/sound";
 import { haptics } from "../audio/haptics";
 import type { RunState, IGameContext } from "./run-state";
 import type { CopSystem } from "./cop-system";
-
-const MAX_PICKUPS = 4;
-const SPAWN_INTERVAL = 6;
-const NITRO_DURATION = 3;
-const NITRO_SPEED_MULT = 1.55;
+import {
+  PICKUP_MAX,
+  PICKUP_SPAWN_INTERVAL,
+  PICKUP_DESPAWN_DIST,
+  PICKUP_MAX_AGE,
+  PICKUP_COLLECT_DIST,
+  PICKUP_MAGNET_RANGE,
+  PICKUP_MAGNET_PULL,
+  NITRO_DURATION,
+  NITRO_SPEED_MULT,
+  EMP_RING_RADIUS,
+  SCORE_EMP_KILL,
+} from "../constants";
 
 // Weighted spawn — EMP is the rarest because it's the strongest
 const PICKUP_WEIGHTS: { kind: IPickupKind; weight: number }[] = [
@@ -52,7 +60,7 @@ export class PickupSystem {
 
   /** Snap a fresh pickup to a road tile near the player. */
   private spawnNear(playerPosition: THREE.Vector3) {
-    if (this.pickups.length >= MAX_PICKUPS) return;
+    if (this.pickups.length >= PICKUP_MAX) return;
     const distance = 25 + Math.random() * 20;
     const angle = Math.random() * Math.PI * 2;
     const x = playerPosition.x + Math.cos(angle) * distance;
@@ -82,7 +90,7 @@ export class PickupSystem {
   }
 
   update(dt: number, timeInSeconds: number, car: Car, run: RunState, cops: CopSystem) {
-    if (timeInSeconds - this.lastSpawnTime > SPAWN_INTERVAL) {
+    if (timeInSeconds - this.lastSpawnTime > PICKUP_SPAWN_INTERVAL) {
       this.spawnNear(car.mesh.position);
       this.lastSpawnTime = timeInSeconds;
     }
@@ -95,7 +103,7 @@ export class PickupSystem {
       const dist = Math.sqrt(dxp * dxp + dzp * dzp);
 
       // Despawn far / aged-out pickups
-      if (dist > 80 || p.age > 25) {
+      if (dist > PICKUP_DESPAWN_DIST || p.age > PICKUP_MAX_AGE) {
         p.destroy();
         this.pickups.splice(i, 1);
         continue;
@@ -103,8 +111,8 @@ export class PickupSystem {
 
       // Magnetism: when close (but not yet collected), pull the pickup
       // toward the car so tight roads don't feel frustrating.
-      if (dist < 6 && dist > 3.5) {
-        const pull = 4 * dt; // units/sec toward player, scaled by dt
+      if (dist < PICKUP_MAGNET_RANGE && dist > PICKUP_COLLECT_DIST) {
+        const pull = PICKUP_MAGNET_PULL * dt; // units/sec toward player, scaled by dt
         p.position.x -= (dxp / dist) * pull;
         p.position.z -= (dzp / dist) * pull;
         p.mesh.position.x = p.position.x;
@@ -112,7 +120,7 @@ export class PickupSystem {
       }
 
       // Collect on touch
-      if (dist < 3.5) {
+      if (dist < PICKUP_COLLECT_DIST) {
         playPickup();
         haptics.pickup();
         spawnConfetti(p.position.x, 2, p.position.z);
@@ -124,11 +132,11 @@ export class PickupSystem {
           run.shieldActive = true;
           spawnPopup(p.position.x, 2, p.position.z, "🛡 SHIELD", "#66ddff");
         } else if (p.kind === "emp") {
-          spawnRing(car.body.position.x, car.body.position.y, car.body.position.z, 30);
+          spawnRing(car.body.position.x, car.body.position.y, car.body.position.z, EMP_RING_RADIUS);
           spawnPopup(car.body.position.x, 3, car.body.position.z, "💥 EMP", "#66ddff");
           const kills = cops.empBlast(car, run);
           if (kills > 0) {
-            spawnPopup(car.body.position.x, 5, car.body.position.z, `+${kills * 30}`, "#ffcc22");
+            spawnPopup(car.body.position.x, 5, car.body.position.z, `+${kills * SCORE_EMP_KILL}`, "#ffcc22");
           }
           triggerShake(0.6);
         }

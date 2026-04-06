@@ -98,6 +98,12 @@ export const audioMuted = signal(_storedMute === "1");
 export const weather = signal<IWeather>("fog");
 
 // --- Actions wired by main.ts ---
+// Stub object so UI imports get a stable reference. main.ts must call
+// `setActions()` exactly once at startup to register real handlers. Passing
+// an `IActions` literal to setActions forces TypeScript to require every
+// method *at the call site* — so partial registration is a compile error.
+// Note: forgetting setActions entirely is still a silent no-op; the safety
+// net is "you'll notice on first manual playtest", not the type system.
 export const actions: IActions = {
   startGame: () => {},
   beginRun: () => {},
@@ -107,3 +113,7 @@ export const actions: IActions = {
   setWeather: () => {},
   togglePause: () => {},
 };
+
+export function setActions(impl: IActions) {
+  Object.assign(actions, impl);
+}

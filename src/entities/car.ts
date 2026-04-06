@@ -33,6 +33,12 @@ export class Car {
   weatherAccelMul: number;
   weatherGripAdd: number;
   nitroMul: number;
+  // Bound listener refs kept so dispose() can detach them. Inline arrows
+  // would close over `this` but be unremoveable, leaking key handlers if
+  // the game ever instantiates more than one Car (e.g. mid-run swap).
+  private _onKeyDown!: (e: KeyboardEvent) => void;
+  private _onKeyUp!: (e: KeyboardEvent) => void;
+  private _onWindowTouchEnd: ((e: TouchEvent) => void) | null = null;
 
   constructor(scene: THREE.Scene, world: CANNON.World, skinId: string = "vf3") {
     this.scene = scene;
@@ -100,8 +106,10 @@ export class Car {
   }
 
   initControls() {
-    window.addEventListener("keydown", (e) => this.handleKeyDown(e));
-    window.addEventListener("keyup", (e) => this.handleKeyUp(e));
+    this._onKeyDown = (e) => this.handleKeyDown(e);
+    this._onKeyUp = (e) => this.handleKeyUp(e);
+    window.addEventListener("keydown", this._onKeyDown);
+    window.addEventListener("keyup", this._onKeyUp);
     this.initTouchControls();
   }
 
@@ -141,14 +149,29 @@ export class Car {
     bind(btnRight, "right");
 
     // Safety: release all keys if all touches end globally (finger slides off button)
-    window.addEventListener("touchend", (e: TouchEvent) => {
+    this._onWindowTouchEnd = (e: TouchEvent) => {
       if (e.touches.length === 0) {
         activeTouches.left.clear();
         activeTouches.right.clear();
         this.keys.left = false;
         this.keys.right = false;
       }
-    });
+    };
+    window.addEventListener("touchend", this._onWindowTouchEnd);
+  }
+
+  /**
+   * Detach window listeners. Not called by the current single-instance flow,
+   * but required for any future "swap car between runs" feature — without it
+   * each new Car would silently double-bind keys + touch handlers.
+   */
+  dispose() {
+    window.removeEventListener("keydown", this._onKeyDown);
+    window.removeEventListener("keyup", this._onKeyUp);
+    if (this._onWindowTouchEnd) {
+      window.removeEventListener("touchend", this._onWindowTouchEnd);
+      this._onWindowTouchEnd = null;
+    }
   }
 
   handleKeyDown(e: KeyboardEvent) {
@@ -174,6 +197,13 @@ export class Car {
     this.mesh.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.geometry) mesh.geometry.dispose();
+      if (mesh.material) {
+        if (Array.isArray(mesh.material)) {
+          for (const m of mesh.material) m.dispose();
+        } else {
+          mesh.material.dispose();
+        }
+      }
     });
     const handles = buildCarMesh(skinId);
     this.mesh = handles.group;

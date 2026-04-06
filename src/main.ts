@@ -61,7 +61,7 @@ import {
   screen,
   playerName,
   canInstallPwa,
-  actions,
+  setActions,
   saveBest,
   isNewBest,
   runDrowned,
@@ -76,6 +76,20 @@ import {
   weather,
 } from "./state";
 import { fetchLeaderboard, submitScore, getPlayerName } from "./api";
+import {
+  MAX_HP,
+  HP_REGEN_PER_SEC,
+  HP_REGEN_SAFE_DIST,
+  HP_HEAL_ON_LEVEL_UP,
+  HP_HEAL_SPEED_STREAK,
+  BUSTED_TIME_THRESHOLD,
+  BUSTED_COP_COUNT,
+  BUSTED_STOPPED_SPEED,
+  SPEED_STREAK_THRESHOLD,
+  SPEED_STREAK_MIN_RATIO,
+  SIREN_MAX_RANGE,
+  DEATH_MOMENT_MS,
+} from "./constants";
 
 // --- Mount Preact UI first so #game-area exists for the canvas ---
 const appRoot = document.getElementById("app") as HTMLElement;
@@ -98,14 +112,14 @@ window.addEventListener("beforeinstallprompt", (e) => {
 if (window.matchMedia("(display-mode: standalone)").matches) {
   canInstallPwa.value = false;
 }
-actions.installPwa = async () => {
+async function installPwa() {
   if (deferredPrompt) {
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === "accepted") canInstallPwa.value = false;
     deferredPrompt = null;
   }
-};
+}
 
 // --- Scene Setup ---
 const scene = new THREE.Scene();
@@ -170,10 +184,10 @@ cityGenerator.update(new THREE.Vector3(0, 0, 0));
 // --- Player Car ---
 const car = new Car(scene, world, selectedSkin.value);
 
-actions.selectSkin = (skinId: string) => {
+function selectSkin(skinId: string) {
   setSelectedSkin(skinId);
   car.applySkin(skinId);
-};
+}
 
 // Apply the current weather's driving modifiers to the freshly built car, then
 // wire the setWeather action so future weather changes update sky, particles
@@ -182,14 +196,14 @@ actions.selectSkin = (skinId: string) => {
   const m = getWeatherModifiers(weather.value);
   car.setWeatherModifiers(m.topSpeedMul, m.accelMul, m.gripAdd);
 }
-actions.setWeather = (w) => {
+function setWeather(w: typeof weather.value) {
   weather.value = w;
   applyWeather(scene, ambientLight, directionalLight, w);
   setRainEnabled(rain, w === "rain");
   setSnowEnabled(snow, w === "snowy");
   const m = getWeatherModifiers(w);
   car.setWeatherModifiers(m.topSpeedMul, m.accelMul, m.gripAdd);
-};
+}
 
 // --- Systems + run state ---
 const ctx = { scene, world };
@@ -198,15 +212,14 @@ const cops = new CopSystem(ctx);
 const civilians = new CivilianSystem(ctx);
 const pickups = new PickupSystem(ctx);
 
-// Tuning constants that stay in main (orchestration-level)
-const BUSTED_TIME_THRESHOLD = 3;
-const BUSTED_COP_COUNT = 2;
-const SPEED_STREAK_THRESHOLD = 5;
-const SPEED_STREAK_MIN_RATIO = 0.9;
-
 // --- Game state machine (just the enum — everything else lives in `run`) ---
 type IGameStateValue = "start" | "playing" | "paused" | "gameover";
 let currentState: IGameStateValue = "start";
+
+// Per-frame scratch for the skid emitter — hoisted to avoid two Vec3
+// allocations every frame the player is drifting or boosting.
+const _rearLocal = new CANNON.Vec3(0, 0, 1.25);
+const _rearWorld = new CANNON.Vec3();
 
 function pauseGame() {
   if (currentState !== "playing") return;
@@ -230,10 +243,10 @@ function resumeGame() {
   startBgm();
 }
 
-actions.togglePause = () => {
+function togglePause() {
   if (currentState === "playing") pauseGame();
   else if (currentState === "paused") resumeGame();
-};
+}
 
 window.addEventListener("keydown", (e) => {
   if (e.code !== "Space" && e.key !== " ") return;
@@ -303,11 +316,6 @@ function startGame() {
   startBgm();
 }
 
-// Length of the dramatic "death moment" between fail-condition trigger and
-// the game-over panel showing — long enough for the flash + debris + sting
-// to land, short enough that the player isn't waiting on the panel.
-const DEATH_MOMENT_MS = 700;
-
 function gameOver(reason: string = "BUSTED") {
   if (currentState === "gameover") return;
   // Stop gameplay immediately so cops/civilians/scoring freeze, but keep
@@ -353,18 +361,31 @@ function gameOver(reason: string = "BUSTED") {
   }, DEATH_MOMENT_MS);
 }
 
-actions.startGame = () => {
+function goToPreGame() {
   // Navigate to the pre-game screen so the player can pick a car & configs
   // before the run actually begins.
   screen.value = "preGame";
-};
-actions.beginRun = startGame;
-actions.toggleSound = () => {
+}
+
+function toggleSound() {
   initAudio();
   resumeAudio();
   toggleMute();
   audioMuted.value = isMuted();
-};
+}
+
+// Single typed registration: forces TypeScript to require every IActions
+// member, replacing the previous "assign each field individually" pattern
+// where forgetting one would silently leave a no-op stub in production.
+setActions({
+  startGame: goToPreGame,
+  beginRun: startGame,
+  installPwa,
+  selectSkin,
+  toggleSound,
+  setWeather,
+  togglePause,
+});
 
 // --- Game Loop ---
 const timeStep = 1 / 60;
@@ -392,11 +413,11 @@ function tickPlaying(dt: number, timeInSeconds: number) {
   // --- Level progression ---
   const prevLevel = run.advanceLevel();
   if (run.level > prevLevel) {
-    run.hp = Math.min(100, run.hp + 15);
+    run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_ON_LEVEL_UP);
     playLevelUp();
     haptics.levelUp();
     spawnPopup(car.body.position.x, car.body.position.y + 1, car.body.position.z, `LV ${run.level}`, "#ffaa22");
-    spawnPopup(car.body.position.x, car.body.position.y + 2, car.body.position.z, "+15 HP", "#66ff88");
+    spawnPopup(car.body.position.x, car.body.position.y + 2, car.body.position.z, `+${HP_HEAL_ON_LEVEL_UP} HP`, "#66ff88");
   }
 
   // Engine pitch follows speed
@@ -427,36 +448,36 @@ function tickPlaying(dt: number, timeInSeconds: number) {
     gameOver("DROWNED");
   }
 
-  // --- Busted: 2+ cops nearby AND stopped for 3s ---
-  if (nearbyCount >= BUSTED_COP_COUNT && car.body.velocity.length() < 2) {
+  // --- Busted: enough cops nearby AND stopped for the threshold ---
+  if (nearbyCount >= BUSTED_COP_COUNT && car.body.velocity.length() < BUSTED_STOPPED_SPEED) {
     run.bustedTimer += dt;
     if (run.bustedTimer > BUSTED_TIME_THRESHOLD) gameOver("BUSTED");
   } else {
     run.bustedTimer = Math.max(0, run.bustedTimer - dt * 2);
   }
 
-  // --- Speed streak heal: +5 HP after 5s at 90%+ max speed ---
+  // --- Speed streak heal: reward sustained top-speed driving ---
   if (car.body.velocity.length() >= car.maxSpeed * SPEED_STREAK_MIN_RATIO) {
     run.speedStreakTimer += dt;
     if (run.speedStreakTimer >= SPEED_STREAK_THRESHOLD) {
-      run.hp = Math.min(100, run.hp + 5);
+      run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_SPEED_STREAK);
       run.speedStreakTimer = 0;
-      spawnPopup(car.body.position.x, car.body.position.y + 2, car.body.position.z, "+5 HP", "#66ff88");
+      spawnPopup(car.body.position.x, car.body.position.y + 2, car.body.position.z, `+${HP_HEAL_SPEED_STREAK} HP`, "#66ff88");
     }
   } else {
     run.speedStreakTimer = 0;
   }
 
-  // --- Passive HP regen: +1 HP/s when no cop within 30 units ---
-  if (nearbyCount === 0 && run.hp < 100 && nearestCopDist >= 30) {
-    run.hp = Math.min(100, run.hp + 1 * dt);
+  // --- Passive HP regen when no cop is in the safe radius ---
+  if (nearbyCount === 0 && run.hp < MAX_HP && nearestCopDist >= HP_REGEN_SAFE_DIST) {
+    run.hp = Math.min(MAX_HP, run.hp + HP_REGEN_PER_SEC * dt);
   }
 
-  // --- Siren: on when any cop within 40, intensity scales with closeness ---
+  // --- Siren: on when any cop within range, intensity scales with closeness ---
   let sirenIntensity = 0;
-  if (currentState === "playing" && nearestCopDist < 40) {
+  if (currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE) {
     startSiren();
-    sirenIntensity = 1 - nearestCopDist / 40;
+    sirenIntensity = 1 - nearestCopDist / SIREN_MAX_RANGE;
     setSirenVolume(sirenIntensity);
   } else {
     stopSiren();
@@ -467,9 +488,7 @@ function tickPlaying(dt: number, timeInSeconds: number) {
   const isDrifting = car.lateralSpeed > 4;
   const isBoosting = run.nitroTimer > 0 && car.body.velocity.length() > car.baseMaxSpeed * 0.6;
   if (isDrifting || isBoosting) {
-    const rearLocal = new CANNON.Vec3(0, 0, 1.25);
-    const rearWorld = new CANNON.Vec3();
-    car.body.pointToWorldFrame(rearLocal, rearWorld);
+    car.body.pointToWorldFrame(_rearLocal, _rearWorld);
     // Yaw extracted from quaternion. Safe because cannon angularFactor is
     // constrained to (0,1,0) so x/z components of the quaternion stay zero.
     const heading = Math.atan2(
@@ -478,8 +497,8 @@ function tickPlaying(dt: number, timeInSeconds: number) {
     );
     const offX = Math.cos(heading) * 1.25;
     const offZ = -Math.sin(heading) * 1.25;
-    spawnSkid(rearWorld.x + offX, rearWorld.z + offZ, heading);
-    spawnSkid(rearWorld.x - offX, rearWorld.z - offZ, heading);
+    spawnSkid(_rearWorld.x + offX, _rearWorld.z + offZ, heading);
+    spawnSkid(_rearWorld.x - offX, _rearWorld.z - offZ, heading);
   }
 
   run.syncHud();

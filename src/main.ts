@@ -1,4 +1,5 @@
 import "virtual:uno.css";
+import { render, h } from "preact";
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { Car } from "./entities/car";
@@ -6,30 +7,46 @@ import { Cop } from "./entities/cop";
 import { Civilian } from "./entities/civilian";
 import { CityGenerator, isRoad } from "./world/city-generator";
 import { isWater, TILE_SIZE } from "./world/terrain";
+import { App } from "./ui/app";
+import {
+  gameState,
+  hp,
+  score,
+  level,
+  survivalTime,
+  gameOverReason,
+  screen,
+  playerName,
+  canInstallPwa,
+  actions,
+} from "./state";
+import { fetchLeaderboard, submitScore, getPlayerName } from "./api";
+
+// --- Mount Preact UI first so #game-area exists for the canvas ---
+const appRoot = document.getElementById("app") as HTMLElement;
+render(h(App, null), appRoot);
+
+// --- Player name ---
+playerName.value = getPlayerName();
 
 // --- PWA Install Prompt (mobile only) ---
-let deferredPrompt: Event | null = null;
-const installBtn = document.getElementById("install-pwa-btn") as HTMLButtonElement | null;
+let deferredPrompt: any = null;
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  if (installBtn) installBtn.classList.replace("hidden", "flex");
+  canInstallPwa.value = true;
 });
-installBtn?.addEventListener("click", async () => {
-  if (deferredPrompt) {
-    (deferredPrompt as any).prompt();
-    const { outcome } = await (deferredPrompt as any).userChoice;
-    if (outcome === "accepted" && installBtn) installBtn.classList.replace("flex", "hidden");
-    deferredPrompt = null;
-  } else {
-    installBtn!.textContent = "Use browser menu → Add to Home Screen";
-    setTimeout(() => { installBtn!.textContent = "📲 Install App"; }, 3000);
-  }
-});
-// Hide if already installed as PWA
-if (window.matchMedia("(display-mode: standalone)").matches && installBtn) {
-  installBtn.classList.replace("flex", "hidden");
+if (window.matchMedia("(display-mode: standalone)").matches) {
+  canInstallPwa.value = false;
 }
+actions.installPwa = async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") canInstallPwa.value = false;
+    deferredPrompt = null;
+  }
+};
 
 // --- Scene Setup ---
 const scene = new THREE.Scene();
@@ -124,11 +141,11 @@ const BUSTED_TIME_THRESHOLD = 3; // seconds stopped
 const BUSTED_COP_COUNT = 2; // 2 cops nearby is enough
 
 // --- Level System ---
-interface ILevelDef {
+type ILevelDef = {
   maxCops: number;
   spawnInterval: number;
   scoreThreshold: number;
-}
+};
 const LEVEL_DEFS: ILevelDef[] = [
   { maxCops: 3, spawnInterval: 4, scoreThreshold: 0 },     // Level 1 — medium start
   { maxCops: 5, spawnInterval: 3, scoreThreshold: 100 },    // Level 2 — ~10s in
@@ -144,201 +161,32 @@ function getLevelDef(): ILevelDef {
   return LEVEL_DEFS[currentLevel - 1];
 }
 
-// --- Anonymous Player Name ---
-const ADJECTIVES = ["Swift","Sneaky","Turbo","Crazy","Wild","Rapid","Slick","Bold","Lucky","Blazing","Nitro","Shadow","Ghost","Rogue","Neon"];
-const NOUNS = ["Racer","Driver","Rider","Drifter","Runner","Chaser","Outlaw","Bandit","Cruiser","Phantom","Maverick","Bullet","Viper","Falcon","Wolf"];
-
-function generateAnonName(): string {
-  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
-  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-  const num = Math.floor(Math.random() * 100);
-  return `${adj}${noun}${num}`;
-}
-
-function getPlayerName(): string {
-  let name = localStorage.getItem("blocky-pursuit-name");
-  if (!name) {
-    name = generateAnonName();
-    localStorage.setItem("blocky-pursuit-name", name);
-  }
-  return name;
-}
-
-const playerName = getPlayerName();
-
-// --- Leaderboard ---
-const leaderboardPanel = document.getElementById("leaderboard-panel") as HTMLElement;
-const leaderboardList = document.getElementById("leaderboard-list") as HTMLElement;
-const leaderboardBtn = document.getElementById("leaderboard-btn") as HTMLElement;
-const leaderboardBackBtn = document.getElementById("leaderboard-back-btn") as HTMLElement;
-const playerNameDisplay = document.getElementById("player-name") as HTMLElement;
-playerNameDisplay.textContent = playerName;
-
-function renderLeaderboard(entries: { name: string; score: number }[]) {
-  if (!entries.length) {
-    leaderboardList.innerHTML = `<div class="text-gray-500 text-center text-xs py-6">No scores yet. Be the first!</div>`;
-    return;
-  }
-  const medalColors = ["text-amber-400", "text-gray-300", "text-amber-600"];
-  leaderboardList.innerHTML = entries
-    .slice(0, 10)
-    .map((e, i) => {
-      const rank = i + 1;
-      const medal = medalColors[i] ?? "text-gray-500";
-      const isMe = e.name === playerName;
-      const displayName = e.name.length > 12 ? e.name.slice(0, 12) + "\u2026" : e.name;
-      return `<div class="flex justify-between ${isMe ? "text-amber-300" : "text-gray-400"}">
-        <span><span class="${medal}">${rank}.</span> ${displayName}</span>
-        <span class="tabular-nums">${e.score.toLocaleString()}</span>
-      </div>`;
-    })
-    .join("");
-}
-
-let cachedEntries: { name: string; score: number }[] = [];
-
-async function fetchLeaderboard() {
-  try {
-    const res = await fetch("/.netlify/functions/leaderboard");
-    if (!res.ok) return;
-    cachedEntries = await res.json() as { name: string; score: number }[];
-    renderLeaderboard(cachedEntries);
-  } catch {
-    renderLeaderboard([]);
-  }
-}
-
-async function submitScore(finalScore: number) {
-  if (finalScore <= 0) return;
-  try {
-    await fetch("/.netlify/functions/submit-score", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: playerName, score: Math.floor(finalScore) }),
-    });
-  } catch { /* offline — ignore */ }
-}
-
-function showLeaderboard() {
-  fetchLeaderboard();
-  howToPlay.classList.add("hidden");
-  leaderboardPanel.classList.remove("hidden");
-}
-
-function hideLeaderboard() {
-  leaderboardPanel.classList.add("hidden");
-  // Restore how-to-play only if on start screen
-  if (currentState === GAME_STATE.START) {
-    howToPlay.classList.remove("hidden");
-  }
-}
-
-leaderboardBtn.addEventListener("click", showLeaderboard);
-leaderboardBackBtn.addEventListener("click", hideLeaderboard);
-
-// --- Feedback ---
-const feedbackPanel = document.getElementById("feedback-panel") as HTMLElement;
-const feedbackBtn = document.getElementById("feedback-btn") as HTMLElement;
-const feedbackBackBtn = document.getElementById("feedback-back-btn") as HTMLElement;
-
-function showFeedback() {
-  howToPlay.classList.add("hidden");
-  leaderboardPanel.classList.add("hidden");
-  feedbackPanel.classList.remove("hidden");
-}
-
-function hideFeedback() {
-  feedbackPanel.classList.add("hidden");
-  if (currentState === GAME_STATE.START) {
-    howToPlay.classList.remove("hidden");
-  }
-}
-
-feedbackBtn.addEventListener("click", showFeedback);
-feedbackBackBtn.addEventListener("click", hideFeedback);
-
-// --- Game State & UI ---
-const GAME_STATE = {
-  START: 0,
-  PLAYING: 1,
-  GAMEOVER: 2,
-};
-let currentState = GAME_STATE.START;
-let survivalTime = 0;
+// --- Game state (local mirrors of signals for hot loop) ---
+let currentState: "start" | "playing" | "gameover" = "start";
+let survivalTimeLocal = 0;
 let carHP = 100;
-let score = 0;
+let scoreLocal = 0;
 let lastScoreTileX = -9999;
 let lastScoreTileZ = -9999;
 let speedStreakTimer = 0;
 const SPEED_STREAK_THRESHOLD = 5; // seconds at high speed to trigger heal
 const SPEED_STREAK_MIN_RATIO = 0.9; // 90% of max speed — requires near-perfect driving
 
-const uiGameTitle = document.getElementById("game-title") as HTMLElement;
-const uiTimerDisplay = document.getElementById("timer-display") as HTMLElement;
-const uiGameOverReason = document.getElementById("game-over-reason") as HTMLElement;
-
-const uiHPBar = document.getElementById("hp-bar-fill") as HTMLElement;
-const uiScoreDisplay = document.getElementById("score-display") as HTMLElement;
-const uiLevelDisplay = document.getElementById("level-display") as HTMLElement;
-const uiHUD = document.getElementById("hud") as HTMLElement;
-
-const btnStart = document.getElementById("start-btn") as HTMLElement;
-const btnRestart = document.getElementById("restart-btn") as HTMLElement;
-const mobileBtnStart = document.getElementById("mobile-start-btn") as HTMLElement;
-const mobileBtnRestart = document.getElementById("mobile-restart-btn") as HTMLElement;
-const mobileCta = document.getElementById("mobile-cta") as HTMLElement;
-const mobileControls = document.getElementById("mobile-controls") as HTMLElement;
-const darkenOverlay = document.getElementById("darken-overlay") as HTMLElement;
-const howToPlay = document.getElementById("how-to-play") as HTMLElement;
-
-function formatTime(seconds: number) {
-  const secs = Math.floor(seconds);
-  const ms = Math.floor((seconds % 1) * 100);
-  return `${secs}:${ms.toString().padStart(2, "0")}`;
-}
-
-const HP_COLOR_CLASSES = ['bg-green-400', 'bg-yellow-400', 'bg-red-400'];
-let lastHPColorClass = HP_COLOR_CLASSES[0];
-
-function updateHUD() {
-  uiHPBar.style.width = `${Math.max(0, carHP)}%`;
-
-  // Color shifts via class swap: green > yellow > red
-  const newClass = carHP > 60 ? HP_COLOR_CLASSES[0] : carHP > 30 ? HP_COLOR_CLASSES[1] : HP_COLOR_CLASSES[2];
-  if (newClass !== lastHPColorClass) {
-    uiHPBar.classList.remove(lastHPColorClass);
-    uiHPBar.classList.add(newClass);
-    lastHPColorClass = newClass;
-  }
-
-  uiScoreDisplay.innerText = `${Math.floor(score)}`;
-  uiLevelDisplay.innerText = `LV ${currentLevel}`;
-  uiTimerDisplay.innerText = formatTime(survivalTime);
+function syncHud() {
+  hp.value = Math.max(0, carHP);
+  score.value = scoreLocal;
+  level.value = currentLevel;
+  survivalTime.value = survivalTimeLocal;
 }
 
 function startGame() {
-  // Hide start/game-over elements, show HUD
-  uiGameTitle.classList.add("hidden");
-  btnStart.classList.add("hidden");
-  btnRestart.classList.add("hidden");
-  uiGameOverReason.classList.add("hidden");
-  mobileBtnStart.classList.add("hidden");
-  mobileBtnRestart.classList.add("hidden");
-  mobileCta.classList.add("hidden");
-  howToPlay.classList.add("hidden");
-  uiHUD.classList.remove("hidden");
-  uiTimerDisplay.classList.remove("hidden");
-  // Show mobile touch controls
-  mobileControls.classList.remove("hidden");
-  mobileControls.classList.add("flex");
-  darkenOverlay.classList.add("opacity-0");
-  currentState = GAME_STATE.PLAYING;
-  leaderboardPanel.classList.add("hidden");
-  feedbackPanel.classList.add("hidden");
-  survivalTime = 0;
+  currentState = "playing";
+  gameState.value = "playing";
+  screen.value = "none";
+  survivalTimeLocal = 0;
   bustedTimer = 0;
   carHP = 100;
-  score = 0;
+  scoreLocal = 0;
   currentLevel = 1;
   lastScoreTileX = -9999;
   lastScoreTileZ = -9999;
@@ -363,39 +211,22 @@ function startGame() {
   civilians.forEach((c) => c.destroy());
   civilians.length = 0;
 
-  updateHUD();
+  syncHud();
   lastCallTime = performance.now() / 1000;
   lastCopSpawnTime = lastCallTime;
   lastCivilianSpawnTime = lastCallTime;
 }
 
 function gameOver(reason: string = "BUSTED") {
-  currentState = GAME_STATE.GAMEOVER;
+  currentState = "gameover";
+  gameState.value = "gameover";
+  gameOverReason.value = reason;
 
   // Submit score then refresh leaderboard
-  submitScore(score).then(() => fetchLeaderboard());
-
-  // Show reason in top-right (both desktop & mobile)
-  uiGameOverReason.innerText = reason;
-  uiGameOverReason.classList.remove("hidden");
-
-  // Desktop: show retry in top bar
-  btnRestart.classList.remove("hidden");
-
-  // Mobile: hide controls, show retry CTA at bottom center
-  mobileControls.classList.add("hidden");
-  mobileControls.classList.remove("flex");
-  mobileBtnRestart.classList.remove("hidden");
-  mobileCta.classList.remove("hidden");
-  mobileCta.classList.add("flex");
-
-  darkenOverlay.classList.remove("opacity-0");
+  submitScore(playerName.value, scoreLocal).then(() => fetchLeaderboard());
 }
 
-btnStart.addEventListener("click", startGame);
-btnRestart.addEventListener("click", startGame);
-mobileBtnStart.addEventListener("click", startGame);
-mobileBtnRestart.addEventListener("click", startGame);
+actions.startGame = startGame;
 
 function spawnCop(playerPosition: THREE.Vector3, playerVelocity: CANNON.Vec3) {
   const levelDef = getLevelDef();
@@ -496,19 +327,19 @@ function animate(time: number) {
   }
   lastCallTime = timeInSeconds;
 
-  if (currentState === GAME_STATE.PLAYING) {
+  if (currentState === "playing") {
     car.update(dt);
     cityGenerator.update(car.mesh.position);
     // Step physics world
     world.step(timeStep, dt, 10);
 
     // Update survival time
-    survivalTime += dt;
+    survivalTimeLocal += dt;
 
     // --- Level Progression ---
     const prevLevel = currentLevel;
     for (let lv = LEVEL_DEFS.length; lv >= 1; lv--) {
-      if (score >= LEVEL_DEFS[lv - 1].scoreThreshold) {
+      if (scoreLocal >= LEVEL_DEFS[lv - 1].scoreThreshold) {
         if (lv > currentLevel) {
           currentLevel = lv;
         }
@@ -528,7 +359,7 @@ function animate(time: number) {
         // Speed multiplier: 1x at speed 0, up to 2x at maxSpeed
         const speedRatio = Math.min(car.body.velocity.length() / car.maxSpeed, 1);
         const speedMult = 1 + speedRatio;
-        score += 1.5 * speedMult;
+        scoreLocal += 1.5 * speedMult;
       }
       lastScoreTileX = scoreTileX;
       lastScoreTileZ = scoreTileZ;
@@ -641,7 +472,7 @@ function animate(time: number) {
       const copTileX = Math.floor(cop.body.position.x / TILE_SIZE);
       const copTileZ = Math.floor(cop.body.position.z / TILE_SIZE);
       if (!isRoad(copTileX, copTileZ) && isWater(copTileX, copTileZ)) {
-        score += 30; // bonus for cop falling in water
+        scoreLocal += 30; // bonus for cop falling in water
         carHP = Math.min(100, carHP + 10); // heal for luring cop into water
         cop.destroy();
         cops.splice(i, 1);
@@ -683,7 +514,7 @@ function animate(time: number) {
       }
     }
 
-    updateHUD();
+    syncHud();
   }
 
   // Camera follow car

@@ -15,10 +15,14 @@
   "dependencies": {
     "@netlify/blobs": "10.7.4",
     "@netlify/functions": "5.1.5",
+    "@preact/signals": "2.9.0",
     "cannon-es": "0.20.0",
+    "es-toolkit": "1.45.1",
+    "preact": "10.29.1",
     "three": "0.160.0"
   },
   "devDependencies": {
+    "@preact/preset-vite": "2.10.5",
     "@types/three": "0.160.0",
     "@unocss/reset": "66.6.7",
     "@unocss/vite": "66.6.7",

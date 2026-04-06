@@ -2,9 +2,11 @@ import { defineConfig } from "vite";
 import UnoCSS from "@unocss/vite";
 import { presetWind4 } from "unocss";
 import { VitePWA } from "vite-plugin-pwa";
+import preact from "@preact/preset-vite";
 
 export default defineConfig({
   plugins: [
+    preact(),
     UnoCSS({
       presets: [presetWind4()],
       safelist: ["opacity-0", "bg-yellow-400", "bg-red-400"],

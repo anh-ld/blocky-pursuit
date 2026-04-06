@@ -1,11 +1,11 @@
 import { getStore } from "@netlify/blobs";
 import type { Context } from "@netlify/functions";
 
-interface ScoreEntry {
+type IScoreEntry = {
   name: string;
   score: number;
   ts: number;
-}
+};
 
 export default async function handler(req: Request, _context: Context) {
   if (req.method !== "POST") {
@@ -22,8 +22,8 @@ export default async function handler(req: Request, _context: Context) {
     const sanitizedName = String(name).slice(0, 20).replace(/[^a-zA-Z0-9 _-]/g, "");
 
     const store = getStore("leaderboard");
-    const raw = await store.get("top-scores", { type: "json" }) as ScoreEntry[] | null;
-    const entries: ScoreEntry[] = raw ?? [];
+    const raw = await store.get("top-scores", { type: "json" }) as IScoreEntry[] | null;
+    const entries: IScoreEntry[] = raw ?? [];
 
     entries.push({ name: sanitizedName, score: Math.floor(score), ts: Date.now() });
 

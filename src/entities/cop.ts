@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 
-export interface ICopLevelConfig {
+export type ICopLevelConfig = {
   mass: number;
   speed: number;
   ramSpeed: number; // burst speed when close to player
@@ -9,7 +9,7 @@ export interface ICopLevelConfig {
   forwardForce: number;
   predictAhead: number; // seconds to predict player position (0 = no prediction)
   flank: boolean; // whether this cop tries to flank
-}
+};
 
 // Player: maxSpeed=40, mass=100
 export const COP_LEVEL_CONFIGS: Record<number, ICopLevelConfig> = {

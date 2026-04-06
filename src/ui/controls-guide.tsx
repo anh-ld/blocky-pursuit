@@ -1,15 +1,33 @@
-import { gameState, audioMuted, actions } from "../state";
+import { gameState, audioMuted, actions, weather } from "../state";
+import { WEATHERS } from "../world/weather";
 
 export function ControlsGuide() {
   if (gameState.value !== "playing") return null;
   const muted = audioMuted.value;
+  const currentWeather = weather.value;
 
   return (
-    <div class="self-end mb-4 mr-4 flex items-center gap-2 hidden md:flex">
+    <div class="self-end mb-4 mr-4 flex items-stretch gap-2 hidden md:flex">
+      <div class="flex items-stretch bg-black/50 pointer-events-auto">
+        {WEATHERS.map((w) => {
+          const active = currentWeather === w.id;
+          return (
+            <button
+              key={w.id}
+              aria-label={w.label}
+              title={w.label}
+              onClick={() => actions.setWeather(w.id)}
+              class={`px-3 text-sm leading-none cursor-pointer flex items-center justify-center ${active ? "bg-amber-500/30 text-amber-300" : "text-gray-400 hover:text-amber-400"}`}
+            >
+              {w.icon}
+            </button>
+          );
+        })}
+      </div>
       <button
         aria-label={muted ? "Unmute sound" : "Mute sound"}
         onClick={() => actions.toggleSound()}
-        class={`px-3 py-2 bg-black/50 text-sm leading-none cursor-pointer pointer-events-auto hover:text-amber-400 ${muted ? "text-gray-500 line-through" : "text-gray-300"}`}
+        class={`px-3 bg-black/50 text-sm leading-none cursor-pointer pointer-events-auto hover:text-amber-400 flex items-center justify-center ${muted ? "text-gray-500 line-through" : "text-gray-300"}`}
       >
         ♪
       </button>

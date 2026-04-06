@@ -39,6 +39,7 @@ import {
 } from "./world/effects";
 import { initPopups, spawnPopup, updatePopups } from "./world/popups";
 import { initSkids, spawnSkid, updateSkids, clearSkids } from "./world/skids";
+import { applyWeather } from "./world/weather";
 import { App } from "./ui/app";
 import {
   gameState,
@@ -58,6 +59,7 @@ import {
   incrementRuns,
   addDrownedCops,
   audioMuted,
+  weather,
 } from "./state";
 import { fetchLeaderboard, submitScore, getPlayerName } from "./api";
 
@@ -94,25 +96,6 @@ actions.installPwa = async () => {
 // --- Scene Setup ---
 const scene = new THREE.Scene();
 
-// Sky gradient (vertical) — drawn to a tall canvas, used as scene background.
-function makeSkyTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = 16;
-  c.height = 256;
-  const cctx = c.getContext("2d")!;
-  const grad = cctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, "#3a8fd1");
-  grad.addColorStop(0.55, "#87ceeb");
-  grad.addColorStop(1, "#cfe9f5");
-  cctx.fillStyle = grad;
-  cctx.fillRect(0, 0, 16, 256);
-  const tex = new THREE.CanvasTexture(c);
-  tex.minFilter = THREE.LinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  return tex;
-}
-scene.background = makeSkyTexture();
-scene.fog = new THREE.Fog(0xcfe9f5, 90, 240);
 
 // --- Isometric Camera Setup ---
 const aspect = 1;
@@ -138,6 +121,13 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
 directionalLight.position.set(50, 100, 50);
 scene.add(directionalLight);
 scene.add(directionalLight.target);
+
+// --- Weather (sky + fog + light tint) ---
+applyWeather(scene, ambientLight, directionalLight, weather.value);
+actions.setWeather = (w) => {
+  weather.value = w;
+  applyWeather(scene, ambientLight, directionalLight, w);
+};
 
 // --- Cannon-es World Setup ---
 const world = new CANNON.World({
@@ -182,8 +172,41 @@ const SPEED_STREAK_THRESHOLD = 5;
 const SPEED_STREAK_MIN_RATIO = 0.9;
 
 // --- Game state machine (just the enum — everything else lives in `run`) ---
-type IGameStateValue = "start" | "playing" | "gameover";
+type IGameStateValue = "start" | "playing" | "paused" | "gameover";
 let currentState: IGameStateValue = "start";
+
+function pauseGame() {
+  if (currentState !== "playing") return;
+  currentState = "paused";
+  gameState.value = "paused";
+  stopEngine();
+  stopSiren();
+  stopBgm();
+}
+
+function resumeGame() {
+  if (currentState !== "paused") return;
+  currentState = "playing";
+  gameState.value = "playing";
+  // Avoid stale dt on resume
+  lastCallTime = null;
+  spawnTimersRebased = false;
+  initAudio();
+  resumeAudio();
+  startEngine();
+  startBgm();
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.code !== "Space" && e.key !== " ") return;
+  if (currentState === "playing") {
+    e.preventDefault();
+    pauseGame();
+  } else if (currentState === "paused") {
+    e.preventDefault();
+    resumeGame();
+  }
+});
 
 // --- Window resize ---
 function resizeRenderer() {
@@ -445,9 +468,7 @@ function animate(time: number) {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     if (currentState === "playing") {
-      stopEngine();
-      stopSiren();
-      stopBgm();
+      pauseGame();
     }
   } else {
     lastCallTime = null;

@@ -3,18 +3,21 @@ import { attempt } from "es-toolkit";
 import { loadProgress, saveProgress } from "./entities/car-skins";
 
 export type IScreen = "howToPlay" | "leaderboard" | "feedback" | "garage" | "none";
-export type IGameStateValue = "start" | "playing" | "gameover";
+export type IGameStateValue = "start" | "playing" | "paused" | "gameover";
 
 export type ILeaderboardEntry = {
   name: string;
   score: number;
 };
 
+export type IWeather = "sunny" | "fog" | "rain" | "sunset";
+
 export type IActions = {
   startGame: () => void;
   installPwa: () => void;
   selectSkin: (skinId: string) => void;
   toggleSound: () => void;
+  setWeather: (w: IWeather) => void;
 };
 
 // --- Game state signals (written by main.ts game loop, read by UI) ---
@@ -90,10 +93,13 @@ export const canInstallPwa = signal(false);
 const [, _storedMute] = attempt(() => localStorage.getItem("bp:muted"));
 export const audioMuted = signal(_storedMute === "1");
 
+export const weather = signal<IWeather>("fog");
+
 // --- Actions wired by main.ts ---
 export const actions: IActions = {
   startGame: () => {},
   installPwa: () => {},
   selectSkin: () => {},
   toggleSound: () => {},
+  setWeather: () => {},
 };

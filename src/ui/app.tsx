@@ -14,6 +14,7 @@ export function App() {
   const sc = screen.value;
   const showHowToPlay = state === "start" && sc === "howToPlay";
   const showGameOver = state === "gameover" && sc !== "leaderboard" && sc !== "feedback";
+  const showPaused = state === "paused";
   const darken = state !== "playing";
 
   return (
@@ -25,6 +26,16 @@ export function App() {
         />
         {showHowToPlay && <HowToPlay />}
         {showGameOver && <GameOver />}
+        {showPaused && (
+          <div class="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+            <div class="bg-black/50 text-gray-300 px-4 py-3 flex flex-col gap-2 text-xs font-normal tracking-wide text-center">
+              <span class="text-amber-400 font-extrabold uppercase tracking-widest">
+                Paused
+              </span>
+              <span class="text-gray-400">Press SPACE to resume</span>
+            </div>
+          </div>
+        )}
         {sc === "leaderboard" && <Leaderboard />}
         {sc === "feedback" && <Feedback />}
         {sc === "garage" && <Garage />}

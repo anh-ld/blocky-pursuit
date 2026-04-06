@@ -26,6 +26,13 @@ export const survivalTime = signal(0);
 export const gameOverReason = signal("BUSTED");
 export const nitroRemaining = signal(0);
 export const shieldUp = signal(false);
+export const combo = signal(0);
+
+// --- Per-run summary stats (shown on game-over) ---
+export const runDrowned = signal(0);
+export const runTopSpeed = signal(0);
+export const runBiggestCombo = signal(0);
+export const runDistance = signal(0);
 
 // --- Persistent progress (best, runs, drowned cops, selected skin) ---
 const _initialProgress = loadProgress();

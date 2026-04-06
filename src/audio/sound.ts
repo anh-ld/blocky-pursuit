@@ -370,6 +370,112 @@ export function playGameOver() {
   playArpeggio({ notes: [523, 466, 392, 311], type: "sawtooth", spacing: 0.15, attack: 0.03, peak: 0.55, decay: 0.4 });
 }
 
+// --- BGM (procedural, looping chord progression) ---
+// Simple driving-game vibe: 4-chord loop on a triangle bass + square pad,
+// scheduled note-by-note. Ducks via a dedicated gain node when sirens
+// get loud so the chase reads cleaner.
+type IBgmNodes = {
+  bus: GainNode;
+  duck: GainNode;
+  schedulerInterval: number;
+  oscs: OscillatorNode[];
+};
+let bgmNodes: IBgmNodes | null = null;
+
+const BGM_BPM = 110;
+const BGM_BEAT = 60 / BGM_BPM;
+// Cmin progression (Cm - Ab - Eb - Bb), 2 beats per chord, 4 chords = 8 beats
+const BGM_PROGRESSION: number[][] = [
+  [130.81, 155.56, 196.0], // Cm
+  [103.83, 130.81, 155.56], // Ab
+  [155.56, 196.0, 233.08], // Eb
+  [116.54, 146.83, 174.61], // Bb
+];
+
+function scheduleBgmBar(startTime: number) {
+  if (!ctx || !bgmNodes) return;
+  for (let i = 0; i < BGM_PROGRESSION.length; i++) {
+    const chord = BGM_PROGRESSION[i];
+    const t = startTime + i * 2 * BGM_BEAT;
+    // Bass note (root, octave down) on the downbeat
+    const bass = ctx.createOscillator();
+    const bassGain = ctx.createGain();
+    bass.type = "triangle";
+    bass.frequency.value = chord[0] / 2;
+    bassGain.gain.setValueAtTime(0.0001, t);
+    bassGain.gain.exponentialRampToValueAtTime(0.35, t + 0.04);
+    bassGain.gain.exponentialRampToValueAtTime(0.0001, t + 2 * BGM_BEAT - 0.05);
+    bass.connect(bassGain);
+    bassGain.connect(bgmNodes.bus);
+    bass.start(t);
+    bass.stop(t + 2 * BGM_BEAT);
+    bgmNodes.oscs.push(bass);
+
+    // Pad (chord triad) — quieter, square wave through implicit smoothing
+    for (const note of chord) {
+      const pad = ctx.createOscillator();
+      const padGain = ctx.createGain();
+      pad.type = "square";
+      pad.frequency.value = note;
+      padGain.gain.setValueAtTime(0.0001, t);
+      padGain.gain.exponentialRampToValueAtTime(0.04, t + 0.1);
+      padGain.gain.exponentialRampToValueAtTime(0.0001, t + 2 * BGM_BEAT - 0.05);
+      pad.connect(padGain);
+      padGain.connect(bgmNodes.bus);
+      pad.start(t);
+      pad.stop(t + 2 * BGM_BEAT);
+      bgmNodes.oscs.push(pad);
+    }
+  }
+  // Trim the osc list so it doesn't grow unbounded — stopped oscs auto-disconnect
+  if (bgmNodes.oscs.length > 200) {
+    bgmNodes.oscs.splice(0, bgmNodes.oscs.length - 200);
+  }
+}
+
+export function startBgm() {
+  if (!ctx || !masterGain || bgmNodes) return;
+  const bus = ctx.createGain();
+  const duck = ctx.createGain();
+  bus.gain.value = 0.5;
+  duck.gain.value = 1.0;
+  bus.connect(duck);
+  duck.connect(masterGain);
+  bgmNodes = { bus, duck, schedulerInterval: 0, oscs: [] };
+
+  // Schedule first bar immediately, then every 8 beats
+  let nextBarStart = now() + 0.05;
+  scheduleBgmBar(nextBarStart);
+  nextBarStart += 8 * BGM_BEAT;
+
+  bgmNodes.schedulerInterval = window.setInterval(() => {
+    if (!ctx || !bgmNodes) return;
+    // Stay 1.5 bars ahead of current time
+    while (nextBarStart < now() + 1.5 * 8 * BGM_BEAT) {
+      scheduleBgmBar(nextBarStart);
+      nextBarStart += 8 * BGM_BEAT;
+    }
+  }, 500);
+}
+
+export function setBgmDuck(amount: number) {
+  // amount 0..1 — at 1, music is 30% as loud
+  if (!ctx || !bgmNodes) return;
+  const target = 1 - amount * 0.7;
+  bgmNodes.duck.gain.setTargetAtTime(target, now(), 0.15);
+}
+
+export function stopBgm() {
+  if (!bgmNodes) return;
+  clearInterval(bgmNodes.schedulerInterval);
+  for (const o of bgmNodes.oscs) {
+    attempt(() => o.stop());
+    attempt(() => o.disconnect());
+  }
+  safeDispose(bgmNodes.bus, bgmNodes.duck);
+  bgmNodes = null;
+}
+
 // Resume audio context after user gesture (mobile autoplay policy)
 export function resumeAudio() {
   if (ctx?.state === "suspended") {

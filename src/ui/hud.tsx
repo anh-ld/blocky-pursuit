@@ -1,10 +1,11 @@
-import { hp, score, level, nitroRemaining, shieldUp } from "../state";
+import { hp, score, level, nitroRemaining, shieldUp, combo } from "../state";
 
 export function Hud() {
   const v = hp.value;
   const color = v > 60 ? "bg-green-400" : v > 30 ? "bg-yellow-400" : "bg-red-400";
   const nitro = nitroRemaining.value;
   const shield = shieldUp.value;
+  const c = combo.value;
   return (
     <div class="flex items-center gap-2">
       <div class="w-25 h-3.5 bg-gray-700 relative overflow-hidden">
@@ -22,6 +23,11 @@ export function Hud() {
       <span class="text-orange-500 text-xs font-extrabold tracking-widest">
         LV {level.value}
       </span>
+      {c > 0 && (
+        <span class="text-pink-400 text-xs font-extrabold tracking-widest">
+          x{c}
+        </span>
+      )}
       {nitro > 0 && (
         <span class="text-amber-300 text-xs font-extrabold tracking-widest">
           ⚡{nitro.toFixed(1)}

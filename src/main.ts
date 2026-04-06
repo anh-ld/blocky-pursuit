@@ -3,13 +3,14 @@ import { render, h } from "preact";
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { Car } from "./entities/car";
-import { Cop } from "./entities/cop";
-import { Civilian } from "./entities/civilian";
-import { Pickup, type IPickupKind } from "./entities/pickup";
+import { updateCopLights } from "./entities/cop";
 import { CityGenerator, isRoad } from "./world/city-generator";
 import { isWater, TILE_SIZE } from "./world/terrain";
-import { LEVEL_DEFS, getLevelDef } from "./systems/leveling";
-import { spawnCop, spawnCivilian } from "./systems/spawning";
+import { LEVEL_DEFS } from "./systems/leveling";
+import { RunState } from "./systems/run-state";
+import { CopSystem } from "./systems/cop-system";
+import { CivilianSystem } from "./systems/civilian-system";
+import { PickupSystem } from "./systems/pickup-system";
 import {
   initAudio,
   resumeAudio,
@@ -19,30 +20,21 @@ import {
   startSiren,
   stopSiren,
   setSirenVolume,
-  playCrash,
   playSplash,
-  playPickup,
   playLevelUp,
   playGameOver,
   toggleMute,
   isMuted,
+  startBgm,
+  stopBgm,
+  setBgmDuck,
 } from "./audio/sound";
-import {
-  initEffects,
-  triggerShake,
-  applyShake,
-  spawnSparks,
-  spawnSplash,
-  spawnConfetti,
-  updateEffects,
-} from "./world/effects";
+import { initEffects, applyShake, spawnSplash, updateEffects } from "./world/effects";
+import { initPopups, spawnPopup, updatePopups } from "./world/popups";
+import { initSkids, spawnSkid, updateSkids, clearSkids } from "./world/skids";
 import { App } from "./ui/app";
 import {
   gameState,
-  hp,
-  score,
-  level,
-  survivalTime,
   gameOverReason,
   screen,
   playerName,
@@ -50,8 +42,10 @@ import {
   actions,
   saveBest,
   isNewBest,
-  nitroRemaining,
-  shieldUp,
+  runDrowned,
+  runTopSpeed,
+  runBiggestCombo,
+  runDistance,
   selectedSkin,
   setSelectedSkin,
   incrementRuns,
@@ -92,14 +86,31 @@ actions.installPwa = async () => {
 
 // --- Scene Setup ---
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb); // Vibrant Sky Blue
+
+// Sky gradient (vertical) — drawn to a tall canvas, used as scene background.
+function makeSkyTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 16;
+  c.height = 256;
+  const cctx = c.getContext("2d")!;
+  const grad = cctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, "#3a8fd1");
+  grad.addColorStop(0.55, "#87ceeb");
+  grad.addColorStop(1, "#cfe9f5");
+  cctx.fillStyle = grad;
+  cctx.fillRect(0, 0, 16, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  return tex;
+}
+scene.background = makeSkyTexture();
+scene.fog = new THREE.Fog(0xcfe9f5, 90, 240);
 
 // --- Isometric Camera Setup ---
-const aspect = 1; // will be set properly after gameArea is measured
-const d = 50; // Zoomed out to show much more of the city and roads
-// Orthographic camera for a true isometric look
+const aspect = 1;
+const d = 50;
 const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
-// Positioned at an equal distance along x, y, z for isometric projection
 camera.position.set(50, 50, 50);
 camera.lookAt(scene.position);
 
@@ -116,7 +127,6 @@ gameArea.appendChild(renderer.domElement);
 // --- Lighting Setup ---
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
-
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
 directionalLight.position.set(50, 100, 50);
 scene.add(directionalLight);
@@ -124,23 +134,22 @@ scene.add(directionalLight.target);
 
 // --- Cannon-es World Setup ---
 const world = new CANNON.World({
-  gravity: new CANNON.Vec3(0, -30, 0), // Increased gravity to keep cars planted
-  allowSleep: false, // Disable sleeping entirely for the whole world
+  gravity: new CANNON.Vec3(0, -30, 0),
+  allowSleep: false,
 });
-
-// Create a ground plane (Physics)
 const groundShape = new CANNON.Plane();
-const groundBody = new CANNON.Body({ mass: 0 }); // mass 0 makes it static
+const groundBody = new CANNON.Body({ mass: 0 });
 groundBody.addShape(groundShape);
-groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0); // Rotate to be horizontal
+groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
-// --- Effects (particles, screen shake) ---
+// --- Effects (particles, screen shake, popups, skids) ---
 initEffects(scene);
+initPopups(scene);
+initSkids(scene);
 
 // --- City Generation ---
 const cityGenerator = new CityGenerator(scene, world);
-// Generate initial chunks around origin for start screen background
 cityGenerator.update(new THREE.Vector3(0, 0, 0));
 
 // --- Player Car ---
@@ -151,13 +160,29 @@ actions.selectSkin = (skinId: string) => {
   car.applySkin(skinId);
 };
 
-// Handle Window Resize
+// --- Systems + run state ---
+const run = new RunState();
+const cops = new CopSystem(scene, world);
+const civilians = new CivilianSystem(scene, world);
+const pickups = new PickupSystem(scene);
+
+// Tuning constants that stay in main (orchestration-level)
+const BUSTED_TIME_THRESHOLD = 3;
+const BUSTED_COP_COUNT = 2;
+const SPEED_STREAK_THRESHOLD = 5;
+const SPEED_STREAK_MIN_RATIO = 0.9;
+
+// --- Game state machine (just the enum — everything else lives in `run`) ---
+type IGameStateValue = "start" | "playing" | "gameover";
+let currentState: IGameStateValue = "start";
+
+// --- Window resize ---
 function resizeRenderer() {
   const w = gameArea.clientWidth;
   const h = gameArea.clientHeight;
-  const aspect = w / h;
-  camera.left = -d * aspect;
-  camera.right = d * aspect;
+  const a = w / h;
+  camera.left = -d * a;
+  camera.right = d * a;
   camera.top = d;
   camera.bottom = -d;
   camera.updateProjectionMatrix();
@@ -167,68 +192,11 @@ resizeRenderer();
 window.addEventListener("resize", resizeRenderer);
 window.addEventListener("orientationchange", () => setTimeout(resizeRenderer, 100));
 
-// --- Civilians Setup ---
-const civilians: Civilian[] = [];
-const MAX_CIVILIANS = 8;
-const CIVILIAN_SPAWN_INTERVAL = 2; // seconds
-let lastCivilianSpawnTime = 0;
-
-// --- Cops Setup ---
-const cops: Cop[] = [];
-let bustedTimer = 0;
-const BUSTED_TIME_THRESHOLD = 3; // seconds stopped
-const BUSTED_COP_COUNT = 2; // 2 cops nearby is enough
-
-// --- Level System ---
-let currentLevel = 1;
-let lastCopSpawnTime = 0;
-
-// --- Game state (local mirrors of signals for hot loop) ---
-let currentState: "start" | "playing" | "gameover" = "start";
-let survivalTimeLocal = 0;
-let carHP = 100;
-let scoreLocal = 0;
-let lastScoreTileX = -9999;
-let lastScoreTileZ = -9999;
-let speedStreakTimer = 0;
-const SPEED_STREAK_THRESHOLD = 5; // seconds at high speed to trigger heal
-const SPEED_STREAK_MIN_RATIO = 0.9; // 90% of max speed — requires near-perfect driving
-let hitPauseTimer = 0; // freezes physics for a few frames on heavy impact
-let drownedThisRun = 0; // tracked for progression / unlocks
-
-// --- Power-ups ---
-const pickups: Pickup[] = [];
-const MAX_PICKUPS = 4;
-const PICKUP_SPAWN_INTERVAL = 6;
-let lastPickupSpawnTime = 0;
-let nitroTimer = 0;
-let shieldActive = false;
-const NITRO_DURATION = 3;
-const NITRO_SPEED_MULT = 1.55;
-const PICKUP_KINDS: IPickupKind[] = ["nitro", "shield", "emp"];
-
-function syncHud() {
-  hp.value = Math.max(0, carHP);
-  score.value = scoreLocal;
-  level.value = currentLevel;
-  survivalTime.value = survivalTimeLocal;
-  nitroRemaining.value = nitroTimer;
-  shieldUp.value = shieldActive;
-}
-
 function startGame() {
   currentState = "playing";
   gameState.value = "playing";
   screen.value = "none";
   isNewBest.value = false;
-  survivalTimeLocal = 0;
-  bustedTimer = 0;
-  carHP = 100;
-  scoreLocal = 0;
-  currentLevel = 1;
-  lastScoreTileX = -9999;
-  lastScoreTileZ = -9999;
-  speedStreakTimer = 0;
 
   // Reset Player
   car.body.position.set(0, 1, 0);
@@ -236,99 +204,217 @@ function startGame() {
   car.body.angularVelocity.set(0, 0, 0);
   car.bounceBackTimer = 0;
   car.recoveryTimer = 0;
+  car.maxSpeed = car.baseMaxSpeed;
   car.setRandomDirection();
 
-  // Instantly teleport camera to player so it doesn't lerp across the map
+  // Reset all per-run state
+  run.reset(car);
+
+  // Camera teleport
   camera.position.set(50, 55, 50);
 
-  // Clear Cops
-  cops.forEach((cop) => cop.destroy());
-  cops.length = 0;
+  // Reset systems
+  cops.reset();
+  civilians.reset();
+  pickups.reset();
 
-  // Clear Civilians
-  civilians.forEach((c) => c.destroy());
-  civilians.length = 0;
+  run.syncHud();
 
-  // Clear pickups + reset buffs
-  pickups.forEach((p) => p.destroy());
-  pickups.length = 0;
-  nitroTimer = 0;
-  shieldActive = false;
-  car.maxSpeed = car.baseMaxSpeed;
-  drownedThisRun = 0;
+  // First-frame after restart: avoid stale dt and rebase spawn timers
+  lastCallTime = null;
+  spawnTimersRebased = false;
 
-  syncHud();
-  lastCallTime = performance.now() / 1000;
-  lastCopSpawnTime = lastCallTime;
-  lastCivilianSpawnTime = lastCallTime;
-  lastPickupSpawnTime = lastCallTime;
+  clearSkids();
 
   // Audio: kick everything on
   initAudio();
   resumeAudio();
   startEngine();
+  startBgm();
 }
 
 function gameOver(reason: string = "BUSTED") {
-  if (currentState === "gameover") return; // idempotent — same frame may trigger multiple checks
+  if (currentState === "gameover") return;
   currentState = "gameover";
   gameState.value = "gameover";
   gameOverReason.value = reason;
 
   // Persist progression
-  isNewBest.value = saveBest(Math.floor(scoreLocal));
+  isNewBest.value = saveBest(Math.floor(run.score));
   incrementRuns();
-  addDrownedCops(drownedThisRun);
+  addDrownedCops(run.drownedThisRun);
+
+  // Publish run summary stats
+  runDrowned.value = run.drownedThisRun;
+  runTopSpeed.value = run.topSpeed;
+  runBiggestCombo.value = run.biggestCombo;
+  runDistance.value = run.distance;
 
   // Audio: stop loops, play sting
   stopEngine();
   stopSiren();
+  stopBgm();
   playGameOver();
 
   // Submit score then refresh leaderboard
-  submitScore(playerName.value, scoreLocal).then(() => fetchLeaderboard());
+  submitScore(playerName.value, run.score).then(() => fetchLeaderboard());
 }
 
 actions.startGame = startGame;
-
 actions.toggleSound = () => {
-  // Ensure ctx exists so toggleMute can act on the master gain
   initAudio();
   resumeAudio();
   toggleMute();
   audioMuted.value = isMuted();
 };
 
-// --- Pickup spawn helper (snap to a road tile near player) ---
-function spawnPickup(playerPosition: THREE.Vector3) {
-  if (pickups.length >= MAX_PICKUPS) return;
-  const distance = 25 + Math.random() * 20;
-  const angle = Math.random() * Math.PI * 2;
-  const x = playerPosition.x + Math.cos(angle) * distance;
-  const z = playerPosition.z + Math.sin(angle) * distance;
-  let tileX = Math.floor(x / TILE_SIZE);
-  let tileZ = Math.floor(z / TILE_SIZE);
-  let found = false;
-  for (let r = 0; r < 4 && !found; r++) {
-    for (let dx = -r; dx <= r && !found; dx++) {
-      for (let dz = -r; dz <= r && !found; dz++) {
-        if (isRoad(tileX + dx, tileZ + dz)) {
-          tileX += dx;
-          tileZ += dz;
-          found = true;
-        }
-      }
-    }
-  }
-  if (!found) return;
-  const kind = PICKUP_KINDS[Math.floor(Math.random() * PICKUP_KINDS.length)];
-  const pos = new THREE.Vector3(tileX * TILE_SIZE + TILE_SIZE / 2, 1, tileZ * TILE_SIZE + TILE_SIZE / 2);
-  pickups.push(new Pickup(scene, pos, kind));
-}
-
 // --- Game Loop ---
 const timeStep = 1 / 60;
 let lastCallTime: number | null = null;
+let spawnTimersRebased = true;
+
+function tickPlaying(dt: number, timeInSeconds: number) {
+  if (!spawnTimersRebased) {
+    cops.rebaseTimers(timeInSeconds);
+    civilians.rebaseTimers(timeInSeconds);
+    pickups.rebaseTimers(timeInSeconds);
+    spawnTimersRebased = true;
+  }
+
+  car.update(dt);
+  cityGenerator.update(car.mesh.position);
+
+  // Step physics world (skip during hit pause for impact emphasis)
+  if (run.hitPauseTimer <= 0) {
+    world.step(timeStep, dt, 10);
+  }
+
+  run.survivalTime += dt;
+
+  // --- Level progression ---
+  const prevLevel = run.level;
+  for (let lv = LEVEL_DEFS.length; lv >= 1; lv--) {
+    if (run.score >= LEVEL_DEFS[lv - 1].scoreThreshold) {
+      if (lv > run.level) run.level = lv;
+      break;
+    }
+  }
+  if (run.level > prevLevel) {
+    run.hp = Math.min(100, run.hp + 15);
+    playLevelUp();
+    spawnPopup(car.body.position.x, car.body.position.y + 1, car.body.position.z, `LV ${run.level}`, "#ffaa22");
+    spawnPopup(car.body.position.x, car.body.position.y + 2, car.body.position.z, "+15 HP", "#66ff88");
+  }
+
+  // Engine pitch follows speed
+  setEngineSpeed(Math.min(car.body.velocity.length() / car.maxSpeed, 1));
+
+  // --- Score: distance on road tiles, with speed + combo multipliers ---
+  const scoreTileX = Math.floor(car.body.position.x / TILE_SIZE);
+  const scoreTileZ = Math.floor(car.body.position.z / TILE_SIZE);
+  if (scoreTileX !== run.lastScoreTileX || scoreTileZ !== run.lastScoreTileZ) {
+    if (isRoad(scoreTileX, scoreTileZ)) {
+      const speedRatio = Math.min(car.body.velocity.length() / car.maxSpeed, 1);
+      const speedMult = 1 + speedRatio;
+      const comboMult = Math.min(1 + run.comboCount * 0.1, 3);
+      run.score += 1.5 * speedMult * comboMult;
+    }
+    run.lastScoreTileX = scoreTileX;
+    run.lastScoreTileZ = scoreTileZ;
+  }
+
+  // --- Combo decay ---
+  if (run.comboTimer > 0) {
+    run.comboTimer -= dt;
+    if (run.comboTimer <= 0) run.comboCount = 0;
+  }
+
+  // --- Run stats: top speed + distance ---
+  const curSpeed = car.body.velocity.length();
+  if (curSpeed > run.topSpeed) run.topSpeed = curSpeed;
+  const dxd = car.body.position.x - run.lastCarX;
+  const dzd = car.body.position.z - run.lastCarZ;
+  run.distance += Math.sqrt(dxd * dxd + dzd * dzd);
+  run.lastCarX = car.body.position.x;
+  run.lastCarZ = car.body.position.z;
+
+  // --- Entity systems ---
+  civilians.update(dt, timeInSeconds, car);
+  pickups.update(dt, timeInSeconds, car, run, cops);
+  const { nearestCopDist, nearbyCount } = cops.update(dt, timeInSeconds, car, run);
+
+  // --- HP / death checks ---
+  if (run.hp <= 0) {
+    run.hp = 0;
+    gameOver("WRECKED");
+  }
+
+  // --- Water check (player drowning) ---
+  const carTileX = Math.floor(car.body.position.x / TILE_SIZE);
+  const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
+  if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
+    playSplash();
+    spawnSplash(car.body.position.x, car.body.position.y, car.body.position.z);
+    gameOver("DROWNED");
+  }
+
+  // --- Busted: 2+ cops nearby AND stopped for 3s ---
+  if (nearbyCount >= BUSTED_COP_COUNT && car.body.velocity.length() < 2) {
+    run.bustedTimer += dt;
+    if (run.bustedTimer > BUSTED_TIME_THRESHOLD) gameOver("BUSTED");
+  } else {
+    run.bustedTimer = Math.max(0, run.bustedTimer - dt * 2);
+  }
+
+  // --- Speed streak heal: +5 HP after 5s at 90%+ max speed ---
+  if (car.body.velocity.length() >= car.maxSpeed * SPEED_STREAK_MIN_RATIO) {
+    run.speedStreakTimer += dt;
+    if (run.speedStreakTimer >= SPEED_STREAK_THRESHOLD) {
+      run.hp = Math.min(100, run.hp + 5);
+      run.speedStreakTimer = 0;
+      spawnPopup(car.body.position.x, car.body.position.y + 2, car.body.position.z, "+5 HP", "#66ff88");
+    }
+  } else {
+    run.speedStreakTimer = 0;
+  }
+
+  // --- Passive HP regen: +1 HP/s when no cop within 30 units ---
+  if (nearbyCount === 0 && run.hp < 100 && nearestCopDist >= 30) {
+    run.hp = Math.min(100, run.hp + 1 * dt);
+  }
+
+  // --- Siren: on when any cop within 40, intensity scales with closeness ---
+  let sirenIntensity = 0;
+  if (currentState === "playing" && nearestCopDist < 40) {
+    startSiren();
+    sirenIntensity = 1 - nearestCopDist / 40;
+    setSirenVolume(sirenIntensity);
+  } else {
+    stopSiren();
+  }
+  setBgmDuck(sirenIntensity);
+
+  // --- Skid marks: emit at rear wheels when drifting hard or boosting ---
+  const isDrifting = car.lateralSpeed > 4;
+  const isBoosting = run.nitroTimer > 0 && car.body.velocity.length() > car.baseMaxSpeed * 0.6;
+  if (isDrifting || isBoosting) {
+    const rearLocal = new CANNON.Vec3(0, 0, 1.25);
+    const rearWorld = new CANNON.Vec3();
+    car.body.pointToWorldFrame(rearLocal, rearWorld);
+    // Yaw extracted from quaternion. Safe because cannon angularFactor is
+    // constrained to (0,1,0) so x/z components of the quaternion stay zero.
+    const heading = Math.atan2(
+      2 * (car.body.quaternion.w * car.body.quaternion.y),
+      1 - 2 * car.body.quaternion.y * car.body.quaternion.y,
+    );
+    const offX = Math.cos(heading) * 1.25;
+    const offZ = -Math.sin(heading) * 1.25;
+    spawnSkid(rearWorld.x + offX, rearWorld.z + offZ, heading);
+    spawnSkid(rearWorld.x - offX, rearWorld.z - offZ, heading);
+  }
+
+  run.syncHud();
+}
 
 function animate(time: number) {
   requestAnimationFrame(animate);
@@ -336,300 +422,20 @@ function animate(time: number) {
   const timeInSeconds = time / 1000;
   let dt = timeStep;
   if (lastCallTime) {
-    // Cap dt so a tab refocus / long pause can't blow up physics
     dt = Math.min(timeInSeconds - lastCallTime, 1 / 30);
   }
   lastCallTime = timeInSeconds;
 
-  // Always run particles even when paused so death animation can play
+  // Always run particles + popups even when paused (death animation)
   updateEffects(dt);
+  updatePopups(dt);
+  updateSkids(dt);
+  updateCopLights(timeInSeconds);
 
-  // Tick down hit pause and short-circuit physics step while active
-  if (hitPauseTimer > 0) hitPauseTimer = Math.max(0, hitPauseTimer - dt);
+  if (run.hitPauseTimer > 0) run.hitPauseTimer = Math.max(0, run.hitPauseTimer - dt);
 
   if (currentState === "playing") {
-    car.update(dt);
-    cityGenerator.update(car.mesh.position);
-    // Step physics world (skip during hit pause for impact emphasis)
-    if (hitPauseTimer <= 0) {
-      world.step(timeStep, dt, 10);
-    }
-
-    // Update survival time
-    survivalTimeLocal += dt;
-
-    // --- Level Progression ---
-    const prevLevel = currentLevel;
-    for (let lv = LEVEL_DEFS.length; lv >= 1; lv--) {
-      if (scoreLocal >= LEVEL_DEFS[lv - 1].scoreThreshold) {
-        if (lv > currentLevel) {
-          currentLevel = lv;
-        }
-        break;
-      }
-    }
-    // Level-up heal: +15 HP per level gained
-    if (currentLevel > prevLevel) {
-      carHP = Math.min(100, carHP + 15);
-      playLevelUp();
-    }
-
-    // Engine pitch follows speed
-    setEngineSpeed(Math.min(car.body.velocity.length() / car.maxSpeed, 1));
-
-    // --- Score: distance on road tiles ---
-    const scoreTileX = Math.floor(car.body.position.x / TILE_SIZE);
-    const scoreTileZ = Math.floor(car.body.position.z / TILE_SIZE);
-    if (scoreTileX !== lastScoreTileX || scoreTileZ !== lastScoreTileZ) {
-      if (isRoad(scoreTileX, scoreTileZ)) {
-        // Speed multiplier: 1x at speed 0, up to 2x at maxSpeed
-        const speedRatio = Math.min(car.body.velocity.length() / car.maxSpeed, 1);
-        const speedMult = 1 + speedRatio;
-        scoreLocal += 1.5 * speedMult;
-      }
-      lastScoreTileX = scoreTileX;
-      lastScoreTileZ = scoreTileZ;
-    }
-
-    // --- Civilian Spawning ---
-    if (timeInSeconds - lastCivilianSpawnTime > CIVILIAN_SPAWN_INTERVAL) {
-      spawnCivilian({
-        scene,
-        world,
-        civilians,
-        maxCivilians: MAX_CIVILIANS,
-        playerPosition: car.mesh.position,
-      });
-      lastCivilianSpawnTime = timeInSeconds;
-    }
-
-    // --- Update Civilians ---
-    for (let i = civilians.length - 1; i >= 0; i--) {
-      const civ = civilians[i];
-      if (!civ) continue;
-      civ.update(dt);
-
-      const distToPlayer = civ.body.position.distanceTo(car.body.position);
-
-      // Despawn far civilians
-      if (distToPlayer > 80) {
-        civ.destroy();
-        civilians.splice(i, 1);
-        continue;
-      }
-
-      // Stun on collision with player
-      if (distToPlayer < 5 && civ.stunTimer <= 0) {
-        civ.stun();
-      }
-    }
-
-    // --- Pickup spawning + update + collection ---
-    if (timeInSeconds - lastPickupSpawnTime > PICKUP_SPAWN_INTERVAL) {
-      spawnPickup(car.mesh.position);
-      lastPickupSpawnTime = timeInSeconds;
-    }
-    for (let i = pickups.length - 1; i >= 0; i--) {
-      const p = pickups[i];
-      p.update(dt);
-      const dxp = p.position.x - car.body.position.x;
-      const dzp = p.position.z - car.body.position.z;
-      const dist = Math.sqrt(dxp * dxp + dzp * dzp);
-      // Despawn far pickups
-      if (dist > 80 || p.age > 25) {
-        p.destroy();
-        pickups.splice(i, 1);
-        continue;
-      }
-      // Collect on touch
-      if (dist < 3.5) {
-        playPickup();
-        spawnConfetti(p.position.x, 2, p.position.z);
-        if (p.kind === "nitro") {
-          nitroTimer = NITRO_DURATION;
-          car.maxSpeed = car.baseMaxSpeed * NITRO_SPEED_MULT;
-        } else if (p.kind === "shield") {
-          shieldActive = true;
-        } else if (p.kind === "emp") {
-          // Stun-knock all cops within 30u (destroy them for big bonus)
-          for (let ci = cops.length - 1; ci >= 0; ci--) {
-            const c = cops[ci];
-            if (c.body.position.distanceTo(car.body.position) < 30) {
-              spawnConfetti(c.body.position.x, c.body.position.y + 2, c.body.position.z);
-              scoreLocal += 20;
-              c.destroy();
-              cops.splice(ci, 1);
-            }
-          }
-          triggerShake(0.6);
-        }
-        p.destroy();
-        pickups.splice(i, 1);
-      }
-    }
-
-    // --- Nitro tick ---
-    if (nitroTimer > 0) {
-      nitroTimer = Math.max(0, nitroTimer - dt);
-      if (nitroTimer === 0) car.maxSpeed = car.baseMaxSpeed;
-    }
-
-    // --- Cop Spawning Logic ---
-    const levelDef = getLevelDef(currentLevel);
-    if (timeInSeconds - lastCopSpawnTime > levelDef.spawnInterval) {
-      spawnCop({
-        scene,
-        world,
-        cops,
-        maxCops: levelDef.maxCops,
-        level: currentLevel,
-        playerPosition: car.mesh.position,
-        playerVelocity: car.body.velocity,
-      });
-      lastCopSpawnTime = timeInSeconds;
-    }
-
-    // --- Update Cops, Check Collisions & Proximity ---
-    let nearbyCoCount = 0;
-    for (let i = cops.length - 1; i >= 0; i--) {
-      const cop = cops[i];
-      if (!cop) continue;
-      cop.update(dt, car.mesh.position, car.body.velocity);
-
-      const distToPlayer = cop.body.position.distanceTo(car.body.position);
-
-      // Despawn cops that are too far
-      if (distToPlayer > 100) {
-        cop.destroy();
-        cops.splice(i, 1);
-        continue;
-      }
-
-      // --- Collision damage ---
-      if (distToPlayer < 5 && cop.damageCooldown <= 0) {
-        // Relative impact speed
-        const relVel = new CANNON.Vec3();
-        car.body.velocity.vsub(cop.body.velocity, relVel);
-        const impactSpeed = relVel.length();
-
-        if (impactSpeed > 3) {
-          if (shieldActive) {
-            // Shield absorbs the hit and dies
-            shieldActive = false;
-            spawnConfetti(car.body.position.x, car.body.position.y + 1, car.body.position.z);
-            playPickup();
-            cop.damageCooldown = 1.0;
-          } else {
-            // damage = base + (copMass / playerMass) * impactSpeed * multiplier
-            const massRatio = cop.config.mass / 100; // player mass is 100
-            const damage = 2 + massRatio * impactSpeed * 0.3;
-            carHP -= damage;
-            cop.damageCooldown = 1.0; // 1 second cooldown per cop
-            playCrash();
-            triggerShake(0.4 + Math.min(impactSpeed / 30, 0.6));
-            spawnSparks(car.body.position.x, car.body.position.y + 1, car.body.position.z);
-            hitPauseTimer = 0.05;
-          }
-        }
-      } else if (distToPlayer < 12) {
-        // Near-miss bonus: cop close but no collision
-        // (scored passively via speed multiplier on road tiles)
-      }
-
-      // Count cops close enough for busted check
-      if (distToPlayer < 8) {
-        nearbyCoCount++;
-      }
-    }
-
-    // --- HP check ---
-    if (carHP <= 0) {
-      carHP = 0;
-      gameOver("WRECKED");
-    }
-
-    // --- Water check ---
-    const carTileX = Math.floor(car.body.position.x / TILE_SIZE);
-    const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
-    if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
-      playSplash();
-      spawnSplash(car.body.position.x, car.body.position.y, car.body.position.z);
-      gameOver("DROWNED");
-    }
-
-    // Civilians die in water — just remove
-    for (let i = civilians.length - 1; i >= 0; i--) {
-      const civ = civilians[i];
-      if (!civ) continue;
-      const civTileX = Math.floor(civ.body.position.x / TILE_SIZE);
-      const civTileZ = Math.floor(civ.body.position.z / TILE_SIZE);
-      if (!isRoad(civTileX, civTileZ) && isWater(civTileX, civTileZ)) {
-        civ.destroy();
-        civilians.splice(i, 1);
-      }
-    }
-
-    // Cops die in water — bonus score
-    for (let i = cops.length - 1; i >= 0; i--) {
-      const cop = cops[i];
-      if (!cop) continue;
-      const copTileX = Math.floor(cop.body.position.x / TILE_SIZE);
-      const copTileZ = Math.floor(cop.body.position.z / TILE_SIZE);
-      if (!isRoad(copTileX, copTileZ) && isWater(copTileX, copTileZ)) {
-        scoreLocal += 30; // bonus for cop falling in water
-        carHP = Math.min(100, carHP + 10); // heal for luring cop into water
-        drownedThisRun++;
-        playSplash();
-        spawnSplash(cop.body.position.x, cop.body.position.y, cop.body.position.z);
-        spawnConfetti(cop.body.position.x, cop.body.position.y + 2, cop.body.position.z);
-        cop.destroy();
-        cops.splice(i, 1);
-      }
-    }
-
-    // --- Busted Logic (need 2+ cops nearby AND stopped for 3s) ---
-    if (nearbyCoCount >= BUSTED_COP_COUNT && car.body.velocity.length() < 2) {
-      bustedTimer += dt;
-      if (bustedTimer > BUSTED_TIME_THRESHOLD) {
-        gameOver("BUSTED");
-      }
-    } else {
-      bustedTimer = Math.max(0, bustedTimer - dt * 2); // decays faster
-    }
-
-    // --- Speed streak heal: +5 HP after 5s at 80%+ max speed ---
-    if (car.body.velocity.length() >= car.maxSpeed * SPEED_STREAK_MIN_RATIO) {
-      speedStreakTimer += dt;
-      if (speedStreakTimer >= SPEED_STREAK_THRESHOLD) {
-        carHP = Math.min(100, carHP + 5);
-        speedStreakTimer = 0; // reset so it can trigger again
-      }
-    } else {
-      speedStreakTimer = 0;
-    }
-
-    // --- Passive HP regen: +1 HP/s when no cop within 30 units ---
-    let nearestCopDist = Infinity;
-    for (const cop of cops) {
-      const d = cop.body.position.distanceTo(car.body.position);
-      if (d < nearestCopDist) nearestCopDist = d;
-    }
-    if (nearbyCoCount === 0 && carHP < 100 && nearestCopDist >= 30) {
-      carHP = Math.min(100, carHP + 1 * dt);
-    }
-
-    // --- Siren: on when any cop within 40, intensity scales with closeness ---
-    // Guarded on state because gameOver() may have flipped state mid-frame and
-    // we don't want to restart the siren after the run ends.
-    if (currentState === "playing" && nearestCopDist < 40) {
-      startSiren();
-      const intensity = 1 - nearestCopDist / 40;
-      setSirenVolume(intensity);
-    } else {
-      stopSiren();
-    }
-
-    syncHud();
+    tickPlaying(dt, timeInSeconds);
   }
 
   // Camera follow car
@@ -640,7 +446,7 @@ function animate(time: number) {
   );
   applyShake(camera, dt);
 
-  // Move directional light + shadow camera to follow the player
+  // Move directional light to follow the player
   directionalLight.position.set(
     car.mesh.position.x + 50,
     100,
@@ -650,6 +456,26 @@ function animate(time: number) {
 
   renderer.render(scene, camera);
 }
+
+// Pause loop + audio when tab is hidden
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (currentState === "playing") {
+      stopEngine();
+      stopSiren();
+      stopBgm();
+    }
+  } else {
+    lastCallTime = null;
+    spawnTimersRebased = false;
+    if (currentState === "playing") {
+      initAudio();
+      resumeAudio();
+      startEngine();
+      startBgm();
+    }
+  }
+});
 
 // Start the loop
 requestAnimationFrame(animate);

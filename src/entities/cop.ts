@@ -38,6 +38,15 @@ const COP_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
 });
 const COP_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x111111, ...matProps });
 
+// Drive both shared siren-light materials from a single time source so all
+// cops on screen stay in phase. Called once per frame from main.ts.
+export function updateCopLights(time: number) {
+  // ~6 Hz alternating: while one is at 1.4, the other is at 0.15
+  const phase = Math.sin(time * Math.PI * 6);
+  COP_RED_LIGHT_MAT.emissiveIntensity = phase > 0 ? 1.4 : 0.15;
+  COP_BLUE_LIGHT_MAT.emissiveIntensity = phase > 0 ? 0.15 : 1.4;
+}
+
 export type ICopLevelConfig = {
   mass: number;
   speed: number;
@@ -75,6 +84,7 @@ export class Cop {
   config: ICopLevelConfig;
   flankSide: number; // +1 or -1
   damageCooldown: number; // seconds until this cop can deal damage again
+  nearMissArmed: boolean; // becomes true when far from player; consumed on next near-miss
   preStepCallback: () => void;
 
   constructor(scene: THREE.Scene, world: CANNON.World, position: THREE.Vector3, level: number = 1) {
@@ -84,6 +94,7 @@ export class Cop {
     this.config = COP_LEVEL_CONFIGS[this.level];
     this.flankSide = Math.random() < 0.5 ? 1 : -1;
     this.damageCooldown = 0;
+    this.nearMissArmed = false;
 
     // Voxel dimensions
     const unit = UNIT;

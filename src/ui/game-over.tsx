@@ -8,6 +8,10 @@ import {
   gameOverReason,
   actions,
   playerName,
+  runDrowned,
+  runTopSpeed,
+  runBiggestCombo,
+  runDistance,
 } from "../state";
 
 function formatTime(seconds: number) {
@@ -17,7 +21,7 @@ function formatTime(seconds: number) {
 }
 
 async function shareRun() {
-  const text = `I scored ${Math.floor(score.value)} in Blocky Pursuit — survived ${formatTime(survivalTime.value)} as ${playerName.value}. Can you beat me?`;
+  const text = `I scored ${Math.floor(score.value)} in Blocky Pursuit — survived ${formatTime(survivalTime.value)} with a x${runBiggestCombo.value} combo as ${playerName.value}. Can you beat me?`;
   const url = window.location.href;
   await attemptAsync(async () => {
     if (navigator.share) {
@@ -66,6 +70,24 @@ export function GameOver() {
           <div class="flex flex-col items-center">
             <span class="text-gray-500">Level</span>
             <span class="text-orange-400 font-extrabold tabular-nums">{level.value}</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] uppercase tracking-widest text-gray-400 w-full mt-1 pt-2 border-t border-gray-700/60">
+          <div class="flex justify-between">
+            <span class="text-gray-500">Drowned</span>
+            <span class="text-cyan-300 font-extrabold tabular-nums">{runDrowned.value}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Best Combo</span>
+            <span class="text-pink-400 font-extrabold tabular-nums">x{runBiggestCombo.value}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Top Speed</span>
+            <span class="text-amber-300 font-extrabold tabular-nums">{Math.round(runTopSpeed.value)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Distance</span>
+            <span class="text-gray-200 font-extrabold tabular-nums">{Math.round(runDistance.value)}m</span>
           </div>
         </div>
         <button

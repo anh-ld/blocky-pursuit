@@ -90,8 +90,53 @@ export function spawnConfetti(x: number, y: number, z: number) {
   }
 }
 
+// --- Expanding rings (EMP, etc.) ---
+type IRing = {
+  mesh: THREE.Mesh;
+  age: number;
+  life: number;
+  maxRadius: number;
+};
+const rings: IRing[] = [];
+const RING_GEO = new THREE.RingGeometry(0.95, 1.0, 48);
+const EMP_RING_MAT = new THREE.MeshBasicMaterial({
+  color: 0x66ddff,
+  transparent: true,
+  side: THREE.DoubleSide,
+});
+
+export function spawnRing(x: number, y: number, z: number, maxRadius: number, life: number = 0.45) {
+  if (!particleScene) return;
+  const mesh = new THREE.Mesh(RING_GEO, EMP_RING_MAT);
+  mesh.position.set(x, y + 0.1, z);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.scale.set(0.1, 0.1, 0.1);
+  particleScene.add(mesh);
+  rings.push({ mesh, age: 0, life, maxRadius });
+}
+
+function updateRings(dt: number) {
+  if (!particleScene) return;
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const r = rings[i];
+    r.age += dt;
+    const t = r.age / r.life;
+    if (t >= 1) {
+      particleScene.remove(r.mesh);
+      rings.splice(i, 1);
+      continue;
+    }
+    const scale = r.maxRadius * t;
+    r.mesh.scale.set(scale, scale, scale);
+    // Note: this mutates the shared material — fine because all rings
+    // share opacity scaling and only briefly overlap.
+    (r.mesh.material as THREE.MeshBasicMaterial).opacity = 1 - t;
+  }
+}
+
 export function updateEffects(dt: number) {
   if (!particleScene) return;
+  updateRings(dt);
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.life -= dt;

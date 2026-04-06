@@ -18,6 +18,8 @@ export class Car {
   recoveryDuration: number;
   bodyMat: THREE.MeshStandardMaterial;
   cabinMat: THREE.MeshStandardMaterial;
+  lateralSpeed: number;
+  bodyBaseEmissive: THREE.Color;
 
   constructor(scene: THREE.Scene, world: CANNON.World, skinId: string = "redstar") {
     this.scene = scene;
@@ -197,6 +199,10 @@ export class Car {
     this.maxSpeed = this.baseMaxSpeed;
     this.turnSpeed = 2.5;
 
+    // Drift / bounce-flash state
+    this.lateralSpeed = 0;
+    this.bodyBaseEmissive = bodyMat.emissive.clone();
+
     // Collision bounce-back state
     this.bounceBackTimer = 0;
     this.bounceBackDuration = 1.25; // seconds to reverse after collision
@@ -261,6 +267,9 @@ export class Car {
       // 2. Custom Arcade Friction (Drift Mechanics)
       const localVelocity = new CANNON.Vec3();
       this.body.vectorToLocalFrame(this.body.velocity, localVelocity);
+
+      // Capture lateral speed BEFORE friction kills it — used by skid emitter
+      this.lateralSpeed = Math.abs(localVelocity.x);
 
       // Relax lateral grip during bounce-back/recovery so steering can redirect the car
       const isRecovering = this.bounceBackTimer > 0 || this.recoveryTimer > 0;
@@ -388,6 +397,15 @@ export class Car {
     // Tick down recovery timer
     if (this.recoveryTimer > 0) {
       this.recoveryTimer -= dt;
+    }
+
+    // Bounce-back rim flash: red emissive while reversing from collision so
+    // the player understands why control was taken away.
+    if (this.bounceBackTimer > 0) {
+      const intensity = Math.min(this.bounceBackTimer / this.bounceBackDuration, 1) * 0.6;
+      this.bodyMat.emissive.setRGB(intensity, 0, 0);
+    } else {
+      this.bodyMat.emissive.copy(this.bodyBaseEmissive);
     }
 
     // Sync visuals

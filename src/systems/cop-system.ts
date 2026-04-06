@@ -134,7 +134,7 @@ export class CopSystem {
             cop.damageCooldown = 1.0;
           } else {
             const massRatio = cop.config.mass / 100;
-            const damage = 2 + massRatio * impactSpeed * 0.3;
+            const damage = (2 + massRatio * impactSpeed * 0.3) * car.damageMul;
             run.hp -= damage;
             cop.damageCooldown = 1.0;
             playCrash();

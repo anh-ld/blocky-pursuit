@@ -1,13 +1,23 @@
-import { gameState, audioMuted, actions, weather } from "../state";
+import { gameState, audioMuted, actions, weather, selectedSkin } from "../state";
 import { WEATHERS } from "../world/weather";
+import { getSkin } from "../entities/car-skins";
 
 export function ControlsGuide() {
   if (gameState.value !== "playing") return null;
   const muted = audioMuted.value;
   const currentWeather = weather.value;
+  const skin = getSkin(selectedSkin.value);
 
   return (
     <div class="self-end mb-4 mr-4 flex items-stretch gap-2 hidden md:flex">
+      <div class="px-3 bg-black/50 text-xs font-normal tracking-wide flex items-center">
+        <span
+          class="font-bold"
+          style={{ color: `#${skin.bodyColor.toString(16).padStart(6, "0")}` }}
+        >
+          {skin.name}
+        </span>
+      </div>
       <div class="flex items-stretch bg-black/50 pointer-events-auto">
         {WEATHERS.map((w) => {
           const active = currentWeather === w.id;

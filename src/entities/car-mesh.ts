@@ -11,30 +11,27 @@ export type ICarMeshHandles = {
 };
 
 /**
- * Build the player car visual hierarchy: chassis, cabin, Vietnam flag,
- * grille, headlights/taillights, wheels. Returns the assembled group plus
- * mutable references to the body/cabin materials so a skin swap can recolor
- * them in place without rebuilding the mesh.
+ * Build the player car visual hierarchy. Geometry is parameterized by the
+ * skin's `shape` field so each car has distinct proportions, optional
+ * spoiler, racing stripe, or VinFast Vietnam flag on the roof.
  */
 export function buildCarMesh(skinId: string): ICarMeshHandles {
   const unit = CAR_UNIT;
   const group = new THREE.Group();
 
   const skin: ICarSkin = getSkin(skinId);
-  const wheelColor = 0x111111;
+  const s = skin.shape;
   const matProps = { roughness: 0.8, flatShading: true };
 
   // Chassis
-  const bodyGeo = new THREE.BoxGeometry(unit * 4, unit, unit * 8);
+  const bodyGeo = new THREE.BoxGeometry(unit * s.bodyW, unit * s.bodyH, unit * s.bodyL);
   const bodyMat = new THREE.MeshStandardMaterial({ color: skin.bodyColor, ...matProps });
   const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-  bodyMesh.position.y = unit;
-  bodyMesh.castShadow = true;
-  bodyMesh.receiveShadow = true;
+  bodyMesh.position.y = unit * (0.5 + s.bodyH / 2);
   group.add(bodyMesh);
 
-  // Cabin (shifted toward rear so front hood is visible)
-  const cabinGeo = new THREE.BoxGeometry(unit * 3, unit * 1.5, unit * 3);
+  // Cabin
+  const cabinGeo = new THREE.BoxGeometry(unit * s.cabinW, unit * s.cabinH, unit * s.cabinL);
   const cabinMat = new THREE.MeshStandardMaterial({
     color: skin.cabinColor,
     roughness: 0.3,
@@ -42,55 +39,90 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     metalness: 0.5,
   });
   const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
-  cabinMesh.position.y = unit * 2.25;
-  cabinMesh.position.z = unit * 1.5;
-  cabinMesh.castShadow = true;
-  cabinMesh.receiveShadow = true;
+  const bodyTopY = unit * (0.5 + s.bodyH);
+  cabinMesh.position.set(0, bodyTopY + (unit * s.cabinH) / 2, unit * s.cabinZ);
   group.add(cabinMesh);
 
-  // Vietnam flag painted on roof (flat on cabin top)
-  const roofY = unit * 3.01;
-  const flagGeo = new THREE.PlaneGeometry(unit * 2.6, unit * 2.6);
-  const flagMat = new THREE.MeshStandardMaterial({
-    color: 0xda251d,
-    flatShading: true,
-    side: THREE.DoubleSide,
-  });
-  const flag = new THREE.Mesh(flagGeo, flagMat);
-  flag.rotation.x = -Math.PI / 2;
-  flag.position.set(0, roofY, unit * 1.5);
-  group.add(flag);
+  const roofY = bodyTopY + unit * s.cabinH + 0.01;
 
-  // Yellow star on top of flag
-  const starShape = new THREE.Shape();
-  const starPoints = 5;
-  const outerR = unit * 0.85;
-  const innerR = unit * 0.34;
-  for (let i = 0; i < starPoints * 2; i++) {
-    const r = i % 2 === 0 ? outerR : innerR;
-    const angle = (i * Math.PI) / starPoints - Math.PI / 2;
-    const x = Math.cos(angle) * r;
-    const y = Math.sin(angle) * r;
-    if (i === 0) starShape.moveTo(x, y);
-    else starShape.lineTo(x, y);
+  // Vietnam flag (VinFast only)
+  if (s.hasFlag) {
+    const flagSize = Math.min(s.cabinW, s.cabinL) * unit * 0.85;
+    const flagGeo = new THREE.PlaneGeometry(flagSize, flagSize);
+    const flagMat = new THREE.MeshStandardMaterial({
+      color: 0xda251d,
+      flatShading: true,
+      side: THREE.DoubleSide,
+    });
+    const flag = new THREE.Mesh(flagGeo, flagMat);
+    flag.rotation.x = -Math.PI / 2;
+    flag.position.set(0, roofY, unit * s.cabinZ);
+    group.add(flag);
+
+    // Yellow star on top of flag
+    const starShape = new THREE.Shape();
+    const starPoints = 5;
+    const outerR = flagSize * 0.34;
+    const innerR = flagSize * 0.14;
+    for (let i = 0; i < starPoints * 2; i++) {
+      const r = i % 2 === 0 ? outerR : innerR;
+      const angle = (i * Math.PI) / starPoints - Math.PI / 2;
+      const x = Math.cos(angle) * r;
+      const y = Math.sin(angle) * r;
+      if (i === 0) starShape.moveTo(x, y);
+      else starShape.lineTo(x, y);
+    }
+    starShape.closePath();
+    const starGeo = new THREE.ShapeGeometry(starShape);
+    const starMat = new THREE.MeshStandardMaterial({
+      color: 0xffcd00,
+      flatShading: true,
+      side: THREE.DoubleSide,
+    });
+    const star = new THREE.Mesh(starGeo, starMat);
+    star.rotation.x = -Math.PI / 2;
+    star.position.set(0, roofY + 0.01, unit * s.cabinZ);
+    group.add(star);
   }
-  starShape.closePath();
-  const starGeo = new THREE.ShapeGeometry(starShape);
-  const starMat = new THREE.MeshStandardMaterial({
-    color: 0xffcd00,
-    flatShading: true,
-    side: THREE.DoubleSide,
-  });
-  const star = new THREE.Mesh(starGeo, starMat);
-  star.rotation.x = -Math.PI / 2;
-  star.position.set(0, roofY + 0.01, unit * 1.5);
-  group.add(star);
+
+  // Racing stripe along the body length (Mustang)
+  if (s.hasStripe) {
+    const stripeGeo = new THREE.PlaneGeometry(unit * 0.8, unit * s.bodyL * 0.95);
+    const stripeMat = new THREE.MeshStandardMaterial({
+      color: skin.accentColor,
+      flatShading: true,
+      side: THREE.DoubleSide,
+    });
+    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+    stripe.rotation.x = -Math.PI / 2;
+    stripe.position.set(0, unit * (0.5 + s.bodyH) + 0.005, 0);
+    group.add(stripe);
+  }
+
+  // Rear spoiler
+  if (s.hasSpoiler) {
+    // Two short uprights + one wide blade
+    const uprightGeo = new THREE.BoxGeometry(unit * 0.25, unit * s.spoilerH, unit * 0.25);
+    const spoilerMat = new THREE.MeshStandardMaterial({ color: skin.accentColor, ...matProps });
+    const uprightL = new THREE.Mesh(uprightGeo, spoilerMat);
+    const uprightR = new THREE.Mesh(uprightGeo, spoilerMat);
+    const upY = unit * (0.5 + s.bodyH) + (unit * s.spoilerH) / 2;
+    const upZ = unit * (s.bodyL / 2 - 0.6);
+    uprightL.position.set(-unit * (s.spoilerW / 2 - 0.4), upY, upZ);
+    uprightR.position.set(unit * (s.spoilerW / 2 - 0.4), upY, upZ);
+    group.add(uprightL, uprightR);
+
+    const bladeGeo = new THREE.BoxGeometry(unit * s.spoilerW, unit * 0.18, unit * 0.7);
+    const blade = new THREE.Mesh(bladeGeo, spoilerMat);
+    blade.position.set(0, upY + (unit * s.spoilerH) / 2, upZ);
+    group.add(blade);
+  }
 
   // Front grille
-  const grilleGeo = new THREE.BoxGeometry(unit * 3.2, unit * 0.6, unit * 0.2);
+  const grilleGeo = new THREE.BoxGeometry(unit * (s.bodyW * 0.8), unit * 0.6, unit * 0.2);
   const grilleMat = new THREE.MeshStandardMaterial({ color: 0x222222, flatShading: true });
   const grille = new THREE.Mesh(grilleGeo, grilleMat);
-  grille.position.set(0, unit * 0.9, -unit * 4.1);
+  grille.position.set(0, unit * (0.5 + s.bodyH * 0.4), -unit * (s.bodyL / 2 + 0.1));
   group.add(grille);
 
   // Headlights (front = -Z)
@@ -101,11 +133,14 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     emissiveIntensity: 0.8,
     flatShading: true,
   });
+  const hlY = unit * (0.5 + s.bodyH * 0.6);
+  const hlX = unit * (s.bodyW / 2 - 0.5);
+  const hlZ = -unit * (s.bodyL / 2 + 0.1);
   const hlLeft = new THREE.Mesh(headlightGeo, headlightMat);
-  hlLeft.position.set(-unit * 1.5, unit * 1.1, -unit * 4.1);
+  hlLeft.position.set(-hlX, hlY, hlZ);
   group.add(hlLeft);
   const hlRight = new THREE.Mesh(headlightGeo, headlightMat);
-  hlRight.position.set(unit * 1.5, unit * 1.1, -unit * 4.1);
+  hlRight.position.set(hlX, hlY, hlZ);
   group.add(hlRight);
 
   // Taillights (rear = +Z, red)
@@ -116,26 +151,28 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     emissiveIntensity: 0.6,
     flatShading: true,
   });
+  const tlZ = unit * (s.bodyL / 2 + 0.1);
   const tlLeft = new THREE.Mesh(taillightGeo, taillightMat);
-  tlLeft.position.set(-unit * 1.5, unit * 1.1, unit * 4.1);
+  tlLeft.position.set(-hlX, hlY, tlZ);
   group.add(tlLeft);
   const tlRight = new THREE.Mesh(taillightGeo, taillightMat);
-  tlRight.position.set(unit * 1.5, unit * 1.1, unit * 4.1);
+  tlRight.position.set(hlX, hlY, tlZ);
   group.add(tlRight);
 
-  // Wheels
+  // Wheels (4 corners, scaled to body size)
   const wheelGeo = new THREE.BoxGeometry(unit, unit, unit);
-  const wheelMat = new THREE.MeshStandardMaterial({ color: wheelColor, ...matProps });
+  const wheelMat = new THREE.MeshStandardMaterial({ color: skin.wheelColor, ...matProps });
+  const wx = unit * (s.bodyW / 2 + 0.05);
+  const wz = unit * (s.bodyL / 2 - 1.2);
   const wheelPositions: [number, number, number][] = [
-    [-unit * 2.5, unit * 0.5, unit * 2.5],
-    [unit * 2.5, unit * 0.5, unit * 2.5],
-    [-unit * 2.5, unit * 0.5, -unit * 2.5],
-    [unit * 2.5, unit * 0.5, -unit * 2.5],
+    [-wx, unit * 0.5, wz],
+    [wx, unit * 0.5, wz],
+    [-wx, unit * 0.5, -wz],
+    [wx, unit * 0.5, -wz],
   ];
   for (const pos of wheelPositions) {
     const wheel = new THREE.Mesh(wheelGeo, wheelMat);
     wheel.position.set(pos[0], pos[1], pos[2]);
-    wheel.castShadow = true;
     group.add(wheel);
   }
 

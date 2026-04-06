@@ -73,9 +73,10 @@ export function installCarPhysics(car: Car) {
     // Capture lateral speed BEFORE friction kills it — used by skid emitter
     car.lateralSpeed = Math.abs(localVelocity.x);
 
-    // Relax lateral grip during bounce-back/recovery so steering can redirect the car
+    // Lateral grip is per-skin (gripFactor). Recovery loosens it so steering
+    // can redirect the car after a bounce-back.
     const isRecovering = car.bounceBackTimer > 0 || car.recoveryTimer > 0;
-    localVelocity.x *= isRecovering ? 0.95 : 0.85;
+    localVelocity.x *= isRecovering ? 0.95 : car.gripFactor;
     localVelocity.z *= 0.98;
 
     body.vectorToWorldFrame(localVelocity, body.velocity);
@@ -87,13 +88,18 @@ export function installCarPhysics(car: Car) {
     }
 
     // 3. Steering — direct heading rotation (like a real steering wheel).
-    // Fixed rotation rate; low speed = tight arc, high speed = wide arc.
+    // Steering authority drops with speed; cars with high stabilityFactor
+    // retain more authority at top speed (less twitchy / easier to drive).
     body.angularVelocity.y = 0;
     if (speed > 0.5) {
       const dir = localVelocity.z < 0 ? 1 : -1;
+      const speedRatio = Math.min(speed / car.maxSpeed, 1);
+      // 1 at 0 speed → stabilityFactor at top speed
+      const steerScale = 1 - speedRatio * (1 - car.stabilityFactor);
+      const effectiveTurn = car.turnSpeed * steerScale;
       let steerAngle = 0;
-      if (car.keys.left) steerAngle = car.turnSpeed * dir;
-      if (car.keys.right) steerAngle = -car.turnSpeed * dir;
+      if (car.keys.left) steerAngle = effectiveTurn * dir;
+      if (car.keys.right) steerAngle = -effectiveTurn * dir;
 
       const q = new CANNON.Quaternion();
       q.setFromEuler(0, steerAngle * (1 / 60), 0);

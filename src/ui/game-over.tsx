@@ -92,13 +92,13 @@ export function GameOver() {
         </div>
         <button
           onClick={() => actions.startGame()}
-          class="w-full mt-2 py-2 bg-amber-400 text-gray-900 text-sm font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
+          class="w-full mt-2 py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
         >
           RETRY
         </button>
         <button
           onClick={shareRun}
-          class="w-full py-1.5 bg-cyan-500/20 text-cyan-300 text-[11px] font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30"
+          class="w-full py-2 bg-cyan-500/20 text-cyan-300 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30"
         >
           Share Score
         </button>

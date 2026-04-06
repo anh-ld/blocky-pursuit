@@ -64,7 +64,14 @@ export function applyShake(camera: THREE.Camera, dt: number) {
   if (shakeTime <= 0) shakeIntensity = 0;
 }
 
-// --- Particles (sprite-based, pooled per emit) ---
+// --- Particles (mesh-pooled) ---
+// Pre-allocate a fixed pool of THREE.Mesh particles. Emit() finds an
+// inactive mesh, reassigns its material/position/velocity and flips
+// visibility. Death just hides — no scene add/remove churn, no GC pressure.
+// At peak intensity (EMP + multi-confetti) we need ~150 simultaneous
+// particles; 256 gives headroom.
+const POOL_SIZE = 256;
+
 type IParticle = {
   mesh: THREE.Mesh;
   vx: number;
@@ -72,10 +79,11 @@ type IParticle = {
   vz: number;
   life: number;
   maxLife: number;
+  active: boolean;
 };
 
 let particleScene: THREE.Scene | null = null;
-const particles: IParticle[] = [];
+let particles: IParticle[] = [];
 
 const PARTICLE_GEO = new THREE.BoxGeometry(0.3, 0.3, 0.3);
 const SPARK_MAT = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
@@ -89,22 +97,66 @@ const CONFETTI_MATS = [
 
 export function initEffects(scene: THREE.Scene) {
   particleScene = scene;
+  // Build the pool once. Meshes start hidden and parented to the scene so
+  // future emits never touch the scene graph.
+  if (particles.length === 0) {
+    for (let i = 0; i < POOL_SIZE; i++) {
+      const mesh = new THREE.Mesh(PARTICLE_GEO, SPARK_MAT);
+      mesh.visible = false;
+      scene.add(mesh);
+      particles.push({ mesh, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0, active: false });
+    }
+  }
+}
+
+/**
+ * Find an inactive particle slot and configure it. Returns false if the
+ * pool is fully saturated — caller should treat that as an acceptable drop
+ * (peak particle storms don't need every single sprite to land).
+ */
+function acquire(
+  x: number,
+  y: number,
+  z: number,
+  mat: THREE.Material,
+  vx: number,
+  vy: number,
+  vz: number,
+  life: number,
+): boolean {
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    if (p.active) continue;
+    p.mesh.material = mat;
+    p.mesh.position.set(x, y, z);
+    p.mesh.scale.set(1, 1, 1);
+    p.mesh.rotation.set(0, 0, 0);
+    p.mesh.visible = true;
+    p.vx = vx;
+    p.vy = vy;
+    p.vz = vz;
+    p.life = life;
+    p.maxLife = life;
+    p.active = true;
+    return true;
+  }
+  return false;
 }
 
 function emit(x: number, y: number, z: number, mat: THREE.Material, count: number, spread: number, life: number) {
   if (!particleScene) return;
   for (let i = 0; i < count; i++) {
-    const mesh = new THREE.Mesh(PARTICLE_GEO, mat);
-    mesh.position.set(x, y, z);
-    particleScene.add(mesh);
-    particles.push({
-      mesh,
-      vx: (Math.random() - 0.5) * spread,
-      vy: Math.random() * spread * 0.8 + spread * 0.2,
-      vz: (Math.random() - 0.5) * spread,
+    const ok = acquire(
+      x,
+      y,
+      z,
+      mat,
+      (Math.random() - 0.5) * spread,
+      Math.random() * spread * 0.8 + spread * 0.2,
+      (Math.random() - 0.5) * spread,
       life,
-      maxLife: life,
-    });
+    );
+    if (!ok) return;
   }
 }
 
@@ -120,17 +172,17 @@ export function spawnConfetti(x: number, y: number, z: number) {
   if (!particleScene) return;
   for (let i = 0; i < 20; i++) {
     const mat = CONFETTI_MATS[i % CONFETTI_MATS.length];
-    const mesh = new THREE.Mesh(PARTICLE_GEO, mat);
-    mesh.position.set(x, y, z);
-    particleScene.add(mesh);
-    particles.push({
-      mesh,
-      vx: (Math.random() - 0.5) * 6,
-      vy: Math.random() * 6 + 2,
-      vz: (Math.random() - 0.5) * 6,
-      life: 0.8,
-      maxLife: 0.8,
-    });
+    const ok = acquire(
+      x,
+      y,
+      z,
+      mat,
+      (Math.random() - 0.5) * 6,
+      Math.random() * 6 + 2,
+      (Math.random() - 0.5) * 6,
+      0.8,
+    );
+    if (!ok) return;
   }
 }
 
@@ -181,12 +233,14 @@ function updateRings(dt: number) {
 export function updateEffects(dt: number) {
   if (!particleScene) return;
   updateRings(dt);
-  for (let i = particles.length - 1; i >= 0; i--) {
+  for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
+    if (!p.active) continue;
     p.life -= dt;
     if (p.life <= 0) {
-      particleScene.remove(p.mesh);
-      particles.splice(i, 1);
+      // Release back to the pool: hide, mark inactive. Mesh stays parented.
+      p.mesh.visible = false;
+      p.active = false;
       continue;
     }
     p.vy -= 18 * dt; // gravity

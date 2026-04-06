@@ -11,7 +11,7 @@ import {
   playerName,
 } from "../state";
 import { CAR_SKINS, isUnlocked, specPercent } from "../entities/car-skins";
-import { WEATHERS } from "../world/weather";
+import { WEATHERS, getWeatherSummary } from "../world/weather";
 
 export function PreGame() {
   const progress = {
@@ -28,14 +28,7 @@ export function PreGame() {
 
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/90 border border-amber-500/40 p-4 w-80 pointer-events-auto flex flex-col gap-3 relative">
-        <button
-          aria-label="Back"
-          onClick={back}
-          class="absolute top-2 right-2 w-7 h-7 text-gray-400 hover:text-amber-400 cursor-pointer flex items-center justify-center text-sm font-bold"
-        >
-          ✕
-        </button>
+      <div class="bg-black/90 border border-amber-500/40 p-4 w-80 pointer-events-auto flex flex-col gap-3">
         <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest text-center">
           Choose Your Ride
         </div>
@@ -110,7 +103,12 @@ export function PreGame() {
 
         {/* Weather row */}
         <div class="flex flex-col gap-1">
-          <span class="text-gray-500 text-[10px] uppercase tracking-widest">Weather</span>
+          <div class="flex items-center justify-between">
+            <span class="text-gray-500 text-[10px] uppercase tracking-widest">Weather</span>
+            <span class="text-gray-400 text-[9px] tracking-wide truncate ml-2">
+              {getWeatherSummary(currentWeather)}
+            </span>
+          </div>
           <div class="flex items-stretch bg-black/50 h-9">
             {WEATHERS.map((w) => {
               const active = currentWeather === w.id;
@@ -118,7 +116,7 @@ export function PreGame() {
                 <button
                   key={w.id}
                   aria-label={w.label}
-                  title={w.label}
+                  title={`${w.label} — ${getWeatherSummary(w.id)}`}
                   onClick={() => actions.setWeather(w.id)}
                   class={`flex-1 text-sm leading-none cursor-pointer flex items-center justify-center ${
                     active ? "bg-amber-500/30 text-amber-300" : "text-gray-400 hover:text-amber-400"
@@ -154,9 +152,17 @@ export function PreGame() {
         {/* Play button */}
         <button
           onClick={() => actions.beginRun()}
-          class="w-full py-3 bg-amber-400 text-gray-900 text-sm font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
+          class="w-full py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
         >
           PLAY
+        </button>
+
+        {/* Back button — matches garage / leaderboard / feedback */}
+        <button
+          onClick={back}
+          class="w-full py-2 bg-gray-700 text-gray-300 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
+        >
+          BACK
         </button>
       </div>
     </div>

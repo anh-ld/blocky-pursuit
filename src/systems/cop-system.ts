@@ -14,8 +14,10 @@ import {
   spawnConfetti,
 } from "../world/effects";
 import { spawnPopup } from "../world/popups";
-import { playCrash, playSplash, playPickup } from "../audio/sound";
+import { playCrash, playSplash, playPickup, playComboTier } from "../audio/sound";
+import { haptics } from "../audio/haptics";
 import { COMBO_DECAY, type RunState, type IGameContext } from "./run-state";
+import { shouldShowComboTip, markComboTipSeen } from "./tutorial";
 
 export type ICopUpdateResult = {
   nearestCopDist: number;
@@ -103,6 +105,29 @@ export class CopSystem {
         if (run.comboCount > run.biggestCombo) run.biggestCombo = run.comboCount;
         // Tiny instant reward so the combo feels alive
         run.score += run.comboCount * 2;
+        // First-ever combo: explain the mechanic so new players discover the
+        // game's main score lever instead of stumbling into it by accident.
+        if (run.comboCount === 1 && shouldShowComboTip()) {
+          markComboTipSeen();
+          spawnPopup(
+            car.body.position.x,
+            car.body.position.y + 4,
+            car.body.position.z,
+            "COMBO!",
+            "#ff66cc",
+            2.4,
+            10,
+          );
+          spawnPopup(
+            car.body.position.x,
+            car.body.position.y + 2.5,
+            car.body.position.z,
+            "Skim past cops — don't touch!",
+            "#ffffff",
+            2.4,
+            14,
+          );
+        }
         if (run.comboCount % 5 === 0) {
           spawnPopup(
             car.body.position.x,
@@ -111,6 +136,10 @@ export class CopSystem {
             `x${run.comboCount}`,
             "#ff66cc",
           );
+          // Combo ladder: rising pitch every 5 combos so the player hears
+          // their multiplier climb in addition to seeing it.
+          playComboTier(run.comboCount / 5);
+          haptics.comboMilestone();
         }
         // Big-combo juice: time slow + flash + extra shake every 10
         if (run.comboCount > 0 && run.comboCount % 10 === 0) {
@@ -138,6 +167,7 @@ export class CopSystem {
             run.hp -= damage;
             cop.damageCooldown = 1.0;
             playCrash();
+            haptics.hit();
             triggerShake(0.4 + Math.min(impactSpeed / 30, 0.6));
             spawnSparks(car.body.position.x, car.body.position.y + 1, car.body.position.z);
             run.hitPauseTimer = 0.05;

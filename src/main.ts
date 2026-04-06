@@ -28,18 +28,32 @@ import {
   stopBgm,
   setBgmDuck,
 } from "./audio/sound";
+import { haptics } from "./audio/haptics";
 import {
   initEffects,
   initScreenFlash,
   applyShake,
   spawnSplash,
+  spawnSparks,
+  spawnConfetti,
   updateEffects,
   updateTimeSlow,
   getTimeSlowFactor,
+  triggerScreenFlash,
+  triggerShake,
 } from "./world/effects";
 import { initPopups, spawnPopup, updatePopups } from "./world/popups";
 import { initSkids, spawnSkid, updateSkids, clearSkids } from "./world/skids";
-import { applyWeather } from "./world/weather";
+import {
+  applyWeather,
+  createRain,
+  updateRain,
+  setRainEnabled,
+  createSnow,
+  updateSnow,
+  setSnowEnabled,
+  getWeatherModifiers,
+} from "./world/weather";
 import { App } from "./ui/app";
 import {
   gameState,
@@ -122,12 +136,15 @@ directionalLight.position.set(50, 100, 50);
 scene.add(directionalLight);
 scene.add(directionalLight.target);
 
-// --- Weather (sky + fog + light tint) ---
+// --- Weather (sky + fog + light tint + rain/snow particles + car modifiers) ---
+const rain = createRain(scene);
+const snow = createSnow(scene);
 applyWeather(scene, ambientLight, directionalLight, weather.value);
-actions.setWeather = (w) => {
-  weather.value = w;
-  applyWeather(scene, ambientLight, directionalLight, w);
-};
+setRainEnabled(rain, weather.value === "rain");
+setSnowEnabled(snow, weather.value === "snowy");
+// `actions.setWeather` is wired later (after `car` exists) so the closure can
+// safely push driving modifiers into the player car. The initial car-side
+// application also happens after construction.
 
 // --- Cannon-es World Setup ---
 const world = new CANNON.World({
@@ -156,6 +173,22 @@ const car = new Car(scene, world, selectedSkin.value);
 actions.selectSkin = (skinId: string) => {
   setSelectedSkin(skinId);
   car.applySkin(skinId);
+};
+
+// Apply the current weather's driving modifiers to the freshly built car, then
+// wire the setWeather action so future weather changes update sky, particles
+// AND car physics in one place.
+{
+  const m = getWeatherModifiers(weather.value);
+  car.setWeatherModifiers(m.topSpeedMul, m.accelMul, m.gripAdd);
+}
+actions.setWeather = (w) => {
+  weather.value = w;
+  applyWeather(scene, ambientLight, directionalLight, w);
+  setRainEnabled(rain, w === "rain");
+  setSnowEnabled(snow, w === "snowy");
+  const m = getWeatherModifiers(w);
+  car.setWeatherModifiers(m.topSpeedMul, m.accelMul, m.gripAdd);
 };
 
 // --- Systems + run state ---
@@ -241,7 +274,7 @@ function startGame() {
   car.body.angularVelocity.set(0, 0, 0);
   car.bounceBackTimer = 0;
   car.recoveryTimer = 0;
-  car.maxSpeed = car.baseMaxSpeed;
+  car.setNitroMultiplier(1);
   car.setRandomDirection();
 
   // Reset all per-run state
@@ -270,31 +303,54 @@ function startGame() {
   startBgm();
 }
 
+// Length of the dramatic "death moment" between fail-condition trigger and
+// the game-over panel showing — long enough for the flash + debris + sting
+// to land, short enough that the player isn't waiting on the panel.
+const DEATH_MOMENT_MS = 700;
+
 function gameOver(reason: string = "BUSTED") {
   if (currentState === "gameover") return;
+  // Stop gameplay immediately so cops/civilians/scoring freeze, but keep
+  // the panel hidden until the death moment plays out.
   currentState = "gameover";
-  gameState.value = "gameover";
   gameOverReason.value = reason;
 
-  // Persist progression
+  // --- Death moment juice (plays on the playfield, no panel yet) ---
+  triggerScreenFlash(0.85);
+  triggerShake(0.9);
+  // Debris burst at the wreck site — confetti + sparks for visible chunks.
+  spawnConfetti(car.body.position.x, car.body.position.y + 1, car.body.position.z);
+  spawnSparks(car.body.position.x, car.body.position.y + 1, car.body.position.z);
+  spawnSparks(car.body.position.x, car.body.position.y + 1.5, car.body.position.z);
+  // Drowned wrecks get an extra splash so the cause-of-death reads.
+  if (reason === "DROWNED") {
+    spawnSplash(car.body.position.x, car.body.position.y, car.body.position.z);
+  }
+
+  // Audio: kill loops immediately, play sting once.
+  stopEngine();
+  stopSiren();
+  stopBgm();
+  playGameOver();
+  haptics.death();
+
+  // Persist progression now (so the panel reads the right values when it
+  // appears) but defer publishing the panel-visible state.
   isNewBest.value = saveBest(Math.floor(run.score));
   incrementRuns();
   addDrownedCops(run.drownedThisRun);
-
-  // Publish run summary stats
   runDrowned.value = run.drownedThisRun;
   runTopSpeed.value = run.topSpeed;
   runBiggestCombo.value = run.biggestCombo;
   runDistance.value = run.distance;
 
-  // Audio: stop loops, play sting
-  stopEngine();
-  stopSiren();
-  stopBgm();
-  playGameOver();
-
-  // Submit score then refresh leaderboard
+  // Submit score in the background — doesn't block the panel.
   submitScore(playerName.value, run.score).then(() => fetchLeaderboard());
+
+  // After the death moment, reveal the panel.
+  setTimeout(() => {
+    gameState.value = "gameover";
+  }, DEATH_MOMENT_MS);
 }
 
 actions.startGame = () => {
@@ -338,6 +394,7 @@ function tickPlaying(dt: number, timeInSeconds: number) {
   if (run.level > prevLevel) {
     run.hp = Math.min(100, run.hp + 15);
     playLevelUp();
+    haptics.levelUp();
     spawnPopup(car.body.position.x, car.body.position.y + 1, car.body.position.z, `LV ${run.level}`, "#ffaa22");
     spawnPopup(car.body.position.x, car.body.position.y + 2, car.body.position.z, "+15 HP", "#66ff88");
   }
@@ -443,6 +500,8 @@ function animate(time: number) {
   updateEffects(dt);
   updateSkids(dt);
   updateTimeSlow(dt);
+  updateRain(rain, dt, car.mesh.position.x, car.mesh.position.z);
+  updateSnow(snow, dt, car.mesh.position.x, car.mesh.position.z);
   if (currentState === "playing") updatePopups(dt);
   updateCopLights(timeInSeconds);
 

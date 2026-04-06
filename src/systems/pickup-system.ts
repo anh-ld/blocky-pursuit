@@ -6,6 +6,7 @@ import { TILE_SIZE } from "../world/terrain";
 import { spawnConfetti, spawnRing, triggerShake } from "../world/effects";
 import { spawnPopup } from "../world/popups";
 import { playPickup } from "../audio/sound";
+import { haptics } from "../audio/haptics";
 import type { RunState, IGameContext } from "./run-state";
 import type { CopSystem } from "./cop-system";
 
@@ -113,10 +114,11 @@ export class PickupSystem {
       // Collect on touch
       if (dist < 3.5) {
         playPickup();
+        haptics.pickup();
         spawnConfetti(p.position.x, 2, p.position.z);
         if (p.kind === "nitro") {
           run.nitroTimer = NITRO_DURATION;
-          car.maxSpeed = car.baseMaxSpeed * NITRO_SPEED_MULT;
+          car.setNitroMultiplier(NITRO_SPEED_MULT);
           spawnPopup(p.position.x, 2, p.position.z, "⚡ NITRO", "#ffdd44");
         } else if (p.kind === "shield") {
           run.shieldActive = true;
@@ -138,7 +140,7 @@ export class PickupSystem {
     // Tick down nitro
     if (run.nitroTimer > 0) {
       run.nitroTimer = Math.max(0, run.nitroTimer - dt);
-      if (run.nitroTimer === 0) car.maxSpeed = car.baseMaxSpeed;
+      if (run.nitroTimer === 0) car.setNitroMultiplier(1);
     }
   }
 }

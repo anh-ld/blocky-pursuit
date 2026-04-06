@@ -21,7 +21,7 @@ export function Feedback() {
           />
           <button
             type="submit"
-            class="w-full py-1.5 bg-violet-500/30 text-violet-300 text-xs font-bold uppercase tracking-wider border border-violet-500/40 cursor-pointer hover:bg-violet-500/40 transition-colors"
+            class="w-full py-2 bg-violet-500/30 text-violet-300 text-xs font-bold uppercase tracking-wider border border-violet-500/40 cursor-pointer hover:bg-violet-500/40 transition-colors"
           >
             Send
           </button>

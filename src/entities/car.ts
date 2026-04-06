@@ -25,6 +25,14 @@ export class Car {
   damageMul: number;
   gripFactor: number;       // lateral velocity retained per tick (lower = grippier)
   stabilityFactor: number;  // 0..1 — fraction of turn rate retained at top speed
+  // Per-skin baselines preserved so weather modifiers can recompute on the fly
+  // without permanently mutating the underlying spec values.
+  baseGripFactor: number;
+  baseForwardForce: number;
+  weatherTopSpeedMul: number;
+  weatherAccelMul: number;
+  weatherGripAdd: number;
+  nitroMul: number;
 
   constructor(scene: THREE.Scene, world: CANNON.World, skinId: string = "vf3") {
     this.scene = scene;
@@ -68,6 +76,12 @@ export class Car {
     this.turnSpeed = 2.5;
     this.damageMul = 1;
     this.gripFactor = 0.85;
+    this.baseGripFactor = 0.85;
+    this.baseForwardForce = 150000;
+    this.weatherTopSpeedMul = 1;
+    this.weatherAccelMul = 1;
+    this.weatherGripAdd = 0;
+    this.nitroMul = 1;
     this.stabilityFactor = 1;
     this.bounceBackTimer = 0;
     this.bounceBackDuration = 1.25;
@@ -175,13 +189,12 @@ export class Car {
   applySpecs(skin: ICarSkin) {
     const sp = skin.specs;
     this.baseMaxSpeed = sp.topSpeed;
-    this.maxSpeed = sp.topSpeed;
-    this.forwardForce = sp.acceleration;
+    this.baseForwardForce = sp.acceleration;
     this.turnSpeed = sp.handling;
     // endurance 0..100 → damageMul 1.0 .. 0.5
     this.damageMul = 1 - sp.endurance / 200;
     // grip 0..100 → lateral velocity retained per tick: 0.95 (drifty) .. 0.72 (sticky)
-    this.gripFactor = 0.95 - (sp.grip / 100) * 0.23;
+    this.baseGripFactor = 0.95 - (sp.grip / 100) * 0.23;
     // stability 0..100 → 0.6 .. 1.0; full = no turn loss at speed
     this.stabilityFactor = 0.6 + (sp.stability / 100) * 0.4;
     // braking 0..100 → bounceBackDuration 1.6s (slow recover) .. 0.7s (quick recover)
@@ -189,6 +202,33 @@ export class Car {
     // weight 0..100 → cannon body mass kg-ish
     this.body.mass = massForWeight(sp.weight);
     this.body.updateMassProperties();
+    this.recomputeWeatherEffective();
+  }
+
+  /**
+   * Apply weather modifiers on top of the per-skin baselines. Called whenever
+   * either the skin or the active weather changes; the result lands in
+   * `maxSpeed`, `forwardForce`, and `gripFactor`, which the physics step reads.
+   */
+  setWeatherModifiers(topSpeedMul: number, accelMul: number, gripAdd: number) {
+    this.weatherTopSpeedMul = topSpeedMul;
+    this.weatherAccelMul = accelMul;
+    this.weatherGripAdd = gripAdd;
+    this.recomputeWeatherEffective();
+  }
+
+  private recomputeWeatherEffective() {
+    this.maxSpeed = this.baseMaxSpeed * this.weatherTopSpeedMul * this.nitroMul;
+    this.forwardForce = this.baseForwardForce * this.weatherAccelMul;
+    // Clamp grip into the safe lateral-friction band so extreme presets can't
+    // make the car uncontrollably sticky or completely frictionless.
+    this.gripFactor = Math.min(0.99, Math.max(0.6, this.baseGripFactor + this.weatherGripAdd));
+  }
+
+  /** Pickup system hook: nitro on/off. Honors any active weather modifier. */
+  setNitroMultiplier(mul: number) {
+    this.nitroMul = mul;
+    this.recomputeWeatherEffective();
   }
 
   /** Set a random facing direction (Y-axis rotation) */

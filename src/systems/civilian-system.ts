@@ -7,9 +7,16 @@ import { isRoad, isWater, TILE_SIZE } from "../world/terrain";
 import { spawnPopup } from "../world/popups";
 import type { RunState, IGameContext } from "./run-state";
 
+const _fleeForce = new CANNON.Vec3();
+
 const MAX_CIVILIANS = 8;
 const CIVILIAN_SPAWN_INTERVAL = 2;
 const STUN_IMPACT_THRESHOLD = 6;
+// Flee tuning: when the player blasts past at speed, civilians get a
+// shove away so the city feels reactive instead of inert.
+const FLEE_RADIUS = 8;
+const FLEE_MIN_PLAYER_SPEED = 20;
+const FLEE_FORCE = 1200;
 
 export class CivilianSystem {
   scene: THREE.Scene;
@@ -54,6 +61,32 @@ export class CivilianSystem {
         civ.destroy();
         this.civilians.splice(i, 1);
         continue;
+      }
+
+      // Flee: when the player roars past at speed, push civilians away so
+      // the city visibly reacts. Cheap distance check + a single applyForce
+      // — civilians clear the road around the player without needing AI.
+      const playerSpeed = car.body.velocity.length();
+      if (
+        distToPlayer < FLEE_RADIUS &&
+        playerSpeed > FLEE_MIN_PLAYER_SPEED &&
+        civ.stunTimer <= 0
+      ) {
+        const dx = civ.body.position.x - car.body.position.x;
+        const dz = civ.body.position.z - car.body.position.z;
+        const inv = 1 / Math.max(0.001, distToPlayer);
+        _fleeForce.set(dx * inv * FLEE_FORCE, 0, dz * inv * FLEE_FORCE);
+        civ.body.applyForce(_fleeForce, civ.body.position);
+        if (!civ.hasPanicked) {
+          civ.hasPanicked = true;
+          spawnPopup(
+            civ.body.position.x,
+            civ.body.position.y + 2,
+            civ.body.position.z,
+            "!!",
+            "#ffeb3b",
+          );
+        }
       }
 
       // Stun on collision with player — require actual impact velocity,

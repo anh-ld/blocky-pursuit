@@ -10,7 +10,7 @@ export type ILeaderboardEntry = {
   score: number;
 };
 
-export type IWeather = "sunny" | "fog" | "rain" | "sunset";
+export type IWeather = "sunny" | "fog" | "rain" | "sunset" | "snowy";
 
 export type IActions = {
   startGame: () => void;

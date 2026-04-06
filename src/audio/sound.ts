@@ -360,6 +360,25 @@ export function playPickup() {
   playArpeggio({ notes: [880, 1320], type: "triangle", spacing: 0.06, attack: 0.01, peak: 0.6, decay: 0.18 });
 }
 
+/**
+ * Combo milestone "ladder" — pitch climbs every 5 combos so the player
+ * hears their multiplier rising. Tier = combo / 5. Capped at 8 to keep
+ * the high end musical instead of piercing.
+ */
+export function playComboTier(tier: number) {
+  const t = Math.max(0, Math.min(tier, 8));
+  // Each tier is 2 semitones up from the last
+  const base = 660 * Math.pow(2, (t * 2) / 12);
+  playArpeggio({
+    notes: [base, base * 1.5],
+    type: "triangle",
+    spacing: 0.05,
+    attack: 0.005,
+    peak: 0.5,
+    decay: 0.14,
+  });
+}
+
 export function playLevelUp() {
   // C E G C — major arpeggio
   playArpeggio({ notes: [523, 659, 784, 1047], type: "square", spacing: 0.08, attack: 0.02, peak: 0.5, decay: 0.2 });

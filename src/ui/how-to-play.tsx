@@ -1,4 +1,5 @@
-import { screen, canInstallPwa, actions } from "../state";
+import { screen, canInstallPwa, actions, bestScore, totalRuns, copsDrowned } from "../state";
+import { CAR_SKINS, isUnlocked } from "../entities/car-skins";
 import { fetchLeaderboard } from "../api";
 
 export function HowToPlay() {
@@ -12,6 +13,17 @@ export function HowToPlay() {
   const openGarage = () => {
     screen.value = "garage";
   };
+
+  // Compute career stats from persisted progress so the start screen shows
+  // visible long-term progression instead of starting cold every visit.
+  const progress = {
+    best: bestScore.value,
+    totalRuns: totalRuns.value,
+    copsDrowned: copsDrowned.value,
+    selectedSkin: "",
+  };
+  const unlockedCount = CAR_SKINS.filter((s) => isUnlocked(s, progress)).length;
+  const showCareer = totalRuns.value > 0;
 
   return (
     <div class="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
@@ -44,29 +56,62 @@ export function HowToPlay() {
           <span class="text-sm leading-none shrink-0">⚡</span>
           <span class="text-gray-400">Drive fast on roads to score</span>
         </div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm leading-none shrink-0">💥</span>
+          <span class="text-gray-400">Skim past cops for combo x3 score</span>
+        </div>
+
+        {showCareer && (
+          <div class="grid grid-cols-4 gap-1 pt-2 mt-1 border-t border-gray-700/60">
+            <div class="flex flex-col items-center">
+              <span class="text-gray-500 text-[8px] uppercase tracking-wider">Best</span>
+              <span class="text-amber-300 text-[11px] font-extrabold tabular-nums">
+                {bestScore.value.toLocaleString()}
+              </span>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-gray-500 text-[8px] uppercase tracking-wider">Runs</span>
+              <span class="text-gray-200 text-[11px] font-extrabold tabular-nums">
+                {totalRuns.value}
+              </span>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-gray-500 text-[8px] uppercase tracking-wider">Drowned</span>
+              <span class="text-cyan-300 text-[11px] font-extrabold tabular-nums">
+                {copsDrowned.value}
+              </span>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-gray-500 text-[8px] uppercase tracking-wider">Cars</span>
+              <span class="text-pink-300 text-[11px] font-extrabold tabular-nums">
+                {unlockedCount}/{CAR_SKINS.length}
+              </span>
+            </div>
+          </div>
+        )}
 
         <button
           onClick={openGarage}
-          class="w-full mt-1 py-1.5 bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors pointer-events-auto"
+          class="w-full mt-1 py-2 bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors pointer-events-auto"
         >
           Garage
         </button>
         <button
           onClick={openLeaderboard}
-          class="w-full mt-1 py-1.5 bg-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30 transition-colors pointer-events-auto"
+          class="w-full mt-1 py-2 bg-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30 transition-colors pointer-events-auto"
         >
           Leaderboard
         </button>
         <button
           onClick={openFeedback}
-          class="w-full mt-1 py-1.5 bg-violet-500/20 text-violet-400 text-xs font-bold uppercase tracking-wider border border-violet-500/30 cursor-pointer hover:bg-violet-500/30 transition-colors pointer-events-auto"
+          class="w-full mt-1 py-2 bg-violet-500/20 text-violet-400 text-xs font-bold uppercase tracking-wider border border-violet-500/30 cursor-pointer hover:bg-violet-500/30 transition-colors pointer-events-auto"
         >
           Feedback
         </button>
         {canInstallPwa.value && (
           <button
             onClick={() => actions.installPwa()}
-            class="flex md:!hidden items-center justify-center gap-1.5 w-full mt-1 py-1.5 bg-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors pointer-events-auto"
+            class="flex md:!hidden items-center justify-center gap-1.5 w-full mt-1 py-2 bg-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors pointer-events-auto"
           >
             📲 Install App
           </button>

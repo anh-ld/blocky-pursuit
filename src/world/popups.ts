@@ -39,7 +39,15 @@ function makeTexture(text: string, color: string): THREE.CanvasTexture {
   return tex;
 }
 
-export function spawnPopup(x: number, y: number, z: number, text: string, color: string = "#ffcc22") {
+export function spawnPopup(
+  x: number,
+  y: number,
+  z: number,
+  text: string,
+  color: string = "#ffcc22",
+  life: number = 1.0,
+  scaleX: number = 8,
+) {
   if (!popupScene) return;
   // Drop the oldest popup if at cap so a flurry of pickups doesn't queue up
   if (popups.length >= MAX_POPUPS) {
@@ -52,9 +60,11 @@ export function spawnPopup(x: number, y: number, z: number, text: string, color:
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(material);
   sprite.position.set(x, y + 2, z);
-  sprite.scale.set(8, 2, 1);
+  sprite.scale.set(scaleX, scaleX * 0.25, 1);
   popupScene.add(sprite);
-  popups.push({ sprite, texture, vy: 6, age: 0, life: 1.0 });
+  // Long-lived tip popups drift more slowly so they stay readable.
+  const vy = life > 1.5 ? 2.5 : 6;
+  popups.push({ sprite, texture, vy, age: 0, life });
 }
 
 export function updatePopups(dt: number) {

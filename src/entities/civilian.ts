@@ -34,12 +34,14 @@ export class Civilian {
   maxSpeed: number;
   forwardForce: number;
   stunTimer: number;
+  hasPanicked: boolean;
   preStepCallback: () => void;
 
   constructor(scene: THREE.Scene, world: CANNON.World, position: THREE.Vector3) {
     this.scene = scene;
     this.world = world;
     this.stunTimer = 0;
+    this.hasPanicked = false;
 
     const unit = 0.5;
     this.mesh = new THREE.Group();

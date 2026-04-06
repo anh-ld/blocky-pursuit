@@ -57,6 +57,11 @@ export function spawnCop(args: ISpawnCopArgs) {
     if (foundRoad) break;
   }
 
+  // Bail if no road tile is reachable from the random spot — otherwise the
+  // cop spawns at the original tile, which can be water (instant +30 free
+  // score on next frame) or stuck inside a building.
+  if (!foundRoad) return;
+
   const pos = new THREE.Vector3(tileX * TILE_SIZE, 1, tileZ * TILE_SIZE);
   const cop = new Cop(scene, world, pos, level);
   cops.push(cop);

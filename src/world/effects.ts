@@ -1,5 +1,49 @@
 import * as THREE from "three";
 
+// --- Time slow (combo milestone juice) ---
+// Brief gameplay slowdown when triggered. Game-loop scales physics + entity
+// dt by getTimeSlowFactor() while particles/popups stay at real time.
+let timeSlowTimer = 0;
+const TIME_SLOW_DURATION = 0.4;
+const TIME_SLOW_MIN_FACTOR = 0.35;
+
+export function triggerTimeSlow() {
+  timeSlowTimer = TIME_SLOW_DURATION;
+}
+
+/** 0..1 — multiply real dt by this for gameplay-affecting updates. */
+export function getTimeSlowFactor(): number {
+  if (timeSlowTimer <= 0) return 1;
+  // Ease back toward 1 over the duration so the resume is smooth
+  const t = 1 - timeSlowTimer / TIME_SLOW_DURATION;
+  return TIME_SLOW_MIN_FACTOR + (1 - TIME_SLOW_MIN_FACTOR) * t;
+}
+
+export function updateTimeSlow(dt: number) {
+  if (timeSlowTimer > 0) timeSlowTimer = Math.max(0, timeSlowTimer - dt);
+}
+
+// --- Screen flash (DOM overlay) ---
+// Initialized lazily with a target element. Triggers a brief white flash via
+// CSS opacity transition — independent of the WebGL canvas.
+let flashEl: HTMLDivElement | null = null;
+
+export function initScreenFlash(parent: HTMLElement) {
+  if (flashEl) return;
+  flashEl = document.createElement("div");
+  flashEl.style.cssText =
+    "position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:20;transition:opacity 90ms ease-out;mix-blend-mode:screen";
+  parent.appendChild(flashEl);
+}
+
+export function triggerScreenFlash(strength: number = 0.5) {
+  if (!flashEl) return;
+  flashEl.style.opacity = String(strength);
+  setTimeout(() => {
+    if (flashEl) flashEl.style.opacity = "0";
+  }, 90);
+}
+
 // --- Camera shake ---
 let shakeIntensity = 0;
 let shakeTime = 0;

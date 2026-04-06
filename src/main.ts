@@ -6,7 +6,6 @@ import { Car } from "./entities/car";
 import { updateCopLights } from "./entities/cop";
 import { CityGenerator, isRoad } from "./world/city-generator";
 import { isWater, TILE_SIZE } from "./world/terrain";
-import { LEVEL_DEFS } from "./systems/leveling";
 import { RunState } from "./systems/run-state";
 import { CopSystem } from "./systems/cop-system";
 import { CivilianSystem } from "./systems/civilian-system";
@@ -29,7 +28,15 @@ import {
   stopBgm,
   setBgmDuck,
 } from "./audio/sound";
-import { initEffects, applyShake, spawnSplash, updateEffects } from "./world/effects";
+import {
+  initEffects,
+  initScreenFlash,
+  applyShake,
+  spawnSplash,
+  updateEffects,
+  updateTimeSlow,
+  getTimeSlowFactor,
+} from "./world/effects";
 import { initPopups, spawnPopup, updatePopups } from "./world/popups";
 import { initSkids, spawnSkid, updateSkids, clearSkids } from "./world/skids";
 import { App } from "./ui/app";
@@ -143,10 +150,11 @@ groundBody.addShape(groundShape);
 groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
-// --- Effects (particles, screen shake, popups, skids) ---
+// --- Effects (particles, screen shake, popups, skids, screen flash) ---
 initEffects(scene);
 initPopups(scene);
 initSkids(scene);
+initScreenFlash(gameArea);
 
 // --- City Generation ---
 const cityGenerator = new CityGenerator(scene, world);
@@ -161,10 +169,11 @@ actions.selectSkin = (skinId: string) => {
 };
 
 // --- Systems + run state ---
+const ctx = { scene, world };
 const run = new RunState();
-const cops = new CopSystem(scene, world);
-const civilians = new CivilianSystem(scene, world);
-const pickups = new PickupSystem(scene);
+const cops = new CopSystem(ctx);
+const civilians = new CivilianSystem(ctx);
+const pickups = new PickupSystem(ctx);
 
 // Tuning constants that stay in main (orchestration-level)
 const BUSTED_TIME_THRESHOLD = 3;
@@ -292,13 +301,7 @@ function tickPlaying(dt: number, timeInSeconds: number) {
   run.survivalTime += dt;
 
   // --- Level progression ---
-  const prevLevel = run.level;
-  for (let lv = LEVEL_DEFS.length; lv >= 1; lv--) {
-    if (run.score >= LEVEL_DEFS[lv - 1].scoreThreshold) {
-      if (lv > run.level) run.level = lv;
-      break;
-    }
-  }
+  const prevLevel = run.advanceLevel();
   if (run.level > prevLevel) {
     run.hp = Math.min(100, run.hp + 15);
     playLevelUp();
@@ -309,37 +312,13 @@ function tickPlaying(dt: number, timeInSeconds: number) {
   // Engine pitch follows speed
   setEngineSpeed(Math.min(car.body.velocity.length() / car.maxSpeed, 1));
 
-  // --- Score: distance on road tiles, with speed + combo multipliers ---
-  const scoreTileX = Math.floor(car.body.position.x / TILE_SIZE);
-  const scoreTileZ = Math.floor(car.body.position.z / TILE_SIZE);
-  if (scoreTileX !== run.lastScoreTileX || scoreTileZ !== run.lastScoreTileZ) {
-    if (isRoad(scoreTileX, scoreTileZ)) {
-      const speedRatio = Math.min(car.body.velocity.length() / car.maxSpeed, 1);
-      const speedMult = 1 + speedRatio;
-      const comboMult = Math.min(1 + run.comboCount * 0.1, 3);
-      run.score += 1.5 * speedMult * comboMult;
-    }
-    run.lastScoreTileX = scoreTileX;
-    run.lastScoreTileZ = scoreTileZ;
-  }
-
-  // --- Combo decay ---
-  if (run.comboTimer > 0) {
-    run.comboTimer -= dt;
-    if (run.comboTimer <= 0) run.comboCount = 0;
-  }
-
-  // --- Run stats: top speed + distance ---
-  const curSpeed = car.body.velocity.length();
-  if (curSpeed > run.topSpeed) run.topSpeed = curSpeed;
-  const dxd = car.body.position.x - run.lastCarX;
-  const dzd = car.body.position.z - run.lastCarZ;
-  run.distance += Math.sqrt(dxd * dxd + dzd * dzd);
-  run.lastCarX = car.body.position.x;
-  run.lastCarZ = car.body.position.z;
+  // --- Pure-state phases (scoring, combo decay, run stats) ---
+  run.scoreRoadTile(car);
+  run.decayCombo(dt);
+  run.recordMovement(car);
 
   // --- Entity systems ---
-  civilians.update(dt, timeInSeconds, car);
+  civilians.update(dt, timeInSeconds, car, run);
   pickups.update(dt, timeInSeconds, car, run, cops);
   const { nearestCopDist, nearbyCount } = cops.update(dt, timeInSeconds, car, run);
 
@@ -426,16 +405,21 @@ function animate(time: number) {
   }
   lastCallTime = timeInSeconds;
 
-  // Always run particles + popups even when paused (death animation)
+  // Particles + skids keep running so the death animation can play out;
+  // popups freeze on game-over so the run summary isn't crowded by stale text.
   updateEffects(dt);
-  updatePopups(dt);
   updateSkids(dt);
+  updateTimeSlow(dt);
+  if (currentState === "playing") updatePopups(dt);
   updateCopLights(timeInSeconds);
 
   if (run.hitPauseTimer > 0) run.hitPauseTimer = Math.max(0, run.hitPauseTimer - dt);
 
   if (currentState === "playing") {
-    tickPlaying(dt, timeInSeconds);
+    // Scale gameplay dt by the active time-slow factor (combo milestone juice).
+    // Particles, popups, skids and the camera follow stay at real-time above.
+    const slowFactor = getTimeSlowFactor();
+    tickPlaying(dt * slowFactor, timeInSeconds);
   }
 
   // Camera follow car

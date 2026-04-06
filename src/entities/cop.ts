@@ -4,13 +4,33 @@ import * as CANNON from "cannon-es";
 // --- Shared materials (one set for all cop instances) ---
 const UNIT = 0.5;
 const matProps = { roughness: 0.8, flatShading: true } as const;
-const COP_BODY_MAT = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, ...matProps });
-const COP_CABIN_MAT = new THREE.MeshStandardMaterial({
-  color: 0xffffff,
-  roughness: 0.3,
-  flatShading: true,
-  metalness: 0.5,
-});
+const cabinProps = { roughness: 0.3, flatShading: true, metalness: 0.5 } as const;
+
+// Cop tiers — visual escalation as level rises so high-level threats read at a glance.
+// Tier 0: standard patrol (lvl 1-2). Tier 1: charcoal urban (lvl 3). Tier 2: SWAT red (lvl 4-5).
+type ICopTier = {
+  bodyMat: THREE.MeshStandardMaterial;
+  cabinMat: THREE.MeshStandardMaterial;
+};
+const COP_TIERS: ICopTier[] = [
+  {
+    bodyMat: new THREE.MeshStandardMaterial({ color: 0x1c1c1c, ...matProps }),
+    cabinMat: new THREE.MeshStandardMaterial({ color: 0xffffff, ...cabinProps }),
+  },
+  {
+    bodyMat: new THREE.MeshStandardMaterial({ color: 0x2a2a2a, ...matProps }),
+    cabinMat: new THREE.MeshStandardMaterial({ color: 0x9aa0a6, ...cabinProps }),
+  },
+  {
+    bodyMat: new THREE.MeshStandardMaterial({ color: 0x080808, ...matProps }),
+    cabinMat: new THREE.MeshStandardMaterial({ color: 0xb71c1c, ...cabinProps }),
+  },
+];
+function tierForLevel(level: number): ICopTier {
+  if (level >= 4) return COP_TIERS[2];
+  if (level === 3) return COP_TIERS[1];
+  return COP_TIERS[0];
+}
 const COP_RED_LIGHT_MAT = new THREE.MeshStandardMaterial({
   color: 0xff1111,
   emissive: 0xff1111,
@@ -102,15 +122,17 @@ export class Cop {
     // --- Visuals (Three.js) ---
     this.mesh = new THREE.Group();
 
+    const tier = tierForLevel(this.level);
+
     // Chassis (Body)
     const bodyGeo = new THREE.BoxGeometry(unit * 4, unit, unit * 8);
-    const bodyMesh = new THREE.Mesh(bodyGeo, COP_BODY_MAT);
+    const bodyMesh = new THREE.Mesh(bodyGeo, tier.bodyMat);
     bodyMesh.position.y = unit;
     this.mesh.add(bodyMesh);
 
     // Cabin (shifted toward rear so front hood is visible)
     const cabinGeo = new THREE.BoxGeometry(unit * 3, unit * 1.5, unit * 3);
-    const cabinMesh = new THREE.Mesh(cabinGeo, COP_CABIN_MAT);
+    const cabinMesh = new THREE.Mesh(cabinGeo, tier.cabinMat);
     cabinMesh.position.y = unit * 2.25;
     cabinMesh.position.z = unit * 1.5; // rear half
     this.mesh.add(cabinMesh);

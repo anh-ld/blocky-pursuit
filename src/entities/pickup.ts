@@ -48,6 +48,13 @@ export class Pickup {
     this.age += dt;
     this.mesh.rotation.y += dt * 2;
     this.mesh.position.y = 1.5 + Math.sin(this.age * 3) * 0.3;
+
+    // Despawn warning: blink for the last 2 seconds before age 25
+    if (this.age > 23) {
+      this.mesh.visible = Math.floor(this.age * 8) % 2 === 0;
+    } else if (!this.mesh.visible) {
+      this.mesh.visible = true;
+    }
   }
 
   destroy() {

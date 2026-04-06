@@ -5,12 +5,17 @@ import { Car } from "../entities/car";
 import { spawnCop } from "./spawning";
 import { getLevelDef } from "./leveling";
 import { isRoad, isWater, TILE_SIZE } from "../world/terrain";
-import { triggerShake, spawnSparks, spawnSplash, spawnConfetti } from "../world/effects";
+import {
+  triggerShake,
+  triggerTimeSlow,
+  triggerScreenFlash,
+  spawnSparks,
+  spawnSplash,
+  spawnConfetti,
+} from "../world/effects";
 import { spawnPopup } from "../world/popups";
 import { playCrash, playSplash, playPickup } from "../audio/sound";
-import type { RunState } from "./run-state";
-
-const COMBO_DECAY = 3.0;
+import { COMBO_DECAY, type RunState, type IGameContext } from "./run-state";
 
 export type ICopUpdateResult = {
   nearestCopDist: number;
@@ -23,9 +28,9 @@ export class CopSystem {
   cops: Cop[] = [];
   lastSpawnTime = 0;
 
-  constructor(scene: THREE.Scene, world: CANNON.World) {
-    this.scene = scene;
-    this.world = world;
+  constructor(ctx: IGameContext) {
+    this.scene = ctx.scene;
+    this.world = ctx.world;
   }
 
   reset() {
@@ -106,6 +111,12 @@ export class CopSystem {
             `x${run.comboCount}`,
             "#ff66cc",
           );
+        }
+        // Big-combo juice: time slow + flash + extra shake every 10
+        if (run.comboCount > 0 && run.comboCount % 10 === 0) {
+          triggerTimeSlow();
+          triggerScreenFlash(0.55);
+          triggerShake(0.5);
         }
       }
 

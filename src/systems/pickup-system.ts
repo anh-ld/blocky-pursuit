@@ -6,7 +6,7 @@ import { TILE_SIZE } from "../world/terrain";
 import { spawnConfetti, spawnRing, triggerShake } from "../world/effects";
 import { spawnPopup } from "../world/popups";
 import { playPickup } from "../audio/sound";
-import type { RunState } from "./run-state";
+import type { RunState, IGameContext } from "./run-state";
 import type { CopSystem } from "./cop-system";
 
 const MAX_PICKUPS = 4;
@@ -36,8 +36,8 @@ export class PickupSystem {
   pickups: Pickup[] = [];
   lastSpawnTime = 0;
 
-  constructor(scene: THREE.Scene) {
-    this.scene = scene;
+  constructor(ctx: IGameContext) {
+    this.scene = ctx.scene;
   }
 
   reset() {
@@ -98,6 +98,16 @@ export class PickupSystem {
         p.destroy();
         this.pickups.splice(i, 1);
         continue;
+      }
+
+      // Magnetism: when close (but not yet collected), pull the pickup
+      // toward the car so tight roads don't feel frustrating.
+      if (dist < 6 && dist > 3.5) {
+        const pull = 4 * dt; // units/sec toward player, scaled by dt
+        p.position.x -= (dxp / dist) * pull;
+        p.position.z -= (dzp / dist) * pull;
+        p.mesh.position.x = p.position.x;
+        p.mesh.position.z = p.position.z;
       }
 
       // Collect on touch

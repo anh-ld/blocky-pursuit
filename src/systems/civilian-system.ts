@@ -4,6 +4,8 @@ import { Civilian } from "../entities/civilian";
 import { Car } from "../entities/car";
 import { spawnCivilian } from "./spawning";
 import { isRoad, isWater, TILE_SIZE } from "../world/terrain";
+import { spawnPopup } from "../world/popups";
+import type { RunState, IGameContext } from "./run-state";
 
 const MAX_CIVILIANS = 8;
 const CIVILIAN_SPAWN_INTERVAL = 2;
@@ -15,9 +17,9 @@ export class CivilianSystem {
   civilians: Civilian[] = [];
   lastSpawnTime = 0;
 
-  constructor(scene: THREE.Scene, world: CANNON.World) {
-    this.scene = scene;
-    this.world = world;
+  constructor(ctx: IGameContext) {
+    this.scene = ctx.scene;
+    this.world = ctx.world;
   }
 
   reset() {
@@ -29,7 +31,7 @@ export class CivilianSystem {
     this.lastSpawnTime = timeInSeconds;
   }
 
-  update(dt: number, timeInSeconds: number, car: Car) {
+  update(dt: number, timeInSeconds: number, car: Car, run: RunState) {
     if (timeInSeconds - this.lastSpawnTime > CIVILIAN_SPAWN_INTERVAL) {
       spawnCivilian({
         scene: this.scene,
@@ -61,6 +63,8 @@ export class CivilianSystem {
         car.body.velocity.vsub(civ.body.velocity, relVel);
         if (relVel.length() > STUN_IMPACT_THRESHOLD) {
           civ.stun();
+          run.score += 5;
+          spawnPopup(civ.body.position.x, civ.body.position.y + 2, civ.body.position.z, "+5", "#ffcc22");
         }
       }
 

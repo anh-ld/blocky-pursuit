@@ -8,12 +8,13 @@ import { MobileControls } from "./mobile-controls";
 import { ControlsGuide } from "./controls-guide";
 import { GameOver } from "./game-over";
 import { Garage } from "./garage";
+import { PreGame } from "./pre-game";
 
 export function App() {
   const state = gameState.value;
   const sc = screen.value;
   const showHowToPlay = state === "start" && sc === "howToPlay";
-  const showGameOver = state === "gameover" && sc !== "leaderboard" && sc !== "feedback";
+  const showGameOver = state === "gameover" && sc !== "leaderboard" && sc !== "feedback" && sc !== "preGame";
   const showPaused = state === "paused";
   const darken = state !== "playing";
 
@@ -40,6 +41,7 @@ export function App() {
         {sc === "leaderboard" && <Leaderboard />}
         {sc === "feedback" && <Feedback />}
         {sc === "garage" && <Garage />}
+        {sc === "preGame" && <PreGame />}
         <div class="absolute top-0 left-0 w-full h-full pointer-events-none z-10 flex flex-col justify-end">
           <ControlsGuide />
           <MobileCta />

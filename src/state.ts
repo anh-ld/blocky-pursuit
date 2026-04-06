@@ -2,7 +2,7 @@ import { signal } from "@preact/signals";
 import { attempt } from "es-toolkit";
 import { loadProgress, saveProgress } from "./entities/car-skins";
 
-export type IScreen = "howToPlay" | "leaderboard" | "feedback" | "garage" | "none";
+export type IScreen = "howToPlay" | "leaderboard" | "feedback" | "garage" | "preGame" | "none";
 export type IGameStateValue = "start" | "playing" | "paused" | "gameover";
 
 export type ILeaderboardEntry = {
@@ -14,6 +14,7 @@ export type IWeather = "sunny" | "fog" | "rain" | "sunset";
 
 export type IActions = {
   startGame: () => void;
+  beginRun: () => void;
   installPwa: () => void;
   selectSkin: (skinId: string) => void;
   toggleSound: () => void;
@@ -99,6 +100,7 @@ export const weather = signal<IWeather>("fog");
 // --- Actions wired by main.ts ---
 export const actions: IActions = {
   startGame: () => {},
+  beginRun: () => {},
   installPwa: () => {},
   selectSkin: () => {},
   toggleSound: () => {},

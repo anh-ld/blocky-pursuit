@@ -1,8 +1,10 @@
-import { gameState, actions } from "../state";
+import { gameState, screen, actions } from "../state";
 
 export function MobileCta() {
   const state = gameState.value;
+  const sc = screen.value;
   if (state === "playing" || state === "paused") return null;
+  if (sc === "preGame") return null;
   const isStart = state === "start";
   return (
     <div class="flex w-full justify-center pb-6 pointer-events-auto">

@@ -297,7 +297,12 @@ function gameOver(reason: string = "BUSTED") {
   submitScore(playerName.value, run.score).then(() => fetchLeaderboard());
 }
 
-actions.startGame = startGame;
+actions.startGame = () => {
+  // Navigate to the pre-game screen so the player can pick a car & configs
+  // before the run actually begins.
+  screen.value = "preGame";
+};
+actions.beginRun = startGame;
 actions.toggleSound = () => {
   initAudio();
   resumeAudio();

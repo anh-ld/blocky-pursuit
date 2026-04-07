@@ -20,23 +20,32 @@ export function initPopups(scene: THREE.Scene) {
   popupScene = scene;
 }
 
-function makeTexture(text: string, color: string): THREE.CanvasTexture {
+const POPUP_FONT = "bold 44px system-ui, -apple-system, sans-serif";
+const POPUP_HEIGHT = 64;
+const POPUP_PAD_X = 16;
+
+function makeTexture(text: string, color: string): { texture: THREE.CanvasTexture; aspect: number } {
   const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 64;
   const ctx = canvas.getContext("2d")!;
-  ctx.font = "bold 44px system-ui, -apple-system, sans-serif";
+  ctx.font = POPUP_FONT;
+  const textWidth = Math.ceil(ctx.measureText(text).width);
+  canvas.width = Math.max(64, textWidth + POPUP_PAD_X * 2);
+  canvas.height = POPUP_HEIGHT;
+  // Setting canvas dimensions resets the context, so reapply font/styles.
+  ctx.font = POPUP_FONT;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.lineWidth = 8;
   ctx.strokeStyle = "#000";
-  ctx.strokeText(text, 128, 32);
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  ctx.strokeText(text, cx, cy);
   ctx.fillStyle = color;
-  ctx.fillText(text, 128, 32);
+  ctx.fillText(text, cx, cy);
   const tex = new THREE.CanvasTexture(canvas);
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
-  return tex;
+  return { texture: tex, aspect: canvas.width / canvas.height };
 }
 
 export function spawnPopup(
@@ -56,11 +65,14 @@ export function spawnPopup(
     oldest.texture.dispose();
     (oldest.sprite.material as THREE.SpriteMaterial).dispose();
   }
-  const texture = makeTexture(text, color);
+  const { texture, aspect } = makeTexture(text, color);
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(material);
   sprite.position.set(x, y + 2, z);
-  sprite.scale.set(scaleX, scaleX * 0.25, 1);
+  // Height is driven by scaleX so callers keep their existing sizing intent;
+  // width follows the measured text aspect so long messages aren't squished.
+  const height = scaleX * 0.25;
+  sprite.scale.set(height * aspect, height, 1);
   popupScene.add(sprite);
   // Long-lived tip popups drift more slowly so they stay readable.
   const vy = life > 1.5 ? 2.5 : 6;

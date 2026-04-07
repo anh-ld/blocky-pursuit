@@ -12,6 +12,7 @@ import {
 } from "../state";
 import { CAR_SKINS, isUnlocked, specPercent } from "../entities/car-skins";
 import { WEATHERS, getWeatherSummary } from "../world/weather";
+import { CarPreview } from "./car-preview";
 
 export function PreGame() {
   const progress = {
@@ -38,11 +39,6 @@ export function PreGame() {
           {CAR_SKINS.map((s) => {
             const unlocked = isUnlocked(s, progress);
             const isSelected = selectedSkin.value === s.id;
-            const hex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
-            const w = Math.round(s.shape.bodyW * 6);
-            const h = Math.round((s.shape.bodyH + s.shape.cabinH) * 4 + 4);
-            const cabinW = Math.round(s.shape.cabinW * 4);
-            const cabinH = Math.round(s.shape.cabinH * 4);
             return (
               <button
                 disabled={!unlocked}
@@ -55,23 +51,8 @@ export function PreGame() {
                     : "border-gray-800 bg-gray-900/40 opacity-50 cursor-not-allowed"
                 }`}
               >
-                <div class="relative flex items-end justify-center" style={{ width: `${w + 8}px`, height: `${h + 4}px` }}>
-                  <div
-                    style={{
-                      width: `${w}px`,
-                      height: `${Math.max(4, Math.round(s.shape.bodyH * 6))}px`,
-                      background: hex(s.bodyColor),
-                    }}
-                  />
-                  <div
-                    class="absolute"
-                    style={{
-                      bottom: `${Math.max(4, Math.round(s.shape.bodyH * 6))}px`,
-                      width: `${cabinW}px`,
-                      height: `${cabinH}px`,
-                      background: hex(s.cabinColor),
-                    }}
-                  />
+                <div class="w-full">
+                  <CarPreview skin={s} />
                 </div>
                 <span class={`text-center leading-tight ${isSelected ? "text-amber-300" : "text-gray-300"}`}>{s.name}</span>
                 {!unlocked ? (

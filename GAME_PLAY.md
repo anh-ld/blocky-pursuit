@@ -54,12 +54,15 @@ Pick at the **Pre-Game** screen. Locked skins show their unlock hint.
 | # | Car | Top | Accel | Hand | Grip | Stab | Brake | Wt | End | Unlock |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | VinFast VF3 | 40 | 150k | 2.6 | 70 | 78 | 60 | 35 | 70 | Default |
-| 2 | Porsche 911 | 47 | 175k | 3.0 | 85 | 80 | 75 | 40 | 50 | Best ≥ 500 |
-| 3 | Ferrari F430 | 48 | 178k | 3.1 | 80 | 70 | 80 | 38 | 45 | Best ≥ 1.5k |
-| 4 | Lamborghini Aventador | 51 | 185k | 2.7 | 65 | 55 | 70 | 70 | 38 | Best ≥ 3k |
-| 5 | Ford Mustang GT | 45 | 188k | 2.4 | 45 | 65 | 50 | 85 | 80 | 10 total runs |
-| 6 | Chevrolet Corvette C8 | 47 | 180k | 2.9 | 75 | 75 | 70 | 60 | 55 | Drown 15 cops |
-| 7 | Nissan GT-R R35 | 49 | 182k | 3.1 | 90 | 90 | 85 | 75 | 65 | Best ≥ 5k |
+| 2 | VW Beetle | 41 | 152k | 2.8 | 72 | 74 | 62 | 38 | 68 | Default |
+| 3 | Mini Cooper | 42 | 158k | 3.0 | 78 | 70 | 68 | 32 | 55 | Default |
+| 4 | Fiat 500 | 40 | 154k | 2.9 | 74 | 68 | 65 | 30 | 50 | Default |
+| 5 | Porsche 911 | 47 | 175k | 3.0 | 85 | 80 | 75 | 40 | 50 | Best ≥ 500 |
+| 6 | Ferrari F430 | 48 | 178k | 3.1 | 80 | 70 | 80 | 38 | 45 | Best ≥ 1.5k |
+| 7 | Lamborghini Aventador | 51 | 185k | 2.7 | 65 | 55 | 70 | 70 | 38 | Best ≥ 3k |
+| 8 | Ford Mustang GT | 45 | 188k | 2.4 | 45 | 65 | 50 | 85 | 80 | 10 total runs |
+| 9 | Chevrolet Corvette C8 | 47 | 180k | 2.9 | 75 | 75 | 70 | 60 | 55 | Drown 15 cops |
+| 10 | Nissan GT-R R35 | 49 | 182k | 3.1 | 90 | 90 | 85 | 75 | 65 | Best ≥ 5k |
 
 Stats: `topSpeed` (game units), `acceleration` (raw force), `handling`
 (turn rate), and 0–100 sliders for `grip / stability / braking / weight /

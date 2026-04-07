@@ -210,6 +210,18 @@ export class Car {
     this.bodyMat = handles.bodyMat;
     this.cabinMat = handles.cabinMat;
     this.bodyBaseEmissive = this.bodyMat.emissive.clone();
+    // Sync the fresh group to the physics body NOW. Otherwise the new mesh
+    // sits at (0,0,0) until the next car.update() — and on the gameover
+    // screen update() never runs, so the camera (which follows mesh.position)
+    // would snap back to the origin and the player would see an empty map
+    // because cityGenerator already unloaded those chunks during the run.
+    this.mesh.position.set(this.body.position.x, this.body.position.y, this.body.position.z);
+    this.mesh.quaternion.set(
+      this.body.quaternion.x,
+      this.body.quaternion.y,
+      this.body.quaternion.z,
+      this.body.quaternion.w,
+    );
     this.scene.add(this.mesh);
     // Per-skin specs
     this.applySpecs(skin);

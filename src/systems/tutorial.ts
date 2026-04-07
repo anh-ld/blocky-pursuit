@@ -2,9 +2,7 @@
 // drives the first-combo tutorial popup; add more flags here as new
 // mechanics get a "did the player ever discover this?" hint.
 
-import { attempt } from "es-toolkit";
-
-const KEY = "bp:tutorial";
+import { StorageKey, storageGetJson, storageSetJson } from "../storage";
 
 type ITutorialState = {
   seenComboTip: boolean;
@@ -23,16 +21,13 @@ const DEFAULTS: ITutorialState = {
 let state: ITutorialState = load();
 
 function load(): ITutorialState {
-  const [, parsed] = attempt(() => {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Partial<ITutorialState>) : null;
-  });
+  const parsed = storageGetJson<Partial<ITutorialState>>(StorageKey.Tutorial);
   if (!parsed) return { ...DEFAULTS };
   return { ...DEFAULTS, ...parsed };
 }
 
 function save() {
-  attempt(() => localStorage.setItem(KEY, JSON.stringify(state)));
+  storageSetJson(StorageKey.Tutorial, state);
 }
 
 export function shouldShowComboTip(): boolean {

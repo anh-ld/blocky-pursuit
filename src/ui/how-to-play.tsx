@@ -1,4 +1,4 @@
-import { screen, canInstallPwa, actions, bestScore, totalRuns, copsDrowned } from "../state";
+import { screen, canInstallPwa, actions, bestScore, totalRuns, copsDrowned, gameState } from "../state";
 import { CAR_SKINS, isUnlocked } from "../entities/car-skins";
 import { fetchLeaderboard } from "../api";
 
@@ -116,6 +116,12 @@ export function HowToPlay() {
             📲 Install App
           </button>
         )}
+        <button
+          onClick={() => actions.startGame()}
+          class="w-full mt-1 py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5 pointer-events-auto"
+        >
+          START
+        </button>
         <a
           href="https://github.com/anh-ld/blocky-pursuit"
           target="_blank"

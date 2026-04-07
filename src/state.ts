@@ -1,6 +1,6 @@
 import { signal } from "@preact/signals";
-import { attempt } from "es-toolkit";
 import { loadProgress, saveProgress } from "./entities/car-skins";
+import { StorageKey, storageGet } from "./storage";
 
 export type IScreen = "howToPlay" | "leaderboard" | "feedback" | "garage" | "preGame" | "none";
 export type IGameStateValue = "start" | "playing" | "paused" | "gameover";
@@ -97,8 +97,7 @@ export const canInstallPwa = signal(false);
 
 // Mute state — initialized from localStorage so the button reflects the
 // persisted preference even before the AudioContext is created.
-const [, _storedMute] = attempt(() => localStorage.getItem("bp:muted"));
-export const audioMuted = signal(_storedMute === "1");
+export const audioMuted = signal(storageGet(StorageKey.Muted) === "1");
 
 export const weather = signal<IWeather>("fog");
 

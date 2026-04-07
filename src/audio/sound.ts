@@ -3,9 +3,9 @@
 // Other sounds are generated procedurally from oscillators + noise.
 
 import { attempt, attemptAsync } from "es-toolkit";
+import { StorageKey, storageGet, storageSet } from "../storage";
 
 const MASTER_VOL = 0.4;
-const STORAGE_KEY = "bp:muted";
 
 let ctx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
@@ -44,8 +44,7 @@ export function initAudio() {
   ctx = created.audioCtx;
   masterGain = created.gain;
 
-  const [, stored] = attempt(() => localStorage.getItem(STORAGE_KEY));
-  muted = stored === "1";
+  muted = storageGet(StorageKey.Muted) === "1";
   if (muted) masterGain.gain.value = 0;
 
   // Kick off engine sample preload (fire-and-forget)
@@ -59,7 +58,7 @@ export function isMuted(): boolean {
 export function toggleMute(): boolean {
   muted = !muted;
   if (masterGain) masterGain.gain.value = muted ? 0 : MASTER_VOL;
-  attempt(() => localStorage.setItem(STORAGE_KEY, muted ? "1" : "0"));
+  storageSet(StorageKey.Muted, muted ? "1" : "0");
   return muted;
 }
 

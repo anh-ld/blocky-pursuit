@@ -15,6 +15,8 @@ import {
   runTileScore,
   runComboScore,
   runCopScore,
+  gameState,
+  screen,
 } from "../state";
 import { haptics } from "../audio/haptics";
 
@@ -49,6 +51,10 @@ export function GameOver() {
   const handleRetry = () => {
     haptics.pickup();
     actions.startGame();
+  };
+  const handleBack = () => {
+    gameState.value = "start";
+    screen.value = "howToPlay";
   };
 
   return (
@@ -127,6 +133,12 @@ export function GameOver() {
           class="w-full py-2 bg-cyan-500/20 text-cyan-300 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30"
         >
           Share Score
+        </button>
+        <button
+          onClick={handleBack}
+          class="w-full py-2 bg-gray-700 text-gray-300 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
+        >
+          Back
         </button>
       </div>
     </div>

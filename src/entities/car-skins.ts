@@ -2,7 +2,7 @@
 // and a small stat tweak. Unlock conditions are evaluated against persisted
 // player progress.
 
-import { attempt } from "es-toolkit";
+import { StorageKey, storageGetJson, storageSetJson } from "../storage";
 
 export type ICarShape = {
   // All values are multipliers of CAR_UNIT (see car-mesh.ts).
@@ -458,7 +458,6 @@ export type IProgress = {
   selectedSkin: string;
 };
 
-const KEY = "bp:progress";
 const DEFAULT_SKIN_ID = "vf3";
 
 const DEFAULT_PROGRESS: IProgress = {
@@ -469,10 +468,7 @@ const DEFAULT_PROGRESS: IProgress = {
 };
 
 export function loadProgress(): IProgress {
-  const [, parsed] = attempt(() => {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Partial<IProgress>) : null;
-  });
+  const parsed = storageGetJson<Partial<IProgress>>(StorageKey.Progress);
   if (!parsed) return { ...DEFAULT_PROGRESS };
   // Migrate any obsolete skin id (e.g. old "redstar" cars) back to default.
   const savedId = parsed.selectedSkin || DEFAULT_SKIN_ID;
@@ -486,7 +482,7 @@ export function loadProgress(): IProgress {
 }
 
 export function saveProgress(p: IProgress) {
-  attempt(() => localStorage.setItem(KEY, JSON.stringify(p)));
+  storageSetJson(StorageKey.Progress, p);
 }
 
 export function isUnlocked(skin: ICarSkin, p: IProgress): boolean {

@@ -1,5 +1,6 @@
 import { attemptAsync } from "es-toolkit";
 import { leaderboardEntries, leaderboardLoading, type ILeaderboardEntry } from "./state";
+import { StorageKey, storageGet, storageSet } from "./storage";
 
 const DEV = import.meta.env.DEV;
 
@@ -42,10 +43,10 @@ function generateAnonName(): string {
 }
 
 export function getPlayerName(): string {
-  let name = localStorage.getItem("blocky-pursuit-name");
+  let name = storageGet(StorageKey.PlayerName);
   if (!name) {
     name = generateAnonName();
-    localStorage.setItem("blocky-pursuit-name", name);
+    storageSet(StorageKey.PlayerName, name);
   }
   return name;
 }

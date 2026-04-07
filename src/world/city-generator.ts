@@ -184,8 +184,28 @@ export class CityGenerator {
     }
   }
 
+  dispose() {
+    for (const [key, chunk] of this.chunks.entries()) {
+      this.unloadChunk(key, chunk);
+    }
+    for (const geo of Object.values(this.geometries)) {
+      geo.dispose();
+    }
+    for (const val of Object.values(this.materials)) {
+      if (Array.isArray(val)) {
+        for (const m of val) m.dispose();
+      } else {
+        val.dispose();
+      }
+    }
+  }
+
   unloadChunk(key: string, chunk: IChunkData) {
     this.scene.remove(chunk.group);
+    // All geometries and materials are shared instances owned by
+    // this.geometries / this.materials — do not dispose them here.
+    // Clearing children releases the Mesh JS objects for GC.
+    chunk.group.clear();
     for (const body of chunk.bodies) {
       this.world.removeBody(body);
     }

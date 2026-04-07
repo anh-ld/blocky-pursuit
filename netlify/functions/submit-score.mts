@@ -1,6 +1,9 @@
 import { getStore } from "@netlify/blobs";
 import type { Context } from "@netlify/functions";
 
+// Generous ceiling — covers hours of perfect play; blocks obviously bogus submissions.
+const MAX_SCORE = 500_000;
+
 type IScoreEntry = {
   name: string;
   score: number;
@@ -15,7 +18,7 @@ export default async function handler(req: Request, _context: Context) {
   try {
     const { name, score } = (await req.json()) as { name: string; score: number };
 
-    if (!name || typeof score !== "number" || score <= 0) {
+    if (!name || !Number.isFinite(score) || score <= 0 || score > MAX_SCORE) {
       return new Response("Invalid payload", { status: 400 });
     }
 

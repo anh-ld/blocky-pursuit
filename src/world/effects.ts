@@ -98,7 +98,7 @@ const CONFETTI_MATS = [
 
 export function initEffects(scene: THREE.Scene) {
   particleScene = scene;
-  // Build the pool once. Meshes start hidden and parented to the scene so
+  // Build pools once. Meshes start hidden and parented to the scene so
   // future emits never touch the scene graph.
   if (particles.length === 0) {
     for (let i = 0; i < POOL_SIZE; i++) {
@@ -106,6 +106,13 @@ export function initEffects(scene: THREE.Scene) {
       mesh.visible = false;
       scene.add(mesh);
       particles.push({ mesh, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0, active: false });
+    }
+    for (let i = 0; i < RING_POOL_SIZE; i++) {
+      const mesh = new THREE.Mesh(RING_GEO, EMP_RING_MAT);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.visible = false;
+      scene.add(mesh);
+      ringPool.push({ mesh, age: 0, life: 0, maxRadius: 0, active: false });
     }
   }
 }
@@ -211,39 +218,43 @@ export function spawnConfetti(x: number, y: number, z: number) {
 }
 
 // --- Expanding rings (EMP, etc.) ---
-type IRing = {
+// Pre-allocated pool: EMP is rare so 4 simultaneous rings is plenty.
+type IRingSlot = {
   mesh: THREE.Mesh;
   age: number;
   life: number;
   maxRadius: number;
+  active: boolean;
 };
-const rings: IRing[] = [];
 const RING_GEO = new THREE.RingGeometry(0.95, 1.0, 48);
 const EMP_RING_MAT = new THREE.MeshBasicMaterial({
   color: 0x66ddff,
   transparent: true,
   side: THREE.DoubleSide,
 });
+const RING_POOL_SIZE = 4;
+const ringPool: IRingSlot[] = [];
 
 export function spawnRing(x: number, y: number, z: number, maxRadius: number, life: number = 0.45) {
-  if (!particleScene) return;
-  const mesh = new THREE.Mesh(RING_GEO, EMP_RING_MAT);
-  mesh.position.set(x, y + 0.1, z);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.scale.set(0.1, 0.1, 0.1);
-  particleScene.add(mesh);
-  rings.push({ mesh, age: 0, life, maxRadius });
+  const slot = ringPool.find((r) => !r.active);
+  if (!slot) return; // pool empty (not yet init) or saturated — acceptable drop
+  slot.mesh.position.set(x, y + 0.1, z);
+  slot.mesh.scale.set(0.1, 0.1, 0.1);
+  slot.mesh.visible = true;
+  slot.age = 0;
+  slot.life = life;
+  slot.maxRadius = maxRadius;
+  slot.active = true;
 }
 
 function updateRings(dt: number) {
-  if (!particleScene) return;
-  for (let i = rings.length - 1; i >= 0; i--) {
-    const r = rings[i];
+  for (const r of ringPool) {
+    if (!r.active) continue;
     r.age += dt;
     const t = r.age / r.life;
     if (t >= 1) {
-      particleScene.remove(r.mesh);
-      rings.splice(i, 1);
+      r.mesh.visible = false;
+      r.active = false;
       continue;
     }
     const scale = r.maxRadius * t;
@@ -265,10 +276,10 @@ export function clearParticles() {
     p.mesh.visible = false;
     p.active = false;
   }
-  if (particleScene) {
-    for (const r of rings) particleScene.remove(r.mesh);
+  for (const r of ringPool) {
+    r.mesh.visible = false;
+    r.active = false;
   }
-  rings.length = 0;
 }
 
 export function updateEffects(dt: number) {

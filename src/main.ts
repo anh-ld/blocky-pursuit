@@ -79,8 +79,10 @@ import {
   addDrownedCops,
   audioMuted,
   weather,
+  type IGameStateValue,
 } from "./state";
 import { fetchLeaderboard, submitScore, getPlayerName } from "./api";
+import { attempt, attemptAsync } from "es-toolkit";
 import {
   MAX_HP,
   HP_REGEN_PER_SEC,
@@ -118,12 +120,18 @@ if (window.matchMedia("(display-mode: standalone)").matches) {
   canInstallPwa.value = false;
 }
 async function installPwa() {
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") canInstallPwa.value = false;
-    deferredPrompt = null;
-  }
+  if (!deferredPrompt) return;
+
+  const p = deferredPrompt;
+  deferredPrompt = null;
+
+  const [err, result] = await attemptAsync(() => {
+    p.prompt();
+    return p.userChoice;
+  });
+
+  if (err) { console.error("[installPwa]", err); return; }
+  if (result!.outcome === "accepted") canInstallPwa.value = false;
 }
 
 // --- Scene Setup ---
@@ -218,7 +226,6 @@ const civilians = new CivilianSystem(ctx);
 const pickups = new PickupSystem(ctx);
 
 // --- Game state machine (just the enum — everything else lives in `run`) ---
-type IGameStateValue = "start" | "playing" | "paused" | "gameover";
 let currentState: IGameStateValue = "start";
 
 // Per-frame scratch for the skid emitter — hoisted to avoid two Vec3
@@ -254,27 +261,32 @@ function togglePause() {
 }
 
 window.addEventListener("keydown", (e) => {
-  if (e.code !== "Space" && e.key !== " ") return;
-  if (currentState === "playing") {
-    e.preventDefault();
-    pauseGame();
-  } else if (currentState === "paused") {
-    e.preventDefault();
-    resumeGame();
-  }
+  attempt(() => {
+    if (e.code !== "Space" && e.key !== " ") return;
+    if (currentState === "playing") {
+      e.preventDefault();
+      pauseGame();
+    } else if (currentState === "paused") {
+      e.preventDefault();
+      resumeGame();
+    }
+  });
 });
 
 // --- Window resize ---
 function resizeRenderer() {
-  const w = gameArea.clientWidth;
-  const h = gameArea.clientHeight;
-  const a = w / h;
-  camera.left = -d * a;
-  camera.right = d * a;
-  camera.top = d;
-  camera.bottom = -d;
-  camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
+  const [err] = attempt(() => {
+    const w = gameArea.clientWidth;
+    const h = gameArea.clientHeight;
+    const a = w / h;
+    camera.left = -d * a;
+    camera.right = d * a;
+    camera.top = d;
+    camera.bottom = -d;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  });
+  if (err) console.error("[resizeRenderer]", err);
 }
 resizeRenderer();
 window.addEventListener("resize", resizeRenderer);
@@ -403,6 +415,14 @@ let lastCallTime: number | null = null;
 let spawnTimersRebased = true;
 
 function tickPlaying(dt: number, timeInSeconds: number) {
+  const [err] = attempt(() => _tickPlayingInner(dt, timeInSeconds));
+  if (err) {
+    console.error("[tickPlaying] fatal loop error", err);
+    attempt(() => gameOver("WRECKED"));
+  }
+}
+
+function _tickPlayingInner(dt: number, timeInSeconds: number) {
   if (!spawnTimersRebased) {
     cops.rebaseTimers(timeInSeconds);
     civilians.rebaseTimers(timeInSeconds);
@@ -584,20 +604,20 @@ function animate(time: number) {
 
 // Pause loop + audio when tab is hidden
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    if (currentState === "playing") {
-      pauseGame();
-    }
-  } else {
-    lastCallTime = null;
-    spawnTimersRebased = false;
-    if (currentState === "playing") {
+  attempt(() => {
+    if (document.hidden) {
+      if (currentState === "playing") pauseGame();
+    } else if (currentState === "playing") {
+      // Guard: only rebase timers and restart audio when actually playing.
+      // Avoids stale-dt resets on gameover/start state tab returns.
+      lastCallTime = null;
+      spawnTimersRebased = false;
       initAudio();
       resumeAudio();
       startEngine();
       startBgm();
     }
-  }
+  });
 });
 
 // Start the loop

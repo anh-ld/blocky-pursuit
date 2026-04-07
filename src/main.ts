@@ -111,11 +111,16 @@ type IBeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 let deferredPrompt: IBeforeInstallPromptEvent | null = null;
+
+// Single controller so all global listeners can be torn down together.
+const listenerController = new AbortController();
+const { signal: listenerSignal } = listenerController;
+
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredPrompt = e as IBeforeInstallPromptEvent;
   canInstallPwa.value = true;
-});
+}, { signal: listenerSignal });
 if (window.matchMedia("(display-mode: standalone)").matches) {
   canInstallPwa.value = false;
 }
@@ -271,7 +276,7 @@ window.addEventListener("keydown", (e) => {
       resumeGame();
     }
   });
-});
+}, { signal: listenerSignal });
 
 // --- Window resize ---
 function resizeRenderer() {
@@ -289,8 +294,8 @@ function resizeRenderer() {
   if (err) console.error("[resizeRenderer]", err);
 }
 resizeRenderer();
-window.addEventListener("resize", resizeRenderer);
-window.addEventListener("orientationchange", () => setTimeout(resizeRenderer, 100));
+window.addEventListener("resize", resizeRenderer, { signal: listenerSignal });
+window.addEventListener("orientationchange", () => setTimeout(resizeRenderer, 100), { signal: listenerSignal });
 
 function startGame() {
   currentState = "playing";
@@ -364,6 +369,15 @@ function gameOver(reason: string = "BUSTED") {
   // Persist progression now (so the panel reads the right values when it
   // appears) but defer publishing the panel-visible state.
   isNewBest.value = saveBest(Math.floor(run.score));
+  // New-best celebration: extra confetti bursts during the death moment so
+  // the player feels the achievement before the panel even appears.
+  if (isNewBest.value) {
+    for (let i = 0; i < 5; i++) {
+      const ox = (Math.random() - 0.5) * 6;
+      const oz = (Math.random() - 0.5) * 6;
+      spawnConfetti(car.body.position.x + ox, car.body.position.y + 1.5, car.body.position.z + oz);
+    }
+  }
   incrementRuns();
   addDrownedCops(run.drownedThisRun);
   runDrowned.value = run.drownedThisRun;
@@ -618,7 +632,7 @@ document.addEventListener("visibilitychange", () => {
       startBgm();
     }
   });
-});
+}, { signal: listenerSignal });
 
 // Start the loop
 requestAnimationFrame(animate);

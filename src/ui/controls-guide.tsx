@@ -12,15 +12,15 @@ export function ControlsGuide() {
 
   return (
     <div class={`self-end mb-4 mr-4 items-stretch gap-2 flex-wrap justify-end ${state === "paused" ? "flex" : "hidden md:flex"}`}>
-      <div class="h-9 px-3 bg-black/50 text-xs font-normal tracking-wide flex items-center">
+      <div class="h-9 px-3 bg-black/60 text-xs font-normal tracking-wide flex items-center">
         <span class="text-gray-300">{name}</span>
       </div>
-      <div class="h-9 px-3 bg-black/50 text-xs font-normal tracking-wide flex items-center">
+      <div class="h-9 px-3 bg-black/60 text-xs font-normal tracking-wide flex items-center">
         <span style={{ color: `#${skin.bodyColor.toString(16).padStart(6, "0")}` }}>
           {skin.name}
         </span>
       </div>
-      <div class="h-9 flex items-stretch bg-black/50 pointer-events-auto">
+      <div class="h-9 flex items-stretch bg-black/60 pointer-events-auto">
         {WEATHERS.map((w) => {
           const active = currentWeather === w.id;
           return (
@@ -39,11 +39,11 @@ export function ControlsGuide() {
       <button
         aria-label={muted ? "Unmute sound" : "Mute sound"}
         onClick={() => actions.toggleSound()}
-        class={`h-9 px-4 bg-black/50 text-sm leading-none cursor-pointer pointer-events-auto hover:text-amber-400 flex items-center justify-center ${muted ? "text-gray-500 line-through" : "text-gray-300"}`}
+        class={`h-9 px-4 bg-black/60 text-sm leading-none cursor-pointer pointer-events-auto hover:text-amber-400 flex items-center justify-center ${muted ? "text-gray-500 line-through" : "text-gray-300"}`}
       >
         ♪
       </button>
-      <div class="h-9 px-4 bg-black/50 text-gray-300 text-xs font-normal tracking-wide hidden md:flex items-center gap-2">
+      <div class="h-9 px-4 bg-black/60 text-gray-300 text-xs font-normal tracking-wide hidden md:flex items-center gap-2">
         <div class="flex gap-1">
           <span class="kbd-sm">A</span>
           <span class="kbd-sm">D</span>

@@ -34,6 +34,9 @@ export const shieldUp = signal(false);
 export const combo = signal(0);
 export const comboTimerRatio = signal(0); // 0..1, fraction of decay window remaining
 export const comboMultiplier = signal(1); // road-tile score multiplier from current combo
+// 0..1, fraction of BUSTED_TIME_THRESHOLD elapsed — drives the warning vignette
+// so the player can see the busted countdown and break free before game over.
+export const bustedProgress = signal(0);
 
 // --- Per-run summary stats (shown on game-over) ---
 export const runDrowned = signal(0);

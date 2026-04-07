@@ -59,7 +59,7 @@ export function GameOver() {
 
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/85 border-2 border-red-500/60 px-6 py-5 w-72 pointer-events-auto flex flex-col items-center gap-3 animate-game-over-in">
+      <div class="bg-black/60 md:bg-black px-4 py-5 w-full h-full md:w-72 md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col items-center gap-3 animate-game-over-in">
         <div class="text-red-400 text-xs font-extrabold uppercase tracking-[0.3em]">
           {reasonText[reason] || reason}
         </div>
@@ -122,24 +122,26 @@ export function GameOver() {
             <span class="text-cyan-300 font-extrabold tabular-nums">{cop.toLocaleString()}</span>
           </div>
         </div>
-        <button
-          onClick={handleRetry}
-          class="w-full mt-2 py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
-        >
-          RETRY
-        </button>
-        <button
-          onClick={shareRun}
-          class="w-full py-2 bg-cyan-500/20 text-cyan-300 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30"
-        >
-          Share Score
-        </button>
-        <button
-          onClick={handleBack}
-          class="w-full py-2 bg-gray-700 text-gray-300 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
-        >
-          Back
-        </button>
+        <div class="mt-auto md:mt-2 flex flex-col gap-2 w-full">
+          <button
+            onClick={handleRetry}
+            class="w-full py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
+          >
+            RETRY
+          </button>
+          <button
+            onClick={shareRun}
+            class="w-full py-2 bg-cyan-500/20 text-cyan-300 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30"
+          >
+            Share Score
+          </button>
+          <button
+            onClick={handleBack}
+            class="w-full py-2 bg-gray-700 text-gray-300 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
+          >
+            Back
+          </button>
+        </div>
       </div>
     </div>
   );

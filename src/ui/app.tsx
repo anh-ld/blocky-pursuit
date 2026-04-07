@@ -1,4 +1,4 @@
-import { gameState, screen } from "../state";
+import { gameState, screen, actions } from "../state";
 import { TopBar } from "./top-bar";
 import { HowToPlay } from "./how-to-play";
 import { Leaderboard } from "./leaderboard";
@@ -9,6 +9,7 @@ import { ControlsGuide } from "./controls-guide";
 import { GameOver } from "./game-over";
 import { Garage } from "./garage";
 import { PreGame } from "./pre-game";
+import { BustedWarning } from "./busted-warning";
 
 export function App() {
   const state = gameState.value;
@@ -25,16 +26,20 @@ export function App() {
         <div
           class={`absolute top-0 left-0 w-full h-full bg-black/60 z-5 pointer-events-none transition-opacity duration-300 ${darken ? "" : "opacity-0"}`}
         />
+        <BustedWarning />
         {showHowToPlay && <HowToPlay />}
         {showGameOver && <GameOver />}
         {showPaused && (
-          <div class="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <div class="bg-black/50 text-gray-300 px-4 py-3 flex flex-col gap-2 text-xs font-normal tracking-wide text-center">
+          <div
+            class="absolute inset-0 z-20 flex items-center justify-center pointer-events-auto cursor-pointer"
+            onClick={() => actions.togglePause()}
+          >
+            <div class="bg-black/60 text-gray-300 px-4 py-3 flex flex-col gap-2 text-xs font-normal tracking-wide text-center">
               <span class="text-amber-400 font-extrabold uppercase tracking-widest">
                 Paused
               </span>
-              <span class="text-gray-400 hidden md:inline">Press SPACE to resume</span>
-              <span class="text-gray-400 md:hidden">Tap play to resume</span>
+              <span class="text-gray-400 hidden md:inline">Press SPACE or tap to resume</span>
+              <span class="text-gray-400 md:hidden">Tap anywhere to resume</span>
             </div>
           </div>
         )}

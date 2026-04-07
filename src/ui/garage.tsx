@@ -22,11 +22,11 @@ export function Garage() {
   };
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/85 border border-amber-500/40 p-4 w-80 pointer-events-auto">
+      <div class="bg-black/60 md:bg-black p-4 w-full h-full md:w-80 md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col">
         <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">
           Garage
         </div>
-        <div class="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">
+        <div class="grid grid-cols-2 gap-2 md:max-h-96 overflow-y-auto py-2">
           {CAR_SKINS.map((s) => {
             const unlocked = isUnlocked(s, progress);
             const isSelected = selectedSkin.value === s.id;
@@ -76,12 +76,14 @@ export function Garage() {
             );
           })}
         </div>
-        <button
-          onClick={back}
-          class="w-full mt-3 py-2 bg-gray-700 text-gray-300 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
-        >
-          BACK
-        </button>
+        <div class="mt-auto">
+          <button
+            onClick={back}
+            class="w-full py-2 bg-gray-700 text-gray-300 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
+          >
+            BACK
+          </button>
+        </div>
       </div>
     </div>
   );

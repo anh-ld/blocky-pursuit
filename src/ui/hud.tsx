@@ -1,4 +1,5 @@
 import { hp, score, level, nitroRemaining, shieldUp, combo, comboTimerRatio, comboMultiplier } from "../state";
+import { COMBO_MILESTONE } from "../constants";
 
 export function Hud() {
   const v = hp.value;
@@ -8,6 +9,10 @@ export function Hud() {
   const c = combo.value;
   const cRatio = comboTimerRatio.value;
   const cMult = comboMultiplier.value;
+  // Tier changes only at milestones (every COMBO_MILESTONE). Using it as a
+  // key forces a remount of the combo node, retriggering the pop animation
+  // at the same instant the milestone sound + popup fire.
+  const comboTier = Math.floor(c / COMBO_MILESTONE);
   return (
     <div class="flex items-center gap-2">
       <div class="w-25 h-3.5 bg-gray-700 relative overflow-hidden">
@@ -28,7 +33,12 @@ export function Hud() {
       {c > 0 && (
         <div class="flex flex-col items-start gap-0.5">
           <div class="flex items-baseline gap-1">
-            <span class="text-pink-400 text-xs font-extrabold tracking-widest">x{c}</span>
+            <span
+              key={`combo-tier-${comboTier}`}
+              class="text-pink-400 text-xs font-extrabold tracking-widest inline-block animate-combo-pop origin-left"
+            >
+              x{c}
+            </span>
             <span class="text-pink-300/70 text-[9px] font-bold tabular-nums">
               {cMult.toFixed(1)}x
             </span>

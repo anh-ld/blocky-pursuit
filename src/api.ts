@@ -50,3 +50,31 @@ export function getPlayerName(): string {
   }
   return name;
 }
+
+// Names shorter than this are collision-prone on a shared leaderboard,
+// so we append a random 4-digit tag to disambiguate them.
+const MIN_UNIQUE_NAME_LEN = 6;
+
+/**
+ * Sanitize and persist a user-edited name. Mirrors the server-side rules in
+ * netlify/functions/submit-score.mts so what the player types is exactly what
+ * the leaderboard will accept (no surprise rejections at submit time).
+ *
+ * - Strips disallowed characters, caps at 20 chars, trims whitespace
+ * - Empty → fresh anonymous name
+ * - Too short (< 6 chars) → append a 4-digit tag so "Al" becomes "Al4821"
+ */
+export function setPlayerName(raw: string): string {
+  const cleaned = raw.slice(0, 20).replace(/[^a-zA-Z0-9 _-]/g, "").trim();
+  let final: string;
+  if (!cleaned) {
+    final = generateAnonName();
+  } else if (cleaned.length < MIN_UNIQUE_NAME_LEN) {
+    const tag = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+    final = `${cleaned}${tag}`.slice(0, 20);
+  } else {
+    final = cleaned;
+  }
+  storageSet(StorageKey.PlayerName, final);
+  return final;
+}

@@ -1,4 +1,4 @@
-import { screen, canInstallPwa, actions, bestScore, totalRuns, copsDrowned, gameState } from "../state";
+import { screen, canInstallPwa, actions, bestScore, totalRuns, copsDrowned } from "../state";
 import { CAR_SKINS, isUnlocked } from "../entities/car-skins";
 import { fetchLeaderboard } from "../api";
 
@@ -27,8 +27,8 @@ export function HowToPlay() {
 
   return (
     <div class="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/50 text-gray-300 px-4 py-3 flex flex-col gap-3 text-xs font-normal tracking-wide">
-        <span class="text-amber-400 font-extrabold uppercase tracking-widest text-center">
+      <div class="bg-black/60 md:bg-black text-gray-300 px-4 py-5 md:py-3 flex flex-col gap-3 text-xs font-normal tracking-wide w-full h-full md:w-auto md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto">
+        <span class="text-amber-400 font-extrabold uppercase tracking-widest md:text-center">
           How to Play
         </span>
         <div class="flex items-center gap-2">
@@ -90,46 +90,48 @@ export function HowToPlay() {
           </div>
         )}
 
-        <button
-          onClick={openGarage}
-          class="w-full mt-1 py-2 bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors pointer-events-auto"
-        >
-          Garage
-        </button>
-        <button
-          onClick={openLeaderboard}
-          class="w-full mt-1 py-2 bg-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30 transition-colors pointer-events-auto"
-        >
-          Leaderboard
-        </button>
-        <button
-          onClick={openFeedback}
-          class="w-full mt-1 py-2 bg-violet-500/20 text-violet-400 text-xs font-bold uppercase tracking-wider border border-violet-500/30 cursor-pointer hover:bg-violet-500/30 transition-colors pointer-events-auto"
-        >
-          Feedback
-        </button>
-        {canInstallPwa.value && (
+        <div class="mt-auto md:mt-0 flex flex-col gap-2 sticky md:static bottom-0 -mx-4 md:mx-0 px-4 md:px-0">
           <button
-            onClick={() => actions.installPwa()}
-            class="flex md:!hidden items-center justify-center gap-1.5 w-full mt-1 py-2 bg-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors pointer-events-auto"
+            onClick={openGarage}
+            class="w-full py-2 bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors pointer-events-auto"
           >
-            📲 Install App
+            Garage
           </button>
-        )}
-        <button
-          onClick={() => actions.startGame()}
-          class="w-full mt-1 py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5 pointer-events-auto"
-        >
-          START
-        </button>
-        <a
-          href="https://github.com/anh-ld/blocky-pursuit"
-          target="_blank"
-          rel="noopener"
-          class="text-center text-gray-500 text-[10px] mt-1 hover:text-amber-400 transition-colors pointer-events-auto"
-        >
-          ⭐ Enjoy it? Star on GitHub!
-        </a>
+          <button
+            onClick={openLeaderboard}
+            class="w-full py-2 bg-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30 transition-colors pointer-events-auto"
+          >
+            Leaderboard
+          </button>
+          <button
+            onClick={openFeedback}
+            class="w-full py-2 bg-violet-500/20 text-violet-400 text-xs font-bold uppercase tracking-wider border border-violet-500/30 cursor-pointer hover:bg-violet-500/30 transition-colors pointer-events-auto"
+          >
+            Feedback
+          </button>
+          {canInstallPwa.value && (
+            <button
+              onClick={() => actions.installPwa()}
+              class="flex md:!hidden items-center justify-center gap-1.5 w-full py-2 bg-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors pointer-events-auto"
+            >
+              📲 Install App
+            </button>
+          )}
+          <button
+            onClick={() => actions.startGame()}
+            class="w-full py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5 pointer-events-auto"
+          >
+            START
+          </button>
+          <a
+            href="https://github.com/anh-ld/blocky-pursuit"
+            target="_blank"
+            rel="noopener"
+            class="text-center text-gray-500 text-[10px] mt-1 hover:text-amber-400 transition-colors pointer-events-auto"
+          >
+            ⭐ Enjoy it? Star on GitHub!
+          </a>
+        </div>
       </div>
     </div>
   );

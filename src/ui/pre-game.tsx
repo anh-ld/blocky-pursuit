@@ -13,6 +13,7 @@ import {
 import { CAR_SKINS, isUnlocked, specPercent } from "../entities/car-skins";
 import { WEATHERS, getWeatherSummary } from "../world/weather";
 import { CarPreview } from "./car-preview";
+import { setPlayerName } from "../api";
 
 export function PreGame() {
   const progress = {
@@ -29,13 +30,13 @@ export function PreGame() {
 
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/90 border border-amber-500/40 p-4 w-80 pointer-events-auto flex flex-col gap-3">
+      <div class="bg-black/60 md:bg-black p-4 w-full h-full md:w-80 md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col gap-3">
         <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest text-center">
           Choose Your Ride
         </div>
 
         {/* Car grid */}
-        <div class="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto">
+        <div class="grid grid-cols-2 gap-2 md:max-h-96 overflow-y-auto py-2">
           {CAR_SKINS.map((s) => {
             const unlocked = isUnlocked(s, progress);
             const isSelected = selectedSkin.value === s.id;
@@ -90,7 +91,7 @@ export function PreGame() {
               {getWeatherSummary(currentWeather)}
             </span>
           </div>
-          <div class="flex items-stretch bg-black/50 h-9">
+          <div class="flex items-stretch bg-black/60 h-9">
             {WEATHERS.map((w) => {
               const active = currentWeather === w.id;
               return (
@@ -111,7 +112,7 @@ export function PreGame() {
         </div>
 
         {/* Sound row */}
-        <div class="flex items-center justify-between bg-black/50 px-3 h-9">
+        <div class="flex items-center justify-between px-3 h-9">
           <span class="text-gray-500 text-[10px] uppercase tracking-widest">Sound</span>
           <button
             aria-label={muted ? "Unmute sound" : "Mute sound"}
@@ -124,27 +125,44 @@ export function PreGame() {
           </button>
         </div>
 
-        {/* Player row */}
-        <div class="flex items-center justify-between bg-black/50 px-3 h-9">
+        {/* Player row — editable, syncs to localStorage on blur/Enter */}
+        <div class="flex items-center justify-between px-3 h-9">
           <span class="text-gray-500 text-[10px] uppercase tracking-widest">Player</span>
-          <span class="text-gray-300 text-xs font-bold truncate ml-2">{playerName.value}</span>
+          <input
+            type="text"
+            value={playerName.value}
+            maxLength={20}
+            spellcheck={false}
+            aria-label="Player name"
+            onBlur={(e) => {
+              const next = setPlayerName((e.target as HTMLInputElement).value);
+              playerName.value = next;
+              (e.target as HTMLInputElement).value = next;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            class="ml-2 bg-transparent text-right text-gray-300 text-xs font-bold truncate outline-none border-b border-gray-700 focus:border-amber-400 w-40"
+          />
         </div>
 
-        {/* Play button */}
-        <button
-          onClick={() => actions.beginRun()}
-          class="w-full py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
-        >
-          PLAY
-        </button>
+        <div class="mt-auto md:mt-0 flex flex-col gap-2 sticky md:static bottom-0 -mx-4 md:mx-0 px-4 md:px-0">
+          {/* Play button */}
+          <button
+            onClick={() => actions.beginRun()}
+            class="w-full py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
+          >
+            PLAY
+          </button>
 
-        {/* Back button — matches garage / leaderboard / feedback */}
-        <button
-          onClick={back}
-          class="w-full py-2 bg-gray-700 text-gray-300 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
-        >
-          BACK
-        </button>
+          {/* Back button — matches garage / leaderboard / feedback */}
+          <button
+            onClick={back}
+            class="w-full py-2 bg-gray-700 text-gray-300 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
+          >
+            BACK
+          </button>
+        </div>
       </div>
     </div>
   );

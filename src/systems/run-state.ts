@@ -3,7 +3,7 @@ import type * as CANNON from "cannon-es";
 import type { Car } from "../entities/car";
 import { isRoad, TILE_SIZE } from "../world/terrain";
 import { LEVEL_DEFS } from "./leveling";
-import { MAX_HP, SCORE_BASE_TILE, COMBO_MULT_PER_COUNT, COMBO_MULT_MAX } from "../constants";
+import { MAX_HP, SCORE_BASE_TILE, COMBO_MULT_PER_COUNT, COMBO_MULT_MAX, BUSTED_TIME_THRESHOLD } from "../constants";
 
 // Bootstrap context shared by every system constructor. Held for the
 // lifetime of the app — these references never change after init.
@@ -21,6 +21,7 @@ import {
   combo,
   comboTimerRatio,
   comboMultiplier,
+  bustedProgress,
 } from "../state";
 
 export const COMBO_DECAY = 3.0;
@@ -153,5 +154,6 @@ export class RunState {
     combo.value = this.comboCount;
     comboTimerRatio.value = Math.max(0, this.comboTimer / COMBO_DECAY);
     comboMultiplier.value = Math.min(1 + this.comboCount * COMBO_MULT_PER_COUNT, COMBO_MULT_MAX);
+    bustedProgress.value = Math.min(1, this.bustedTimer / BUSTED_TIME_THRESHOLD);
   }
 }

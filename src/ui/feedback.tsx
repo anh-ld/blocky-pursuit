@@ -7,11 +7,11 @@ export function Feedback() {
 
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center">
-      <div class="bg-black/80 border border-violet-500/40 p-5 w-64 pointer-events-auto">
+      <div class="bg-black/60 md:bg-black p-5 w-full h-full md:w-64 md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col">
         <div class="text-violet-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">
           Feedback
         </div>
-        <form name="feedback" method="POST" action="/" data-netlify="true" class="flex flex-col gap-2">
+        <form name="feedback" method="POST" action="/" data-netlify="true" class="flex flex-col gap-2 mb-2">
           <input type="hidden" name="form-name" value="feedback" />
           <textarea
             name="message"
@@ -26,12 +26,14 @@ export function Feedback() {
             Send
           </button>
         </form>
-        <button
-          onClick={back}
-          class="btn mt-3 bg-gray-700 text-gray-300 text-xs py-2 hover:bg-gray-600 hover:translate-y-0.5 active:translate-y-1"
-        >
-          BACK
-        </button>
+        <div class="mt-auto">
+          <button
+            onClick={back}
+            class="btn w-full bg-gray-700 text-gray-300 text-xs py-2 font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
+          >
+            BACK
+          </button>
+        </div>
       </div>
     </div>
   );

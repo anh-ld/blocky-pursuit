@@ -37,7 +37,7 @@ const NOUNS = ["Racer","Driver","Rider","Drifter","Runner","Chaser","Outlaw","Ba
 function generateAnonName(): string {
   const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
   const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-  const num = Math.floor(Math.random() * 100);
+  const num = Math.floor(Math.random() * 10000);
   return `${adj}${noun}${num}`;
 }
 

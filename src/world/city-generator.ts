@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
-import { CHUNK_SIZE, TILE_SIZE, TILES_PER_CHUNK, Zone, pseudoRandom, getZone, isRoad, isWater } from "./terrain";
-import { createMaterials, createGeometries, type IMaterials, type IGeometries } from "./materials";
+import { CHUNK_SIZE, TILE_SIZE, TILES_PER_CHUNK, Zone, pseudoRandom, getZone, isRoad, isWater, isShore, isDeepWater } from "./terrain";
+import { createMaterials, createGeometries, tickWaterMaterial, type IMaterials, type IGeometries } from "./materials";
 import { placeDowntown } from "./zones/downtown";
 import { placeSuburbs } from "./zones/suburbs";
-import { placeNature, placeWaterDecor } from "./zones/nature";
+import { placeNature, placeWaterDecor, placeShoreDecor } from "./zones/nature";
 
 export { isRoad } from "./terrain";
 
@@ -27,6 +27,11 @@ export class CityGenerator {
     this.chunks = new Map();
     this.materials = createMaterials();
     this.geometries = createGeometries();
+  }
+
+  /** Animate shared materials (water shimmer). Called every frame from main. */
+  tick(timeSec: number) {
+    tickWaterMaterial(this.materials, timeSec);
   }
 
   update(playerPosition: THREE.Vector3) {
@@ -79,21 +84,32 @@ export class CityGenerator {
         const zone = getZone(globalTileX, globalTileZ);
         const isRoadTile = isRoad(globalTileX, globalTileZ);
         const isWaterTile = !isRoadTile && isWater(globalTileX, globalTileZ);
+        const isDeep = isWaterTile && isDeepWater(globalTileX, globalTileZ);
+        const isShoreTile = !isRoadTile && !isWaterTile && isShore(globalTileX, globalTileZ);
 
-        // Ground tile
+        // Ground tile — pick material based on zone + role
         let groundMat = this.materials.grass;
+        let tileY = 0.01;
         if (isRoadTile) {
           groundMat = this.materials.road;
         } else if (isWaterTile) {
-          groundMat = this.materials.water;
+          // Sunken so water reads as below the land surface — visible depth.
+          groundMat = isDeep ? this.materials.waterDeep : this.materials.water;
+          tileY = -0.18;
+        } else if (isShoreTile) {
+          groundMat = this.materials.sand;
         } else if (zone === Zone.NATURE) {
-          groundMat = pseudoRandom(globalTileX, globalTileZ, 50) > 0.5
-            ? this.materials.grass
-            : this.materials.grassDark;
+          // Ground variation: grass shades + occasional sand/dirt patches.
+          const v = pseudoRandom(globalTileX, globalTileZ, 50);
+          if (v < 0.08) groundMat = this.materials.dirt;
+          else if (v < 0.16) groundMat = this.materials.sand;
+          else if (v < 0.42) groundMat = this.materials.grassDark;
+          else if (v < 0.72) groundMat = this.materials.grass;
+          else groundMat = this.materials.grassLight;
         }
 
         const tileMesh = new THREE.Mesh(this.geometries.tile, groundMat);
-        tileMesh.position.set(worldX, 0.01, worldZ);
+        tileMesh.position.set(worldX, tileY, worldZ);
         tileMesh.rotation.x = -Math.PI / 2;
         tileMesh.receiveShadow = true;
         chunk.group.add(tileMesh);
@@ -101,6 +117,12 @@ export class CityGenerator {
         // Water
         if (isWaterTile) {
           placeWaterDecor(chunk, this.materials, this.geometries, globalTileX, globalTileZ, worldX, worldZ);
+          continue;
+        }
+
+        // Shore: sand tile + reeds/cattails along the water edge
+        if (isShoreTile) {
+          placeShoreDecor(chunk, this.materials, this.geometries, globalTileX, globalTileZ, worldX, worldZ);
           continue;
         }
 

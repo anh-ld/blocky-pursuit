@@ -548,6 +548,7 @@ function animate(time: number) {
   updateEffects(dt);
   updateSkids(dt);
   updateTimeSlow(dt);
+  cityGenerator.tick(timeInSeconds);
   updateRain(rain, dt, car.mesh.position.x, car.mesh.position.z);
   updateSnow(snow, dt, car.mesh.position.x, car.mesh.position.z);
   if (currentState === "playing") updatePopups(dt);

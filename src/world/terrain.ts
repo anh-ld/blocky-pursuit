@@ -48,6 +48,37 @@ export function isWater(globalTileX: number, globalTileZ: number): boolean {
   return false;
 }
 
+/**
+ * Deep-water variant — interior pixels of a body of water, away from the
+ * shore. Used to draw a darker, more saturated tile so rivers/lakes read as
+ * having depth instead of being a flat blue rectangle. Does not affect
+ * gameplay (drown logic still uses isWater).
+ */
+export function isDeepWater(globalTileX: number, globalTileZ: number): boolean {
+  if (!isWater(globalTileX, globalTileZ)) return false;
+  return (
+    isWater(globalTileX + 1, globalTileZ) &&
+    isWater(globalTileX - 1, globalTileZ) &&
+    isWater(globalTileX, globalTileZ + 1) &&
+    isWater(globalTileX, globalTileZ - 1)
+  );
+}
+
+/**
+ * Shore = land tile in nature that touches a water tile. Drawn as sand and
+ * decorated with reeds/cattails to soften the water-to-grass seam.
+ */
+export function isShore(globalTileX: number, globalTileZ: number): boolean {
+  if (isWater(globalTileX, globalTileZ)) return false;
+  if (getZone(globalTileX, globalTileZ) !== Zone.NATURE) return false;
+  return (
+    isWater(globalTileX + 1, globalTileZ) ||
+    isWater(globalTileX - 1, globalTileZ) ||
+    isWater(globalTileX, globalTileZ + 1) ||
+    isWater(globalTileX, globalTileZ - 1)
+  );
+}
+
 // Periodic roadblocks: break infinite straight roads every ~40 tiles
 // Returns true if this tile is a blocked gap in an otherwise straight road
 function isRoadBlocked(globalTileX: number, globalTileZ: number): boolean {

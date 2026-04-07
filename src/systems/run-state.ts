@@ -22,7 +22,13 @@ import {
   comboTimerRatio,
   comboMultiplier,
   bustedProgress,
+  scoreMultRemaining,
+  timeWarpRemaining,
+  magnetRemaining,
+  ghostRemaining,
+  tankRemaining,
 } from "../state";
+import { SCORE_MULT_VALUE } from "../constants";
 
 export const COMBO_DECAY = 3.0;
 
@@ -38,6 +44,11 @@ export class RunState {
   // Buffs
   nitroTimer = 0;
   shieldActive = false;
+  scoreMultTimer = 0;
+  timeWarpTimer = 0;
+  magnetTimer = 0;
+  ghostTimer = 0;
+  tankTimer = 0;
 
   // Score/road tracking
   lastScoreTileX = -9999;
@@ -83,7 +94,12 @@ export class RunState {
     return prev;
   }
 
-  /** Award road-tile score with speed + combo multipliers. No-op if same tile. */
+  /** Active score multiplier from the doubleScore pickup buff (1 when off). */
+  get activeScoreMult(): number {
+    return this.scoreMultTimer > 0 ? SCORE_MULT_VALUE : 1;
+  }
+
+  /** Award road-tile score with speed + combo + buff multipliers. No-op if same tile. */
   scoreRoadTile(car: Car) {
     const tx = Math.floor(car.body.position.x / TILE_SIZE);
     const tz = Math.floor(car.body.position.z / TILE_SIZE);
@@ -92,7 +108,7 @@ export class RunState {
       const speedRatio = Math.min(car.body.velocity.length() / car.maxSpeed, 1);
       const speedMult = 1 + speedRatio;
       const comboMult = Math.min(1 + this.comboCount * COMBO_MULT_PER_COUNT, COMBO_MULT_MAX);
-      const earned = SCORE_BASE_TILE * speedMult * comboMult;
+      const earned = SCORE_BASE_TILE * speedMult * comboMult * this.activeScoreMult;
       this.score += earned;
       this.tileScore += earned;
     }
@@ -125,6 +141,11 @@ export class RunState {
     this.survivalTime = 0;
     this.nitroTimer = 0;
     this.shieldActive = false;
+    this.scoreMultTimer = 0;
+    this.timeWarpTimer = 0;
+    this.magnetTimer = 0;
+    this.ghostTimer = 0;
+    this.tankTimer = 0;
     this.lastScoreTileX = -9999;
     this.lastScoreTileZ = -9999;
     this.speedStreakTimer = 0;
@@ -155,5 +176,10 @@ export class RunState {
     comboTimerRatio.value = Math.max(0, this.comboTimer / COMBO_DECAY);
     comboMultiplier.value = Math.min(1 + this.comboCount * COMBO_MULT_PER_COUNT, COMBO_MULT_MAX);
     bustedProgress.value = Math.min(1, this.bustedTimer / BUSTED_TIME_THRESHOLD);
+    scoreMultRemaining.value = this.scoreMultTimer;
+    timeWarpRemaining.value = this.timeWarpTimer;
+    magnetRemaining.value = this.magnetTimer;
+    ghostRemaining.value = this.ghostTimer;
+    tankRemaining.value = this.tankTimer;
   }
 }

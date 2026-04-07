@@ -26,7 +26,7 @@ export function Garage() {
         <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">
           Garage
         </div>
-        <div class="grid grid-cols-2 gap-2 md:max-h-96 overflow-y-auto py-2">
+        <div class="grid grid-cols-2 gap-2 md:max-h-96 overflow-y-auto py-2 -mx-4 px-4">
           {CAR_SKINS.map((s) => {
             const unlocked = isUnlocked(s, progress);
             const isSelected = selectedSkin.value === s.id;

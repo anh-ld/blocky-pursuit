@@ -31,6 +31,12 @@ export const survivalTime = signal(0);
 export const gameOverReason = signal("BUSTED");
 export const nitroRemaining = signal(0);
 export const shieldUp = signal(false);
+// New buff timers — non-zero values display a HUD chip while active.
+export const scoreMultRemaining = signal(0);
+export const timeWarpRemaining = signal(0);
+export const magnetRemaining = signal(0);
+export const ghostRemaining = signal(0);
+export const tankRemaining = signal(0);
 export const combo = signal(0);
 export const comboTimerRatio = signal(0); // 0..1, fraction of decay window remaining
 export const comboMultiplier = signal(1); // road-tile score multiplier from current combo

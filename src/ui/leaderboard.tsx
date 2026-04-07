@@ -47,7 +47,7 @@ export function Leaderboard() {
         <div class="mt-auto">
           <button
             onClick={back}
-            class="btn w-full bg-gray-700 text-gray-300 text-xs py-2 font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
+            class="btn bg-gray-700 text-gray-300 text-xs py-2 tracking-wider hover:bg-gray-600"
           >
             BACK
           </button>

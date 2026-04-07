@@ -24,13 +24,29 @@ import {
   NITRO_SPEED_MULT,
   EMP_RING_RADIUS,
   SCORE_EMP_KILL,
+  MAX_HP,
+  REPAIR_HEAL,
+  SCORE_MULT_DURATION,
+  TIME_WARP_DURATION,
+  MAGNET_DURATION,
+  MAGNET_RANGE_MULT,
+  MAGNET_PULL_MULT,
+  GHOST_DURATION,
+  TANK_DURATION,
 } from "../constants";
 
-// Weighted spawn — EMP is the rarest because it's the strongest
+// Weighted spawn — rarer = stronger. Defensive (shield/repair/ghost),
+// offensive (emp/tank), score (doubleScore), utility (nitro/magnet/timeWarp).
 const PICKUP_WEIGHTS: { kind: IPickupKind; weight: number }[] = [
-  { kind: "nitro", weight: 50 },
-  { kind: "shield", weight: 35 },
-  { kind: "emp", weight: 15 },
+  { kind: "nitro", weight: 25 },
+  { kind: "shield", weight: 20 },
+  { kind: "emp", weight: 10 },
+  { kind: "repair", weight: 25 },
+  { kind: "doubleScore", weight: 10 },
+  { kind: "timeWarp", weight: 15 },
+  { kind: "magnet", weight: 20 },
+  { kind: "ghost", weight: 10 },
+  { kind: "tank", weight: 10 },
 ];
 
 function pickPickupKind(): IPickupKind {
@@ -113,9 +129,13 @@ export class PickupSystem {
       }
 
       // Magnetism: when close (but not yet collected), pull the pickup
-      // toward the car so tight roads don't feel frustrating.
-      if (dist < PICKUP_MAGNET_RANGE && dist > PICKUP_COLLECT_DIST) {
-        const pull = PICKUP_MAGNET_PULL * dt; // units/sec toward player, scaled by dt
+      // toward the car so tight roads don't feel frustrating. The Magnet
+      // pickup buff temporarily extends both range and pull strength.
+      const mag = run.magnetTimer > 0 ? MAGNET_RANGE_MULT : 1;
+      const pullMul = run.magnetTimer > 0 ? MAGNET_PULL_MULT : 1;
+      const magnetRange = PICKUP_MAGNET_RANGE * mag;
+      if (dist < magnetRange && dist > PICKUP_COLLECT_DIST) {
+        const pull = PICKUP_MAGNET_PULL * pullMul * dt;
         p.position.x -= (dxp / dist) * pull;
         p.position.z -= (dzp / dist) * pull;
         p.mesh.position.x = p.position.x;
@@ -154,16 +174,66 @@ export class PickupSystem {
             spawnPopup(car.body.position.x, 6.5, car.body.position.z, "Wipes nearby cops", "#ffffff", 2.4, 12);
           }
           triggerShake(0.6);
+        } else if (p.kind === "repair") {
+          const before = run.hp;
+          run.hp = Math.min(MAX_HP, run.hp + REPAIR_HEAL);
+          const healed = Math.round(run.hp - before);
+          spawnPopup(p.position.x, 2, p.position.z, `+${healed} HP`, "#66ff77");
+          if (shouldShowPickupTip("repair")) {
+            markPickupTipSeen("repair");
+            spawnPopup(p.position.x, 3.5, p.position.z, "Patches up your ride", "#ffffff", 2.4, 12);
+          }
+        } else if (p.kind === "doubleScore") {
+          run.scoreMultTimer = SCORE_MULT_DURATION;
+          spawnPopup(p.position.x, 2, p.position.z, "💰 2X SCORE", "#ffdd44");
+          if (shouldShowPickupTip("doubleScore")) {
+            markPickupTipSeen("doubleScore");
+            spawnPopup(p.position.x, 3.5, p.position.z, "Double points for 8s", "#ffffff", 2.4, 14);
+          }
+        } else if (p.kind === "timeWarp") {
+          run.timeWarpTimer = TIME_WARP_DURATION;
+          spawnPopup(p.position.x, 2, p.position.z, "⏳ TIME WARP", "#66aaff");
+          if (shouldShowPickupTip("timeWarp")) {
+            markPickupTipSeen("timeWarp");
+            spawnPopup(p.position.x, 3.5, p.position.z, "Cops slowed for 5s", "#ffffff", 2.4, 14);
+          }
+        } else if (p.kind === "magnet") {
+          run.magnetTimer = MAGNET_DURATION;
+          spawnPopup(p.position.x, 2, p.position.z, "🧲 MAGNET", "#ff5555");
+          if (shouldShowPickupTip("magnet")) {
+            markPickupTipSeen("magnet");
+            spawnPopup(p.position.x, 3.5, p.position.z, "Pickups fly to you", "#ffffff", 2.4, 14);
+          }
+        } else if (p.kind === "ghost") {
+          run.ghostTimer = GHOST_DURATION;
+          spawnPopup(p.position.x, 2, p.position.z, "👻 GHOST", "#ddddff");
+          if (shouldShowPickupTip("ghost")) {
+            markPickupTipSeen("ghost");
+            spawnPopup(p.position.x, 3.5, p.position.z, "Phase through cops 3s", "#ffffff", 2.4, 14);
+          }
+        } else if (p.kind === "tank") {
+          run.tankTimer = TANK_DURATION;
+          spawnPopup(p.position.x, 2, p.position.z, "💢 TANK", "#ff6666");
+          if (shouldShowPickupTip("tank")) {
+            markPickupTipSeen("tank");
+            spawnPopup(p.position.x, 3.5, p.position.z, "Ram cops to wreck them", "#ffffff", 2.4, 14);
+          }
         }
         p.destroy();
         this.pickups.splice(i, 1);
       }
     }
 
-    // Tick down nitro
+    // Tick down all timed buffs. Nitro is special-cased because it has a
+    // car-side side effect (multiplier reset) when the timer hits zero.
     if (run.nitroTimer > 0) {
       run.nitroTimer = Math.max(0, run.nitroTimer - dt);
       if (run.nitroTimer === 0) car.setNitroMultiplier(1);
     }
+    if (run.scoreMultTimer > 0) run.scoreMultTimer = Math.max(0, run.scoreMultTimer - dt);
+    if (run.timeWarpTimer > 0) run.timeWarpTimer = Math.max(0, run.timeWarpTimer - dt);
+    if (run.magnetTimer > 0) run.magnetTimer = Math.max(0, run.magnetTimer - dt);
+    if (run.ghostTimer > 0) run.ghostTimer = Math.max(0, run.ghostTimer - dt);
+    if (run.tankTimer > 0) run.tankTimer = Math.max(0, run.tankTimer - dt);
   }
 }

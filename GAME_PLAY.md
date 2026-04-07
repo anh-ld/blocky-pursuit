@@ -119,11 +119,18 @@ where `speedRatio = velocity / maxSpeed` (clamped 0–1) and
 - Combo decays after **3 s** of no new near-miss (`COMBO_DECAY`).
 - Combo multiplier caps at **3.0×** (combo of 20).
 - Every 5 combos → floating `xN` popup + rising-pitch ding (the
-  "combo ladder" — pitch climbs 2 semitones per tier) + haptic buzz.
+  "combo ladder" — pitch climbs 2 semitones per tier) + haptic buzz +
+  **HUD combo number scale-pops** (CSS keyframe re-triggered via tier key).
 - Every 10 combos → **time-slow** + screen flash + extra shake.
 - The **first** combo of a player's career also spawns a tutorial popup
   ("COMBO! Skim past cops — don't touch!"), persisted via `bp:tutorial`.
   (`src/systems/cop-system.ts:96`, `src/systems/tutorial.ts`)
+
+### Score multiplier (2× pickup)
+While the **2X SCORE** pickup buff is active (8 s), every score source —
+tile points, near-miss combo bonuses, drowned/EMP/tank cop kills — is
+multiplied by **2**. Stacks with the combo multiplier, so a `x12` combo
+during 2× yields `1.5 × 2 × 2.2 × 2 = 13.2` points per tile.
 
 ---
 
@@ -210,17 +217,47 @@ There is no other way to kill a cop.
 
 Spawned on a road tile near the player every **6 s**, max **4** alive.
 Despawn at 80 units away or after **25 s**. Magnetism pulls them in within
-6 units.
+**6** units (extended by the Magnet pickup — see below).
 
-| Kind | Weight | Effect | Duration |
-|---|---|---|---|
-| ⚡ **Nitro** | 50 | Top-speed × **1.55** | **3 s** |
-| 🛡 **Shield** | 35 | Absorbs the next cop hit | until consumed |
-| 💥 **EMP** | 15 | AOE radius **30** — destroys all cops in range | instant |
+Each kind has a **distinct silhouette** so the player can read it at a
+glance instead of decoding only the color. The first time the player ever
+collects each kind, a tutorial popup explains it (persisted via
+`bp:tutorial`).
 
-Nitro and weather modifiers stack. Shield absorbs one hit and flashes
-confetti instead of damage. EMP awards `+30` score and `+10` HP per cop it
-destroys. (`src/systems/pickup-system.ts:12`)
+| Kind | Shape | Color | Weight | Effect | Duration |
+|---|---|---|---|---|---|
+| ⚡ **Nitro** | Cone | Orange | 25 | Top-speed × **1.55** | **3 s** |
+| 🛡 **Shield** | Icosahedron | Cyan | 20 | Absorbs the next cop hit | until consumed |
+| 💥 **EMP** | Flat torus | Magenta | 10 | AOE radius **30** — destroys all cops in range, +30 / +10 HP per kill | instant |
+| ➕ **Repair** | Greek cross | Green | 25 | **+40 HP** instant heal (clamped to 100) | instant |
+| 💰 **2X Score** | Stacked cubes | Gold | 10 | All score (tile + combo + cop kills) × **2** | **8 s** |
+| ⏳ **Time Warp** | Octahedron | Sky blue | 15 | Cops capped to **50%** of their max speed | **5 s** |
+| 🧲 **Magnet** | 3/4 torus arc | Red | 20 | Pickup magnet **range × 3** and **pull × 3** | **8 s** |
+| 👻 **Ghost** | Tapered cylinder, translucent | White | 10 | Intangible to cops — no damage, no busted timer, no shield consumed | **3 s** |
+| 💢 **Tank** | Tetrahedron | Dark red | 10 | Ramming a cop **wrecks it instead of damaging you** (+25 score · +10 HP per kill) | **5 s** |
+
+Total spawn weight: **145**. Defensive (Shield + Repair + Ghost = 55),
+offensive (EMP + Tank = 20), score (2X = 10), utility (Nitro + Magnet +
+Time Warp = 60).
+
+- **Nitro** stacks with weather modifiers via `setNitroMultiplier()`.
+- **Shield** absorbs one hit and flashes confetti instead of damage.
+- **EMP** awards `+30 score`, `+10 HP` and `+1` to the persistent
+  `copsDrowned` counter per cop wiped.
+- **Repair** heals the actual delta (so a popup `+12 HP` reads correctly
+  if the player was at 88).
+- **2X Score** is the only score amplifier in the game; it stacks
+  multiplicatively with the combo multiplier.
+- **Time Warp** doesn't kill cops, just slows them — letting the player
+  weave through a swarm at full speed for combo gold.
+- **Magnet** triples both the radius at which pickups start being pulled
+  AND the pull strength — chain pickups together into a "loot run".
+- **Ghost** also disables the busted check (intangible cops can't actually
+  hold the player in place), so it's the only escape from a 4-cop pile-up.
+- **Tank** wrecks count toward `copsDrowned` and award the same +10 HP as
+  drowning, but use `TANK_KILL_SCORE = 25` instead of 30.
+
+(`src/entities/pickup.ts`, `src/systems/pickup-system.ts`)
 
 ---
 
@@ -271,12 +308,22 @@ HP is capped at **100**. (`src/main.ts:386`)
   continuous. The "busted timer" decays at 2× when you're moving or alone,
   so brief stalls are forgiven. (`src/main.ts:401`)
 
+### Busted warning
+While the busted timer is filling, a **pulsing red radial vignette** + a
+`Busted in Xs — MOVE!` countdown render across the play area. The opacity
+ramps with `bustedProgress = bustedTimer / 3s`, so the player sees the
+threat building and can break free instead of dying silently.
+(`src/ui/busted-warning.tsx`)
+
 ### Death moment
 On any fail condition, gameplay halts immediately but the game-over panel
 is delayed by **700 ms** (`DEATH_MOMENT_MS`). During that window the game
 plays a strong screen flash, big shake, confetti + double sparks burst at
 the wreck, and (for `DROWNED`) a splash. Audio loops cut and the game-over
-sting + death haptic fire. The panel then pops in with the run summary.
+sting + death haptic fire. **If the run is a new best**, an extra 5
+confetti bursts spawn at randomized offsets around the wreck so the
+achievement lands *before* the panel even appears. The panel then pops in
+with the run summary.
 
 ---
 
@@ -286,9 +333,18 @@ Top bar shows:
 - **HP bar** (green > 60, yellow > 30, red ≤ 30)
 - **SCORE** (integer)
 - **LV** (current level)
-- **Combo** `xN` + `N.N×` multiplier + decay bar (only when combo > 0)
+- **Combo** `xN` (with scale-pop on every milestone of 5) + `N.N×`
+  multiplier + decay bar (only when combo > 0)
 - **⚡ Nitro** seconds remaining (only when active)
 - **🛡 Shield** icon (only when active)
+- **💰 2x Score** seconds remaining (only when active)
+- **⏳ Time Warp** seconds remaining (only when active)
+- **🧲 Magnet** seconds remaining (only when active)
+- **👻 Ghost** seconds remaining (only when active)
+- **💢 Tank** seconds remaining (only when active)
+
+In the play area itself:
+- **Busted warning** vignette + countdown text — see §11.
 
 Cops within 40 units trigger a siren whose volume scales with how close
 the nearest one is. (`src/main.ts:426`)
@@ -315,8 +371,14 @@ Score is submitted to the Netlify leaderboard function on game over.
 |---|---|
 | `bp:progress` | `best`, `totalRuns`, `copsDrowned`, `selectedSkin` |
 | `bp:muted` | mute state |
-| `bp:tutorial` | one-time onboarding flags (e.g. `seenComboTip`) |
-| `blocky-pursuit-name` | auto-generated player name (e.g. `TurboPhantom42`) |
+| `bp:tutorial` | one-time onboarding flags (`seenComboTip` + per-pickup `seenXTip` for all 9 kinds) |
+| `blocky-pursuit-name` | player name (auto-generated on first run, **editable** in Pre-Game) |
+
+The player name is editable from the **Pre-Game** screen — type into the
+Player row and blur or press Enter to save. Sanitization mirrors the
+server-side rules (`[^a-zA-Z0-9 _-]` stripped, capped at 20 chars). Names
+shorter than 6 characters get a 4-digit numeric tag appended (`"A"` →
+`"A4821"`) so the leaderboard stays unique. (`src/api.ts: setPlayerName`)
 
 Skin unlocks are derived from the persisted `best`, `totalRuns`, and
 `copsDrowned` counters. (`src/entities/car-skins.ts:357`)
@@ -368,8 +430,19 @@ between runs, not only on the game-over panel.
 | `COMBO_DECAY` | 3 s | `src/systems/run-state.ts:25` |
 | `MAX_PICKUPS` | 4 | `src/systems/pickup-system.ts:12` |
 | `SPAWN_INTERVAL` (pickup) | 6 s | `src/systems/pickup-system.ts:13` |
-| `NITRO_DURATION` | 3 s | `src/systems/pickup-system.ts:14` |
-| `NITRO_SPEED_MULT` | 1.55 | `src/systems/pickup-system.ts:15` |
+| `NITRO_DURATION` | 3 s | `src/constants.ts` |
+| `NITRO_SPEED_MULT` | 1.55 | `src/constants.ts` |
+| `REPAIR_HEAL` | 40 HP | `src/constants.ts` |
+| `SCORE_MULT_DURATION` | 8 s | `src/constants.ts` |
+| `SCORE_MULT_VALUE` | 2 | `src/constants.ts` |
+| `TIME_WARP_DURATION` | 5 s | `src/constants.ts` |
+| `TIME_WARP_FACTOR` | 0.5 | `src/constants.ts` |
+| `MAGNET_DURATION` | 8 s | `src/constants.ts` |
+| `MAGNET_RANGE_MULT` | 3 | `src/constants.ts` |
+| `MAGNET_PULL_MULT` | 3 | `src/constants.ts` |
+| `GHOST_DURATION` | 3 s | `src/constants.ts` |
+| `TANK_DURATION` | 5 s | `src/constants.ts` |
+| `TANK_KILL_SCORE` | 25 | `src/constants.ts` |
 | `MAX_CIVILIANS` | 8 | `src/systems/civilian-system.ts:10` |
 | `CIVILIAN_SPAWN_INTERVAL` | 2 s | `src/systems/civilian-system.ts:11` |
 | `STUN_IMPACT_THRESHOLD` | 6 | `src/systems/civilian-system.ts:12` |
@@ -394,5 +467,22 @@ between runs, not only on the game-over panel.
   Corvette C8.
 - **Save EMPs for emergencies.** With 12+ cops on screen, an EMP can wipe
   half the screen and heal you for 60+ HP at once.
+- **Stack 2X Score with high combos.** A `x12` combo at 2× scores `~13`
+  points per tile — by far the highest tile rate in the game. Try to grab
+  a 2X right *before* a long road stretch with a few cops to skim.
+- **Time Warp ≠ EMP.** Time Warp doesn't kill cops, it just slows them.
+  Use it to pile up combo near-misses through a swarm at full speed
+  rather than to escape.
+- **Ghost is your "oh sh*t" button.** Unlike Shield (one hit) it disables
+  the busted check too, so it's the only clean escape from a 4-cop pile-up.
+- **Tank flips the game.** For 5 s the cops are the prey — actively chase
+  them instead of running. Each ramming kill = +25 score, +10 HP, +1
+  drowned. Stack with 2X for double rewards.
+- **Magnet → loot run.** Triple range/pull lets you sweep up multiple
+  pickups in one drive-by. Grab a Magnet near a cluster.
+- **Repair when low.** Below 30 HP, take a Repair on sight even if it's a
+  detour — the +40 buys you several more cop hits.
+- **When the busted vignette pulses, MOVE.** Even brief sideways drift
+  resets the busted timer at 2× the tick rate, so any motion bails you out.
 - **Snowy = hardcore mode.** −20% top speed, −25% accel, almost no grip.
   Sunny is the easiest weather; snowy is the hardest.

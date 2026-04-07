@@ -1,4 +1,18 @@
-import { hp, score, level, nitroRemaining, shieldUp, combo, comboTimerRatio, comboMultiplier } from "../state";
+import {
+  hp,
+  score,
+  level,
+  nitroRemaining,
+  shieldUp,
+  combo,
+  comboTimerRatio,
+  comboMultiplier,
+  scoreMultRemaining,
+  timeWarpRemaining,
+  magnetRemaining,
+  ghostRemaining,
+  tankRemaining,
+} from "../state";
 import { COMBO_MILESTONE } from "../constants";
 
 export function Hud() {
@@ -9,6 +23,11 @@ export function Hud() {
   const c = combo.value;
   const cRatio = comboTimerRatio.value;
   const cMult = comboMultiplier.value;
+  const scoreMult = scoreMultRemaining.value;
+  const timeWarp = timeWarpRemaining.value;
+  const magnet = magnetRemaining.value;
+  const ghost = ghostRemaining.value;
+  const tank = tankRemaining.value;
   // Tier changes only at milestones (every COMBO_MILESTONE). Using it as a
   // key forces a remount of the combo node, retriggering the pop animation
   // at the same instant the milestone sound + popup fire.
@@ -55,6 +74,31 @@ export function Hud() {
       )}
       {shield && (
         <span class="text-cyan-300 text-xs font-extrabold tracking-widest">🛡</span>
+      )}
+      {scoreMult > 0 && (
+        <span class="text-yellow-300 text-xs font-extrabold tracking-widest">
+          💰{scoreMult.toFixed(1)}
+        </span>
+      )}
+      {timeWarp > 0 && (
+        <span class="text-sky-300 text-xs font-extrabold tracking-widest">
+          ⏳{timeWarp.toFixed(1)}
+        </span>
+      )}
+      {magnet > 0 && (
+        <span class="text-red-300 text-xs font-extrabold tracking-widest">
+          🧲{magnet.toFixed(1)}
+        </span>
+      )}
+      {ghost > 0 && (
+        <span class="text-violet-200 text-xs font-extrabold tracking-widest">
+          👻{ghost.toFixed(1)}
+        </span>
+      )}
+      {tank > 0 && (
+        <span class="text-rose-400 text-xs font-extrabold tracking-widest">
+          💢{tank.toFixed(1)}
+        </span>
       )}
     </div>
   );

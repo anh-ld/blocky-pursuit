@@ -72,3 +72,26 @@ export const NITRO_SPEED_MULT = 1.55;
 // gameplay AOE (or vice versa). They start equal by coincidence, not design.
 export const EMP_KILL_RADIUS = 30;
 export const EMP_RING_RADIUS = 30;
+
+// --- Repair (instant heal) ---
+export const REPAIR_HEAL = 40;
+
+// --- Score multiplier (2x) ---
+export const SCORE_MULT_DURATION = 8;
+export const SCORE_MULT_VALUE = 2;
+
+// --- Time warp (slows cops) ---
+export const TIME_WARP_DURATION = 5;
+export const TIME_WARP_FACTOR = 0.5;
+
+// --- Magnet (extended pickup magnet) ---
+export const MAGNET_DURATION = 8;
+export const MAGNET_RANGE_MULT = 3;
+export const MAGNET_PULL_MULT = 3;
+
+// --- Ghost (intangible to cops) ---
+export const GHOST_DURATION = 3;
+
+// --- Tank (kill cops on contact) ---
+export const TANK_DURATION = 5;
+export const TANK_KILL_SCORE = 25;

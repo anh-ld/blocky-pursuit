@@ -26,6 +26,30 @@ const CIV_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
 });
 const CIV_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x111111, ...matProps });
 
+// --- Shared geometries (one set for all civilian instances). All civilians
+// have identical proportions, so the GPU buffers only need to live once.
+const CIV_UNIT = 0.5;
+const CIV_BODY_GEO = new THREE.BoxGeometry(CIV_UNIT * 4, CIV_UNIT * 1.2, CIV_UNIT * 8);
+const CIV_CABIN_GEO = new THREE.BoxGeometry(CIV_UNIT * 3.6, CIV_UNIT * 2, CIV_UNIT * 5.5);
+const CIV_STRIPE_GEO = new THREE.BoxGeometry(CIV_UNIT * 0.15, CIV_UNIT * 0.4, CIV_UNIT * 5);
+const CIV_BOTTOM_STRIPE_GEO = new THREE.BoxGeometry(CIV_UNIT * 4.1, CIV_UNIT * 0.2, CIV_UNIT * 8.1);
+const CIV_WINDSHIELD_GEO = new THREE.BoxGeometry(CIV_UNIT * 3, CIV_UNIT * 1.4, CIV_UNIT * 0.2);
+const CIV_SIDEWIN_GEO = new THREE.BoxGeometry(CIV_UNIT * 0.15, CIV_UNIT * 1, CIV_UNIT * 1.2);
+const CIV_REARWIN_GEO = new THREE.BoxGeometry(CIV_UNIT * 2.4, CIV_UNIT * 1, CIV_UNIT * 0.15);
+const CIV_HEADLIGHT_GEO = new THREE.BoxGeometry(CIV_UNIT * 0.6, CIV_UNIT * 0.4, CIV_UNIT * 0.3);
+const CIV_TAILLIGHT_GEO = new THREE.BoxGeometry(CIV_UNIT * 0.6, CIV_UNIT * 0.4, CIV_UNIT * 0.3);
+const CIV_WHEEL_GEO = new THREE.BoxGeometry(CIV_UNIT, CIV_UNIT, CIV_UNIT);
+
+// --- Per-step scratch Vec3s — reused across every civilian's preStep
+// callback. Safe because physics steps process bodies sequentially within
+// a single thread, and none of these values need to outlive a single call.
+const _civForward = new CANNON.Vec3(0, 0, -1);
+const _civWorldForward = new CANNON.Vec3();
+const _civLocalVel = new CANNON.Vec3();
+const _civForce = new CANNON.Vec3();
+const _civForceOffset = new CANNON.Vec3(0, 0, 0);
+const _civQ = new CANNON.Quaternion();
+
 export class Civilian {
   scene: THREE.Scene;
   world: CANNON.World;
@@ -36,6 +60,10 @@ export class Civilian {
   stunTimer: number;
   hasPanicked: boolean;
   preStepCallback: () => void;
+  // Per-instance materials (random body color → darker trim). Stored so
+  // `destroy()` can dispose them when the civilian despawns.
+  private bodyMat: THREE.MeshStandardMaterial;
+  private stripeMat: THREE.MeshStandardMaterial;
 
   constructor(scene: THREE.Scene, world: CANNON.World, position: THREE.Vector3) {
     this.scene = scene;
@@ -43,7 +71,7 @@ export class Civilian {
     this.stunTimer = 0;
     this.hasPanicked = false;
 
-    const unit = 0.5;
+    const unit = CIV_UNIT;
     this.mesh = new THREE.Group();
 
     const bodyColor = CIVILIAN_COLORS[Math.floor(Math.random() * CIVILIAN_COLORS.length)];
@@ -51,81 +79,72 @@ export class Civilian {
     // Darker shade for trim/stripe
     const trimColor = new THREE.Color(bodyColor).multiplyScalar(0.7).getHex();
 
+    // Per-instance materials — must be disposed in destroy()
+    this.bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, ...matProps });
+    this.stripeMat = new THREE.MeshStandardMaterial({ color: trimColor, ...matProps });
+
     // Van body — tall, boxy
-    const bodyGeo = new THREE.BoxGeometry(unit * 4, unit * 1.2, unit * 8);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, ...matProps });
-    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+    const bodyMesh = new THREE.Mesh(CIV_BODY_GEO, this.bodyMat);
     bodyMesh.position.y = unit * 1;
     bodyMesh.castShadow = true;
     bodyMesh.receiveShadow = true;
     this.mesh.add(bodyMesh);
 
-    // Van cabin — tall box spanning most of the length
-    const cabinGeo = new THREE.BoxGeometry(unit * 3.6, unit * 2, unit * 5.5);
-    const cabinMat = new THREE.MeshStandardMaterial({ color: bodyColor, ...matProps });
-    const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
+    // Van cabin — tall box spanning most of the length (shares bodyMat)
+    const cabinMesh = new THREE.Mesh(CIV_CABIN_GEO, this.bodyMat);
     cabinMesh.position.y = unit * 2.6;
     cabinMesh.position.z = unit * 0.5;
     cabinMesh.castShadow = true;
     this.mesh.add(cabinMesh);
 
     // Side stripe — runs along both sides
-    const stripeMat = new THREE.MeshStandardMaterial({ color: trimColor, ...matProps });
-    const stripeGeo = new THREE.BoxGeometry(unit * 0.15, unit * 0.4, unit * 5);
-    const stripeL = new THREE.Mesh(stripeGeo, stripeMat);
+    const stripeL = new THREE.Mesh(CIV_STRIPE_GEO, this.stripeMat);
     stripeL.position.set(-unit * 1.85, unit * 2.2, unit * 0.5);
     this.mesh.add(stripeL);
-    const stripeR = new THREE.Mesh(stripeGeo, stripeMat);
+    const stripeR = new THREE.Mesh(CIV_STRIPE_GEO, this.stripeMat);
     stripeR.position.set(unit * 1.85, unit * 2.2, unit * 0.5);
     this.mesh.add(stripeR);
 
     // Bottom trim line
-    const bottomStripeGeo = new THREE.BoxGeometry(unit * 4.1, unit * 0.2, unit * 8.1);
-    const bottomStripe = new THREE.Mesh(bottomStripeGeo, stripeMat);
+    const bottomStripe = new THREE.Mesh(CIV_BOTTOM_STRIPE_GEO, this.stripeMat);
     bottomStripe.position.y = unit * 0.45;
     this.mesh.add(bottomStripe);
 
     // Windshield (front window)
-    const windshieldGeo = new THREE.BoxGeometry(unit * 3, unit * 1.4, unit * 0.2);
-    const windshield = new THREE.Mesh(windshieldGeo, CIV_GLASS_MAT);
+    const windshield = new THREE.Mesh(CIV_WINDSHIELD_GEO, CIV_GLASS_MAT);
     windshield.position.set(0, unit * 2.8, -unit * 2.3);
     this.mesh.add(windshield);
 
     // Side windows
-    const sideWinGeo = new THREE.BoxGeometry(unit * 0.15, unit * 1, unit * 1.2);
-    const sideWinL = new THREE.Mesh(sideWinGeo, CIV_GLASS_MAT);
+    const sideWinL = new THREE.Mesh(CIV_SIDEWIN_GEO, CIV_GLASS_MAT);
     sideWinL.position.set(-unit * 1.85, unit * 2.8, -unit * 1.2);
     this.mesh.add(sideWinL);
-    const sideWinR = new THREE.Mesh(sideWinGeo, CIV_GLASS_MAT);
+    const sideWinR = new THREE.Mesh(CIV_SIDEWIN_GEO, CIV_GLASS_MAT);
     sideWinR.position.set(unit * 1.85, unit * 2.8, -unit * 1.2);
     this.mesh.add(sideWinR);
 
     // Rear window
-    const rearWinGeo = new THREE.BoxGeometry(unit * 2.4, unit * 1, unit * 0.15);
-    const rearWin = new THREE.Mesh(rearWinGeo, CIV_GLASS_MAT);
+    const rearWin = new THREE.Mesh(CIV_REARWIN_GEO, CIV_GLASS_MAT);
     rearWin.position.set(0, unit * 2.8, unit * 3.3);
     this.mesh.add(rearWin);
 
     // Headlights
-    const headlightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
-    const hlLeft = new THREE.Mesh(headlightGeo, CIV_HEADLIGHT_MAT);
+    const hlLeft = new THREE.Mesh(CIV_HEADLIGHT_GEO, CIV_HEADLIGHT_MAT);
     hlLeft.position.set(-unit * 1.5, unit * 1.1, -unit * 4.1);
     this.mesh.add(hlLeft);
-    const hlRight = new THREE.Mesh(headlightGeo, CIV_HEADLIGHT_MAT);
+    const hlRight = new THREE.Mesh(CIV_HEADLIGHT_GEO, CIV_HEADLIGHT_MAT);
     hlRight.position.set(unit * 1.5, unit * 1.1, -unit * 4.1);
     this.mesh.add(hlRight);
 
     // Taillights
-    const taillightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
-    const tlLeft = new THREE.Mesh(taillightGeo, CIV_TAILLIGHT_MAT);
+    const tlLeft = new THREE.Mesh(CIV_TAILLIGHT_GEO, CIV_TAILLIGHT_MAT);
     tlLeft.position.set(-unit * 1.5, unit * 1.1, unit * 4.1);
     this.mesh.add(tlLeft);
-    const tlRight = new THREE.Mesh(taillightGeo, CIV_TAILLIGHT_MAT);
+    const tlRight = new THREE.Mesh(CIV_TAILLIGHT_GEO, CIV_TAILLIGHT_MAT);
     tlRight.position.set(unit * 1.5, unit * 1.1, unit * 4.1);
     this.mesh.add(tlRight);
 
     // Wheels
-    const wheelGeo = new THREE.BoxGeometry(unit, unit, unit);
     const wheelPositions: [number, number, number][] = [
       [-unit * 2.5, unit * 0.5, unit * 2.5],
       [unit * 2.5, unit * 0.5, unit * 2.5],
@@ -133,7 +152,7 @@ export class Civilian {
       [unit * 2.5, unit * 0.5, -unit * 2.5],
     ];
     wheelPositions.forEach((pos) => {
-      const wheel = new THREE.Mesh(wheelGeo, CIV_WHEEL_MAT);
+      const wheel = new THREE.Mesh(CIV_WHEEL_GEO, CIV_WHEEL_MAT);
       wheel.position.set(pos[0], pos[1], pos[2]);
       this.mesh.add(wheel);
     });
@@ -162,7 +181,9 @@ export class Civilian {
     const initAngle = directions[Math.floor(Math.random() * directions.length)];
     this.body.quaternion.setFromEuler(0, initAngle, 0);
 
-    // Physics pre-step: drive forward, follow roads
+    // Physics pre-step: drive forward, follow roads. Uses module-scope
+    // scratch Vec3s instead of allocating fresh ones every step (8 civilians
+    // × 60Hz × 6 allocations = ~3000 alloc/sec otherwise).
     this.preStepCallback = () => {
       this.body.wakeUp();
 
@@ -181,12 +202,10 @@ export class Civilian {
       const tileCenterZ = tileZ * TILE_SIZE + TILE_SIZE / 2;
 
       // Get forward direction in world space
-      const forward = new CANNON.Vec3(0, 0, -1);
-      const worldForward = new CANNON.Vec3();
-      this.body.quaternion.vmult(forward, worldForward);
+      this.body.quaternion.vmult(_civForward, _civWorldForward);
 
       // Determine primary movement axis from facing direction
-      const movingX = Math.abs(worldForward.x) > Math.abs(worldForward.z);
+      const movingX = Math.abs(_civWorldForward.x) > Math.abs(_civWorldForward.z);
 
       // Snap toward tile center on the perpendicular axis to stay centered on road
       if (movingX) {
@@ -198,8 +217,8 @@ export class Civilian {
       }
 
       // Check tile 1 ahead in the direction we're moving
-      const aheadTileX = tileX + Math.round(worldForward.x);
-      const aheadTileZ = tileZ + Math.round(worldForward.z);
+      const aheadTileX = tileX + Math.round(_civWorldForward.x);
+      const aheadTileZ = tileZ + Math.round(_civWorldForward.z);
 
       // If current tile isn't road, try to steer to nearest road
       const onRoad = isRoad(tileX, tileZ);
@@ -217,7 +236,7 @@ export class Civilian {
           if (isRoad(tileX + n.dx, tileZ + n.dz)) {
             // Skip the direction we came from (unless we're off-road)
             if (onRoad) {
-              const dot = worldForward.x * n.dx + worldForward.z * n.dz;
+              const dot = _civWorldForward.x * n.dx + _civWorldForward.z * n.dz;
               if (dot < -0.5) continue;
             }
             roadDirs.push(n);
@@ -230,27 +249,26 @@ export class Civilian {
           this.body.quaternion.setFromEuler(0, targetAngle, 0);
         } else {
           // No road nearby, turn around
-          const q = new CANNON.Quaternion();
-          q.setFromEuler(0, Math.PI, 0);
-          this.body.quaternion = this.body.quaternion.mult(q);
+          _civQ.setFromEuler(0, Math.PI, 0);
+          this.body.quaternion = this.body.quaternion.mult(_civQ);
         }
       }
 
       // Drive forward
-      const localVel = new CANNON.Vec3();
-      this.body.vectorToLocalFrame(this.body.velocity, localVel);
-      const forwardSpeed = -localVel.z;
+      this.body.vectorToLocalFrame(this.body.velocity, _civLocalVel);
+      const forwardSpeed = -_civLocalVel.z;
       const speedRatio = Math.min(forwardSpeed / this.maxSpeed, 1);
       const forceScale = 1.0 - speedRatio * 0.7;
-      const force = new CANNON.Vec3(0, 0, -this.forwardForce * forceScale);
-      this.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
+      _civForce.set(0, 0, -this.forwardForce * forceScale);
+      this.body.applyLocalForce(_civForce, _civForceOffset);
 
-      // Arcade friction — very strong lateral grip to stay on road
-      const localVelocity = new CANNON.Vec3();
-      this.body.vectorToLocalFrame(this.body.velocity, localVelocity);
-      localVelocity.x *= 0.7;
-      localVelocity.z *= 0.98;
-      this.body.vectorToWorldFrame(localVelocity, this.body.velocity);
+      // Arcade friction — very strong lateral grip to stay on road. Reuse
+      // _civLocalVel; applyLocalForce may have mutated body.velocity so we
+      // re-read into the same scratch.
+      this.body.vectorToLocalFrame(this.body.velocity, _civLocalVel);
+      _civLocalVel.x *= 0.7;
+      _civLocalVel.z *= 0.98;
+      this.body.vectorToWorldFrame(_civLocalVel, this.body.velocity);
 
       // Cap speed
       const speed = this.body.velocity.length();
@@ -285,5 +303,9 @@ export class Civilian {
     this.scene.remove(this.mesh);
     this.world.removeBody(this.body);
     this.world.removeEventListener("preStep", this.preStepCallback);
+    // Per-instance materials are uniquely colored, so they must be disposed
+    // here. Geometries are module-shared and stay alive.
+    this.bodyMat.dispose();
+    this.stripeMat.dispose();
   }
 }

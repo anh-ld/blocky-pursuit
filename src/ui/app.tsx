@@ -24,7 +24,7 @@ export function App() {
       <TopBar />
       <div id="game-area" class="relative flex-1 overflow-hidden">
         <div
-          class={`absolute top-0 left-0 w-full h-full bg-black/60 z-5 pointer-events-none transition-opacity duration-300 ${darken ? "" : "opacity-0"}`}
+          class={`absolute inset-0 bg-black/60 z-5 pointer-events-none transition-opacity duration-300 ${darken ? "" : "opacity-0"}`}
         />
         <BustedWarning />
         {showHowToPlay && <HowToPlay />}
@@ -47,7 +47,7 @@ export function App() {
         {sc === "feedback" && <Feedback />}
         {sc === "garage" && <Garage />}
         {sc === "preGame" && <PreGame />}
-        <div class="absolute top-0 left-0 w-full h-full pointer-events-none z-10 flex flex-col justify-end">
+        <div class="absolute inset-0 pointer-events-none z-10 flex flex-col justify-end">
           <ControlsGuide />
           <MobileCta />
           <MobileControls />

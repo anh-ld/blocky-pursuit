@@ -11,7 +11,7 @@ export function ControlsGuide() {
   const name = playerName.value;
 
   return (
-    <div class={`self-end mb-4 mr-4 items-stretch gap-2 flex-wrap justify-end ${state === "paused" ? "flex" : "hidden md:flex"}`}>
+    <div class={`self-end mb-4 mr-4 gap-2 flex-wrap justify-end ${state === "paused" ? "flex" : "hidden md:flex"}`}>
       <div class="h-9 px-3 bg-black/60 text-xs font-normal tracking-wide flex items-center">
         <span class="text-gray-300">{name}</span>
       </div>

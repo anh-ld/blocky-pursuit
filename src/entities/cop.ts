@@ -58,6 +58,17 @@ const COP_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
 });
 const COP_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x111111, ...matProps });
 
+// --- Shared geometries (one set for all cop instances). All cops share the
+// same proportions, so the GPU buffers only need to live once. Disposing
+// per-instance would be wrong — these stay alive for the whole session.
+const COP_BODY_GEO = new THREE.BoxGeometry(UNIT * 4, UNIT, UNIT * 8);
+const COP_CABIN_GEO = new THREE.BoxGeometry(UNIT * 3, UNIT * 1.5, UNIT * 3);
+const COP_LIGHT_GEO = new THREE.BoxGeometry(UNIT, UNIT * 0.5, UNIT);
+const COP_GRILLE_GEO = new THREE.BoxGeometry(UNIT * 3.2, UNIT * 0.6, UNIT * 0.2);
+const COP_HEADLIGHT_GEO = new THREE.BoxGeometry(UNIT * 0.6, UNIT * 0.4, UNIT * 0.3);
+const COP_TAILLIGHT_GEO = new THREE.BoxGeometry(UNIT * 0.6, UNIT * 0.4, UNIT * 0.3);
+const COP_WHEEL_GEO = new THREE.BoxGeometry(UNIT, UNIT, UNIT);
+
 // Per-step scratch — reused across every cop's preStep callback. Safe
 // because physics steps process cops sequentially within a single thread,
 // and none of these values need to outlive a single preStep call.
@@ -138,55 +149,47 @@ export class Cop {
     const tier = tierForLevel(this.level);
 
     // Chassis (Body)
-    const bodyGeo = new THREE.BoxGeometry(unit * 4, unit, unit * 8);
-    const bodyMesh = new THREE.Mesh(bodyGeo, tier.bodyMat);
+    const bodyMesh = new THREE.Mesh(COP_BODY_GEO, tier.bodyMat);
     bodyMesh.position.y = unit;
     this.mesh.add(bodyMesh);
 
     // Cabin (shifted toward rear so front hood is visible)
-    const cabinGeo = new THREE.BoxGeometry(unit * 3, unit * 1.5, unit * 3);
-    const cabinMesh = new THREE.Mesh(cabinGeo, tier.cabinMat);
+    const cabinMesh = new THREE.Mesh(COP_CABIN_GEO, tier.cabinMat);
     cabinMesh.position.y = unit * 2.25;
     cabinMesh.position.z = unit * 1.5; // rear half
     this.mesh.add(cabinMesh);
 
     // Siren lights (on top of cabin)
-    const lightGeo = new THREE.BoxGeometry(unit, unit * 0.5, unit);
-    const redLight = new THREE.Mesh(lightGeo, COP_RED_LIGHT_MAT);
+    const redLight = new THREE.Mesh(COP_LIGHT_GEO, COP_RED_LIGHT_MAT);
     redLight.position.set(-unit, unit * 3.25, unit * 1.5);
     this.mesh.add(redLight);
 
-    const blueLight = new THREE.Mesh(lightGeo, COP_BLUE_LIGHT_MAT);
+    const blueLight = new THREE.Mesh(COP_LIGHT_GEO, COP_BLUE_LIGHT_MAT);
     blueLight.position.set(unit, unit * 3.25, unit * 1.5);
     this.mesh.add(blueLight);
 
     // Front grille
-    const grilleGeo = new THREE.BoxGeometry(unit * 3.2, unit * 0.6, unit * 0.2);
-    const grille = new THREE.Mesh(grilleGeo, COP_GRILLE_MAT);
+    const grille = new THREE.Mesh(COP_GRILLE_GEO, COP_GRILLE_MAT);
     grille.position.set(0, unit * 0.9, -unit * 4.1);
     this.mesh.add(grille);
 
     // Headlights (front = -Z)
-    const headlightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
-    const hlLeft = new THREE.Mesh(headlightGeo, COP_HEADLIGHT_MAT);
+    const hlLeft = new THREE.Mesh(COP_HEADLIGHT_GEO, COP_HEADLIGHT_MAT);
     hlLeft.position.set(-unit * 1.5, unit * 1.1, -unit * 4.1);
     this.mesh.add(hlLeft);
-    const hlRight = new THREE.Mesh(headlightGeo, COP_HEADLIGHT_MAT);
+    const hlRight = new THREE.Mesh(COP_HEADLIGHT_GEO, COP_HEADLIGHT_MAT);
     hlRight.position.set(unit * 1.5, unit * 1.1, -unit * 4.1);
     this.mesh.add(hlRight);
 
     // Taillights (rear = +Z, red)
-    const taillightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
-    const tlLeft = new THREE.Mesh(taillightGeo, COP_TAILLIGHT_MAT);
+    const tlLeft = new THREE.Mesh(COP_TAILLIGHT_GEO, COP_TAILLIGHT_MAT);
     tlLeft.position.set(-unit * 1.5, unit * 1.1, unit * 4.1);
     this.mesh.add(tlLeft);
-    const tlRight = new THREE.Mesh(taillightGeo, COP_TAILLIGHT_MAT);
+    const tlRight = new THREE.Mesh(COP_TAILLIGHT_GEO, COP_TAILLIGHT_MAT);
     tlRight.position.set(unit * 1.5, unit * 1.1, unit * 4.1);
     this.mesh.add(tlRight);
 
     // Wheels
-    const wheelGeo = new THREE.BoxGeometry(unit, unit, unit);
-
     const wheelPositions: [number, number, number][] = [
       [-unit * 2.5, unit * 0.5, unit * 2.5], // Front Left
       [unit * 2.5, unit * 0.5, unit * 2.5], // Front Right
@@ -195,7 +198,7 @@ export class Cop {
     ];
 
     wheelPositions.forEach((pos) => {
-      const wheel = new THREE.Mesh(wheelGeo, COP_WHEEL_MAT);
+      const wheel = new THREE.Mesh(COP_WHEEL_GEO, COP_WHEEL_MAT);
       wheel.position.set(pos[0], pos[1], pos[2]);
       this.mesh.add(wheel);
     });

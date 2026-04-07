@@ -37,6 +37,8 @@ import {
   SCORE_DROWNED_COP,
   SCORE_EMP_KILL,
   EMP_KILL_RADIUS,
+  TIME_WARP_FACTOR,
+  TANK_KILL_SCORE,
 } from "../constants";
 
 // Reused per-frame scratch — avoids allocating a fresh Vec3 inside the
@@ -72,12 +74,14 @@ export class CopSystem {
   /** EMP-style AOE — used by PickupSystem when an EMP is collected. */
   empBlast(car: Car, run: RunState): number {
     let kills = 0;
+    const mult = run.activeScoreMult;
     for (let ci = this.cops.length - 1; ci >= 0; ci--) {
       const c = this.cops[ci];
       if (c.body.position.distanceTo(car.body.position) < EMP_KILL_RADIUS) {
         spawnConfetti(c.body.position.x, c.body.position.y + 2, c.body.position.z);
-        run.score += SCORE_EMP_KILL;
-        run.copScore += SCORE_EMP_KILL;
+        const reward = SCORE_EMP_KILL * mult;
+        run.score += reward;
+        run.copScore += reward;
         run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_EMP_KILL);
         run.drownedThisRun++;
         kills++;
@@ -106,10 +110,22 @@ export class CopSystem {
 
     let nearbyCount = 0;
     let nearestCopDist = Infinity;
+    const mult = run.activeScoreMult;
+    const timeWarp = run.timeWarpTimer > 0;
+    const ghost = run.ghostTimer > 0;
+    const tank = run.tankTimer > 0;
 
     for (let i = this.cops.length - 1; i >= 0; i--) {
       const cop = this.cops[i];
       cop.update(dt, car.mesh.position, car.body.velocity);
+
+      // Time warp: clamp cop velocity to half its normal cap so the player
+      // can weave through a swarm at full speed for a few seconds.
+      if (timeWarp) {
+        const maxV = cop.maxSpeed * TIME_WARP_FACTOR;
+        const v = cop.body.velocity.length();
+        if (v > maxV) cop.body.velocity.scale(maxV / v, cop.body.velocity);
+      }
 
       const distToPlayer = cop.body.position.distanceTo(car.body.position);
       if (distToPlayer < nearestCopDist) nearestCopDist = distToPlayer;
@@ -130,7 +146,7 @@ export class CopSystem {
         run.comboTimer = COMBO_DECAY;
         if (run.comboCount > run.biggestCombo) run.biggestCombo = run.comboCount;
         // Tiny instant reward so the combo feels alive
-        const comboReward = run.comboCount * COMBO_INSTANT_REWARD_PER_COUNT;
+        const comboReward = run.comboCount * COMBO_INSTANT_REWARD_PER_COUNT * mult;
         run.score += comboReward;
         run.comboScore += comboReward;
         // First-ever combo: explain the mechanic so new players discover the
@@ -183,7 +199,28 @@ export class CopSystem {
         const impactSpeed = _relVel.length();
 
         if (impactSpeed > COP_MIN_IMPACT_SPEED) {
-          if (run.shieldActive) {
+          if (ghost) {
+            // Phase: pretend the contact never happened. No damage, no
+            // shield consumed, no combo break.
+            cop.damageCooldown = COP_DAMAGE_COOLDOWN;
+          } else if (tank) {
+            // Tank mode: ramming wrecks the cop. Score + heal + flash, no
+            // damage to player. Resembles a drown but credited via tank.
+            const reward = TANK_KILL_SCORE * mult;
+            run.score += reward;
+            run.copScore += reward;
+            run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_EMP_KILL);
+            run.drownedThisRun++;
+            spawnSparks(cop.body.position.x, cop.body.position.y + 1, cop.body.position.z);
+            spawnConfetti(cop.body.position.x, cop.body.position.y + 2, cop.body.position.z);
+            spawnPopup(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z, `+${Math.round(reward)}`, "#ff6666");
+            playCrash();
+            haptics.hit();
+            triggerShake(0.5);
+            cop.destroy();
+            this.cops.splice(i, 1);
+            continue;
+          } else if (run.shieldActive) {
             run.shieldActive = false;
             spawnConfetti(car.body.position.x, car.body.position.y + 1, car.body.position.z);
             playPickup();
@@ -205,21 +242,23 @@ export class CopSystem {
         }
       }
 
-      // Count cops close enough for busted check
-      if (distToPlayer < BUSTED_NEARBY_RADIUS) nearbyCount++;
+      // Count cops close enough for busted check (skipped while ghosting —
+      // intangible cops can't actually hold the player in place).
+      if (!ghost && distToPlayer < BUSTED_NEARBY_RADIUS) nearbyCount++;
 
       // Cops die in water — bonus score + heal
       const tx = Math.floor(cop.body.position.x / TILE_SIZE);
       const tz = Math.floor(cop.body.position.z / TILE_SIZE);
       if (!isRoad(tx, tz) && isWater(tx, tz)) {
-        run.score += SCORE_DROWNED_COP;
-        run.copScore += SCORE_DROWNED_COP;
+        const reward = SCORE_DROWNED_COP * mult;
+        run.score += reward;
+        run.copScore += reward;
         run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_DROWNED_COP);
         run.drownedThisRun++;
         playSplash();
         spawnSplash(cop.body.position.x, cop.body.position.y, cop.body.position.z);
         spawnConfetti(cop.body.position.x, cop.body.position.y + 2, cop.body.position.z);
-        spawnPopup(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z, `+${SCORE_DROWNED_COP}`, "#ffcc22");
+        spawnPopup(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z, `+${Math.round(reward)}`, "#ffcc22");
         cop.destroy();
         this.cops.splice(i, 1);
       }

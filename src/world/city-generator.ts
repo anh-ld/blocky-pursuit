@@ -8,6 +8,75 @@ import { placeNature, placeWaterDecor, placeShoreDecor } from "./zones/nature";
 
 export { isRoad } from "./terrain";
 
+// --- Easter egg: "🇻🇳 ANH LE" stencil baked into the asphalt of rare
+// road tiles. Uses a single shared CanvasTexture + PlaneGeometry so every
+// occurrence in the world is the same draw call setup. The author signs
+// his work like a real road department.
+function makeAnhLeTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 320;
+  c.height = 64;
+  const cctx = c.getContext("2d")!;
+  cctx.clearRect(0, 0, c.width, c.height);
+
+  // Vietnam flag — red rectangle (3:2 ratio) with a yellow 5-point star
+  const flagX = 12;
+  const flagY = 10;
+  const flagW = 66;
+  const flagH = 44;
+  cctx.fillStyle = "#da251d"; // Vietnam red
+  cctx.fillRect(flagX, flagY, flagW, flagH);
+
+  // Yellow 5-point star centered in the flag
+  const sx = flagX + flagW / 2;
+  const sy = flagY + flagH / 2;
+  const outerR = 15;
+  const innerR = 6;
+  cctx.fillStyle = "#ffcd00"; // Vietnam yellow
+  cctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const angle = (i * Math.PI) / 5 - Math.PI / 2;
+    const px = sx + Math.cos(angle) * r;
+    const py = sy + Math.sin(angle) * r;
+    if (i === 0) cctx.moveTo(px, py);
+    else cctx.lineTo(px, py);
+  }
+  cctx.closePath();
+  cctx.fill();
+
+  // "ANH LE" text fills the right portion of the canvas. Letters are
+  // drawn one at a time so we can apply manual letter-spacing — Canvas2D
+  // has no `letterSpacing` field on every browser yet.
+  cctx.font = "bold 44px sans-serif";
+  cctx.fillStyle = "#ffffff";
+  cctx.textAlign = "left";
+  cctx.textBaseline = "middle";
+  const text = "ANH LE";
+  const letterSpacing = 6;
+  let cursorX = flagX + flagW + 14;
+  const cursorY = c.height / 2 + 2;
+  for (const ch of text) {
+    cctx.fillText(ch, cursorX, cursorY);
+    cursorX += cctx.measureText(ch).width + letterSpacing;
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  return tex;
+}
+const ANH_LE_TEX = makeAnhLeTexture();
+// Plane aspect roughly matches the canvas (320:64 ≈ 5:1) so the flag and
+// text don't get squashed.
+const ANH_LE_GEO = new THREE.PlaneGeometry(8, 1.6);
+const ANH_LE_MAT = new THREE.MeshBasicMaterial({
+  map: ANH_LE_TEX,
+  transparent: true,
+  opacity: 0.9,
+  depthWrite: false,
+});
+
 export type IChunkData = {
   group: THREE.Group;
   bodies: CANNON.Body[];
@@ -181,6 +250,20 @@ export class CityGenerator {
       }
       dashMesh.position.set(worldX, 0.03, worldZ);
       chunk.group.add(dashMesh);
+    }
+
+    // Easter egg: ~1.5% of straight road tiles get the "ANH LE" stencil.
+    // Deterministic via pseudoRandom so the same tile always has it on
+    // chunk reload, and so it can't ever land on the same tile as a dash
+    // (the seed is different).
+    if (pseudoRandom(tileX, tileZ, 999) < 0.015) {
+      const eggMesh = new THREE.Mesh(ANH_LE_GEO, ANH_LE_MAT);
+      eggMesh.rotation.x = -Math.PI / 2;
+      // Align the long axis of the text with the road direction so the
+      // stencil reads as you drive over it.
+      if (isNS) eggMesh.rotation.z = Math.PI / 2;
+      eggMesh.position.set(worldX, 0.04, worldZ);
+      chunk.group.add(eggMesh);
     }
   }
 

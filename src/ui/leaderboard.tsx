@@ -12,7 +12,7 @@ export function Leaderboard() {
 
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center">
-      <div class="bg-black/60 md:bg-black p-5 w-full h-full md:w-64 md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col">
+      <div class="bg-black/60 md:bg-black p-5 w-full h-full md:w-160 md:max-w-[90vw] md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col">
         <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">
           Leaderboard
         </div>

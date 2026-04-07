@@ -29,7 +29,7 @@ export function CarPreview({ skin }: { skin: ICarSkin }) {
 
   return (
     <div
-      class="relative w-full h-16 flex flex-col items-center justify-center overflow-hidden border-2 border-black/60"
+      class="relative w-full h-16 flex flex-col items-center justify-center overflow-hidden border border-whitef"
       style={{ background: body }}
     >
       {/* Diagonal accent stripe */}

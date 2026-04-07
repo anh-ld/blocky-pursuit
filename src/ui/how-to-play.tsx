@@ -27,8 +27,8 @@ export function HowToPlay() {
 
   return (
     <div class="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/60 md:bg-black text-gray-300 px-4 py-5 md:py-3 flex flex-col gap-3 text-xs font-normal tracking-wide w-full h-full md:w-auto md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto">
-        <span class="text-amber-400 font-extrabold uppercase tracking-widest md:text-center">
+      <div class="bg-black/60 md:bg-black md:w-160 md:max-w-[90vw] text-gray-300 px-4 py-5 md:py-3 flex flex-col gap-3 text-xs font-normal tracking-wide w-full h-full md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto">
+        <span class="text-amber-400 font-extrabold uppercase tracking-widest mb-4">
           How to Play
         </span>
         <div class="flex items-center gap-2">
@@ -90,7 +90,7 @@ export function HowToPlay() {
           </div>
         )}
 
-        <div class="mt-auto md:mt-0 flex flex-col gap-2 sticky md:static bottom-0 -mx-4 md:mx-0 px-4 md:px-0">
+        <div class="mt-auto flex flex-col gap-2">
           <button
             onClick={openGarage}
             class="w-full py-2 bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors"

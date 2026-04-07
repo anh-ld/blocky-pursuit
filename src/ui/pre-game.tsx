@@ -30,13 +30,13 @@ export function PreGame() {
 
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/60 md:bg-black p-4 w-full h-full md:w-80 md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col gap-3">
+      <div class="bg-black/60 md:bg-black p-4 w-full h-full md:w-160 md:max-w-[90vw] md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col gap-3">
         <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest text-center">
           Choose Your Ride
         </div>
 
         {/* Car grid */}
-        <div class="grid grid-cols-2 gap-2 md:max-h-96 overflow-y-auto py-2 -mx-4 px-4">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 md:max-h-120 overflow-y-auto py-2 -mx-4 px-4">
           {CAR_SKINS.map((s) => {
             const unlocked = isUnlocked(s, progress);
             const isSelected = selectedSkin.value === s.id;
@@ -112,7 +112,7 @@ export function PreGame() {
         </div>
 
         {/* Sound row */}
-        <div class="flex items-center justify-between px-3 h-9">
+        <div class="flex items-center justify-between h-9">
           <span class="text-gray-500 text-[10px] uppercase tracking-widest">Sound</span>
           <button
             aria-label={muted ? "Unmute sound" : "Mute sound"}
@@ -126,7 +126,7 @@ export function PreGame() {
         </div>
 
         {/* Player row — editable, syncs to localStorage on blur/Enter */}
-        <div class="flex items-center justify-between px-3 h-9">
+        <div class="flex items-center justify-between h-9">
           <span class="text-gray-500 text-[10px] uppercase tracking-widest">Player</span>
           <input
             type="text"
@@ -146,7 +146,7 @@ export function PreGame() {
           />
         </div>
 
-        <div class="mt-auto md:mt-0 flex flex-col gap-2 sticky md:static bottom-0 -mx-4 md:mx-0 px-4 md:px-0">
+        <div class="mt-auto flex flex-col gap-2">
           {/* Play button */}
           <button
             onClick={() => actions.beginRun()}

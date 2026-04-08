@@ -45,6 +45,8 @@ import {
   triggerShake,
 } from "./world/effects";
 import { initPopups, spawnPopup, updatePopups, clearPopups } from "./world/popups";
+import { initPortals } from "./world/portals";
+import { getSkin } from "./entities/car-skins";
 import { initSkids, spawnSkid, updateSkids, clearSkids } from "./world/skids";
 import {
   applyWeather,
@@ -103,7 +105,11 @@ const appRoot = document.getElementById("app") as HTMLElement;
 render(h(App, null), appRoot);
 
 // --- Player name ---
-playerName.value = getPlayerName();
+// Vibe Jam continuity: a portal arrival can carry `?username=` from the
+// previous game. Honor it so the player keeps their identity across the
+// webring instead of being silently renamed to whatever we had stored.
+const _incomingPortalName = new URLSearchParams(window.location.search).get("username");
+playerName.value = _incomingPortalName?.trim() || getPlayerName();
 
 // --- PWA Install Prompt (mobile only) ---
 type IBeforeInstallPromptEvent = Event & {
@@ -201,6 +207,14 @@ cityGenerator.update(new THREE.Vector3(0, 0, 0));
 
 // --- Player Car ---
 const car = new Car(scene, world, selectedSkin.value);
+
+// --- Vibe Jam 2026 portals (start + exit webring) ---
+const portals = initPortals({
+  scene,
+  getPlayerName: () => playerName.value || "player",
+  getPlayerColorHex: () => "#" + getSkin(selectedSkin.value).bodyColor.toString(16).padStart(6, "0"),
+  getPlayerSpeedMs: () => car.body.velocity.length(),
+});
 
 function selectSkin(skinId: string) {
   setSelectedSkin(skinId);
@@ -564,6 +578,16 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     spawnSpeedLine(car.body.position.x, car.body.position.y, car.body.position.z, fx, fz);
   }
 
+  // --- Vibe Jam portal check: redirect if the car drove through one ---
+  const portalDest = portals.update(car.mesh.position);
+  if (portalDest) {
+    stopEngine();
+    stopSiren();
+    stopBgm();
+    window.location.href = portalDest;
+    return;
+  }
+
   run.syncHud();
 }
 
@@ -636,3 +660,21 @@ document.addEventListener("visibilitychange", () => {
 
 // Start the loop
 requestAnimationFrame(animate);
+
+// Vibe Jam continuity: when the player arrives via ?portal=true, skip every
+// menu/screen and drop them straight into a run so the webring handoff feels
+// seamless. If a return portal exists, spawn the player AT it ("coming out
+// of" the portal) facing toward the city so they drive away naturally.
+if (portals.cameFromPortal) {
+  startGame();
+  const spawn = portals.returnSpawnPos;
+  if (spawn) {
+    car.body.position.set(spawn.x, 1, spawn.z);
+    car.body.velocity.set(0, 0, 0);
+    car.body.angularVelocity.set(0, 0, 0);
+    // Face +X (toward origin / the rest of the city) — return portal sits
+    // at -80 on the X axis. Yaw of -π/2 turns cannon-local forward (-Z)
+    // into world +X.
+    car.body.quaternion.setFromEuler(0, -Math.PI / 2, 0);
+  }
+}

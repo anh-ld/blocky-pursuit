@@ -8,6 +8,9 @@ import { spawnPopup } from "../world/popups";
 import type { RunState, IGameContext } from "./run-state";
 
 const _fleeForce = new CANNON.Vec3();
+// Per-frame scratch for the stun-impact branch — keeps the civilian collision
+// hot path allocation-free, mirroring `_relVel` in cop-system.
+const _civCollideRelVel = new CANNON.Vec3();
 
 const MAX_CIVILIANS = 8;
 const CIVILIAN_SPAWN_INTERVAL = 2;
@@ -92,9 +95,8 @@ export class CivilianSystem {
       // Stun on collision with player — require actual impact velocity,
       // not just proximity, so brushing past at low speed doesn't stun.
       if (distToPlayer < 5 && civ.stunTimer <= 0) {
-        const relVel = new CANNON.Vec3();
-        car.body.velocity.vsub(civ.body.velocity, relVel);
-        if (relVel.length() > STUN_IMPACT_THRESHOLD) {
+        car.body.velocity.vsub(civ.body.velocity, _civCollideRelVel);
+        if (_civCollideRelVel.length() > STUN_IMPACT_THRESHOLD) {
           civ.stun();
           run.score += 5;
           spawnPopup(civ.body.position.x, civ.body.position.y + 2, civ.body.position.z, "+5", "#ffcc22");

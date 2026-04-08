@@ -3,7 +3,7 @@ import * as CANNON from "cannon-es";
 import { Cop } from "../entities/cop";
 import { Car } from "../entities/car";
 import { spawnCop } from "./spawning";
-import { getLevelDef } from "./leveling";
+import { getLevelDef, getHeat, HEAT_INTERVAL_SHAVE, HEAT_INTERVAL_FLOOR } from "./leveling";
 import { isRoad, isWater, TILE_SIZE } from "../world/terrain";
 import {
   triggerShake,
@@ -51,11 +51,21 @@ export type ICopUpdateResult = {
   nearbyCount: number; // cops within busted-check radius
 };
 
+// SWAT mini-boss tuning. Lives outside `constants.ts` because it's an
+// emergent escalation feature, not a designer-tunable balance lever.
+const SWAT_MIN_LEVEL = 5;
+const SWAT_RESPAWN_DELAY = 25; // seconds between SWAT spawns
+const SWAT_KILL_SCORE = 80;
+const SWAT_KILL_HEAL = 25;
+
 export class CopSystem {
   scene: THREE.Scene;
   world: CANNON.World;
   cops: Cop[] = [];
   lastSpawnTime = 0;
+  // Last time a SWAT mini-boss was spawned. Tracked separately so SWAT
+  // cadence is independent of the regular spawn timer.
+  lastSwatSpawn = -SWAT_RESPAWN_DELAY;
 
   constructor(ctx: IGameContext) {
     this.scene = ctx.scene;
@@ -65,10 +75,12 @@ export class CopSystem {
   reset() {
     this.cops.forEach((c) => c.destroy());
     this.cops.length = 0;
+    this.lastSwatSpawn = -SWAT_RESPAWN_DELAY;
   }
 
   rebaseTimers(timeInSeconds: number) {
     this.lastSpawnTime = timeInSeconds;
+    this.lastSwatSpawn = timeInSeconds - SWAT_RESPAWN_DELAY;
   }
 
   /** EMP-style AOE — used by PickupSystem when an EMP is collected. */
@@ -77,6 +89,9 @@ export class CopSystem {
     const mult = run.activeScoreMult;
     for (let ci = this.cops.length - 1; ci >= 0; ci--) {
       const c = this.cops[ci];
+      // SWAT mini-bosses shrug off EMP — they have to be drowned, rammed
+      // (tank), or out-driven. Keeps them threatening even with pickups up.
+      if (c.isSwat) continue;
       if (c.body.position.distanceTo(car.body.position) < EMP_KILL_RADIUS) {
         spawnConfetti(c.body.position.x, c.body.position.y + 2, c.body.position.z);
         const reward = SCORE_EMP_KILL * mult;
@@ -95,7 +110,14 @@ export class CopSystem {
   update(dt: number, timeInSeconds: number, car: Car, run: RunState): ICopUpdateResult {
     // Spawning is level-dependent
     const levelDef = getLevelDef(run.level);
-    if (timeInSeconds - this.lastSpawnTime > levelDef.spawnInterval) {
+    // Endgame heat shaves the spawn interval past max level so survivor runs
+    // keep escalating instead of plateauing at LV10's cadence.
+    const heatTier = getHeat(run.score, run.level);
+    const effectiveInterval = Math.max(
+      HEAT_INTERVAL_FLOOR,
+      levelDef.spawnInterval - heatTier * HEAT_INTERVAL_SHAVE,
+    );
+    if (timeInSeconds - this.lastSpawnTime > effectiveInterval) {
       spawnCop({
         scene: this.scene,
         world: this.world,
@@ -106,6 +128,30 @@ export class CopSystem {
         playerVelocity: car.body.velocity,
       });
       this.lastSpawnTime = timeInSeconds;
+    }
+
+    // SWAT mini-boss spawn — at most one alive at a time, level 5+. Lives
+    // outside the maxCops cap so the regular swarm cadence is unaffected.
+    if (
+      run.level >= SWAT_MIN_LEVEL &&
+      timeInSeconds - this.lastSwatSpawn > SWAT_RESPAWN_DELAY &&
+      !this.cops.some((c) => c.isSwat)
+    ) {
+      spawnCop({
+        scene: this.scene,
+        world: this.world,
+        cops: this.cops,
+        maxCops: levelDef.maxCops,
+        level: Math.max(run.level, SWAT_MIN_LEVEL),
+        playerPosition: car.mesh.position,
+        playerVelocity: car.body.velocity,
+        isSwat: true,
+      });
+      this.lastSwatSpawn = timeInSeconds;
+      // Telegraph the spawn so the player knows a heavier threat is on the
+      // map. Popup floats above the player rather than the SWAT cop itself
+      // so it's always visible regardless of where the cop is.
+      spawnPopup(car.body.position.x, car.body.position.y + 5, car.body.position.z, "⚠ SWAT", "#ff4444", 1.6, 12);
     }
 
     let nearbyCount = 0;
@@ -205,18 +251,24 @@ export class CopSystem {
             cop.damageCooldown = COP_DAMAGE_COOLDOWN;
           } else if (tank) {
             // Tank mode: ramming wrecks the cop. Score + heal + flash, no
-            // damage to player. Resembles a drown but credited via tank.
-            const reward = TANK_KILL_SCORE * mult;
+            // damage to player. SWAT pays out at the SWAT bonus tier.
+            const baseScore = cop.isSwat ? SWAT_KILL_SCORE : TANK_KILL_SCORE;
+            const baseHeal = cop.isSwat ? SWAT_KILL_HEAL : HP_HEAL_EMP_KILL;
+            const reward = baseScore * mult;
             run.score += reward;
             run.copScore += reward;
-            run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_EMP_KILL);
+            run.hp = Math.min(MAX_HP, run.hp + baseHeal);
             run.drownedThisRun++;
             spawnSparks(cop.body.position.x, cop.body.position.y + 1, cop.body.position.z);
             spawnConfetti(cop.body.position.x, cop.body.position.y + 2, cop.body.position.z);
+            if (cop.isSwat) {
+              spawnConfetti(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z);
+              triggerScreenFlash(0.45);
+            }
             spawnPopup(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z, `+${Math.round(reward)}`, "#ff6666");
             playCrash();
             haptics.hit();
-            triggerShake(0.5);
+            triggerShake(cop.isSwat ? 0.7 : 0.5);
             cop.destroy();
             this.cops.splice(i, 1);
             continue;
@@ -250,15 +302,25 @@ export class CopSystem {
       const tx = Math.floor(cop.body.position.x / TILE_SIZE);
       const tz = Math.floor(cop.body.position.z / TILE_SIZE);
       if (!isRoad(tx, tz) && isWater(tx, tz)) {
-        const reward = SCORE_DROWNED_COP * mult;
+        // SWAT kills get a bonus payout + heal so the player feels rewarded
+        // for cornering the mini-boss into water (or tanking it head-on).
+        const baseScore = cop.isSwat ? SWAT_KILL_SCORE : SCORE_DROWNED_COP;
+        const baseHeal = cop.isSwat ? SWAT_KILL_HEAL : HP_HEAL_DROWNED_COP;
+        const reward = baseScore * mult;
         run.score += reward;
         run.copScore += reward;
-        run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_DROWNED_COP);
+        run.hp = Math.min(MAX_HP, run.hp + baseHeal);
         run.drownedThisRun++;
         playSplash();
         spawnSplash(cop.body.position.x, cop.body.position.y, cop.body.position.z);
         spawnConfetti(cop.body.position.x, cop.body.position.y + 2, cop.body.position.z);
-        spawnPopup(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z, `+${Math.round(reward)}`, "#ffcc22");
+        if (cop.isSwat) {
+          // Extra debris + flash so the SWAT kill reads as a bigger event.
+          spawnConfetti(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z);
+          triggerScreenFlash(0.45);
+          triggerShake(0.5);
+        }
+        spawnPopup(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z, `+${Math.round(reward)}`, cop.isSwat ? "#ff4444" : "#ffcc22");
         cop.destroy();
         this.cops.splice(i, 1);
       }

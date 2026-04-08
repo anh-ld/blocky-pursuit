@@ -1,11 +1,18 @@
 import * as THREE from "three";
-import { Pickup, type IPickupKind } from "../entities/pickup";
+import { Pickup, PICKUP_RARITY, type IPickupKind } from "../entities/pickup";
 import { Car } from "../entities/car";
 import { isRoad } from "../world/city-generator";
 import { TILE_SIZE } from "../world/terrain";
 import { spawnConfetti, spawnRing, triggerShake } from "../world/effects";
 import { spawnPopup } from "../world/popups";
-import { playPickup } from "../audio/sound";
+import {
+  playPickup,
+  playPickupHeal,
+  playPickupShield,
+  playPickupOffense,
+  playPickupScore,
+  playNitroWhoosh,
+} from "../audio/sound";
 import { haptics } from "../audio/haptics";
 import type { RunState, IGameContext } from "./run-state";
 import type { CopSystem } from "./cop-system";
@@ -35,19 +42,58 @@ import {
   TANK_DURATION,
 } from "../constants";
 
-// Weighted spawn — rarer = stronger. Defensive (shield/repair/ghost),
-// offensive (emp/tank), score (doubleScore), utility (nitro/magnet/timeWarp).
-const PICKUP_WEIGHTS: { kind: IPickupKind; weight: number }[] = [
-  { kind: "nitro", weight: 25 },
-  { kind: "shield", weight: 20 },
-  { kind: "emp", weight: 10 },
-  { kind: "repair", weight: 25 },
-  { kind: "doubleScore", weight: 10 },
-  { kind: "timeWarp", weight: 15 },
-  { kind: "magnet", weight: 20 },
-  { kind: "ghost", weight: 10 },
-  { kind: "tank", weight: 10 },
+// Weighted spawn — rarity tier sets the base weight (common = 30, rare = 10,
+// epic = 4) so rare/epic pickups feel like real loot drops. Within a tier,
+// every kind shares the same weight so the variety still rotates evenly.
+const RARITY_BASE_WEIGHT: Record<"common" | "rare" | "epic", number> = {
+  common: 30,
+  rare: 10,
+  epic: 4,
+};
+const PICKUP_KINDS: IPickupKind[] = [
+  "nitro",
+  "shield",
+  "repair",
+  "doubleScore",
+  "magnet",
+  "timeWarp",
+  "emp",
+  "ghost",
+  "tank",
 ];
+const PICKUP_WEIGHTS: { kind: IPickupKind; weight: number }[] = PICKUP_KINDS.map(
+  (kind) => ({ kind, weight: RARITY_BASE_WEIGHT[PICKUP_RARITY[kind]] }),
+);
+
+// Per-kind audio routing. Splits the 9 pickups into 5 sonic palettes so the
+// player can identify what they grabbed by ear without looking. Nitro layers
+// a noise whoosh on top of the score ding for extra "speed up" oomph.
+function playPickupSfx(kind: IPickupKind) {
+  switch (kind) {
+    case "repair":
+      playPickupHeal();
+      return;
+    case "shield":
+      playPickupShield();
+      return;
+    case "emp":
+    case "tank":
+      playPickupOffense();
+      return;
+    case "nitro":
+      playPickupScore();
+      playNitroWhoosh();
+      return;
+    case "doubleScore":
+    case "magnet":
+    case "timeWarp":
+    case "ghost":
+      playPickupScore();
+      return;
+    default:
+      playPickup();
+  }
+}
 
 function pickPickupKind(): IPickupKind {
   const total = PICKUP_WEIGHTS.reduce((s, p) => s + p.weight, 0);
@@ -106,6 +152,11 @@ export class PickupSystem {
       tileZ * TILE_SIZE + TILE_SIZE / 2,
     );
     this.pickups.push(new Pickup(this.scene, pos, kind));
+    // Rare/epic pickups get a small confetti puff at spawn so the player
+    // notices them appearing in their peripheral vision.
+    if (PICKUP_RARITY[kind] !== "common") {
+      spawnConfetti(pos.x, pos.y + 0.5, pos.z);
+    }
   }
 
   update(dt: number, timeInSeconds: number, car: Car, run: RunState, cops: CopSystem) {
@@ -144,7 +195,7 @@ export class PickupSystem {
 
       // Collect on touch
       if (dist < PICKUP_COLLECT_DIST) {
-        playPickup();
+        playPickupSfx(p.kind);
         haptics.pickup();
         spawnConfetti(p.position.x, 2, p.position.z);
         if (p.kind === "nitro") {

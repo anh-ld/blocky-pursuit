@@ -6,7 +6,7 @@ import { Car } from "./entities/car";
 import { updateCopLights } from "./entities/cop";
 import { CityGenerator, isRoad } from "./world/city-generator";
 import { isWater, TILE_SIZE } from "./world/terrain";
-import { RunState } from "./systems/run-state";
+import { RunState, COMBO_DECAY } from "./systems/run-state";
 import { CopSystem } from "./systems/cop-system";
 import { CivilianSystem } from "./systems/civilian-system";
 import { PickupSystem } from "./systems/pickup-system";
@@ -27,6 +27,8 @@ import {
   startBgm,
   stopBgm,
   setBgmDuck,
+  playComboTick,
+  playComboLost,
 } from "./audio/sound";
 import { haptics } from "./audio/haptics";
 import {
@@ -252,6 +254,12 @@ let currentState: IGameStateValue = "start";
 const _rearLocal = new CANNON.Vec3(0, 0, 1.25);
 const _rearWorld = new CANNON.Vec3();
 
+// Combo lifeline tracking — set in tickPlaying, drives the warning tick
+// audio cadence and the "you just lost it" sting on edge transitions.
+let _prevComboCount = 0;
+let _comboTickAccum = 0;
+const COMBO_TICK_INTERVAL = 0.18; // seconds between warning ticks while in danger
+
 function pauseGame() {
   if (currentState !== "playing") return;
   currentState = "paused";
@@ -346,6 +354,8 @@ function startGame() {
   clearSkids();
   clearPopups();
   clearParticles();
+  _prevComboCount = 0;
+  _comboTickAccum = 0;
 
   // Audio: kick everything on
   initAudio();
@@ -485,6 +495,25 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   run.scoreRoadTile(car);
   run.decayCombo(dt);
   run.recordMovement(car);
+
+  // --- Combo lifeline: warning tick + "lost it" sting ---
+  // Tick window matches `comboInDanger` in run-state.syncHud (ratio < 0.25
+  // on a chain of 5+). The sting fires on the falling edge of a chain >= 10
+  // so casual breaks don't get punished with extra audio.
+  const comboRatio = run.comboTimer / COMBO_DECAY;
+  if (run.comboCount >= 5 && comboRatio > 0 && comboRatio < 0.25) {
+    _comboTickAccum += dt;
+    if (_comboTickAccum >= COMBO_TICK_INTERVAL) {
+      _comboTickAccum = 0;
+      playComboTick();
+    }
+  } else {
+    _comboTickAccum = 0;
+  }
+  if (_prevComboCount >= 10 && run.comboCount === 0) {
+    playComboLost();
+  }
+  _prevComboCount = run.comboCount;
 
   // --- Entity systems ---
   civilians.update(dt, timeInSeconds, car, run);

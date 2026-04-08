@@ -355,8 +355,73 @@ function playArpeggio(opts: IArpeggioOpts) {
 }
 
 export function playPickup() {
-  // Two-note "ding!"
+  // Two-note "ding!" — generic pickup, kept as a fallback for callers that
+  // don't pass a specific kind.
   playArpeggio({ notes: [880, 1320], type: "triangle", spacing: 0.06, attack: 0.01, peak: 0.6, decay: 0.18 });
+}
+
+/** Healing pickups (repair, shield) — warm rising triad. */
+export function playPickupHeal() {
+  playArpeggio({ notes: [523, 659, 784], type: "triangle", spacing: 0.05, attack: 0.01, peak: 0.55, decay: 0.22 });
+}
+
+/** Shield pickup — short metallic ring above the heal palette. */
+export function playPickupShield() {
+  playArpeggio({ notes: [988, 1318], type: "sine", spacing: 0.05, attack: 0.005, peak: 0.55, decay: 0.22 });
+}
+
+/** Offensive pickups (EMP, Tank) — low→high zap. */
+export function playPickupOffense() {
+  playArpeggio({ notes: [330, 660, 880], type: "sawtooth", spacing: 0.04, attack: 0.005, peak: 0.5, decay: 0.18 });
+}
+
+/** Score / utility pickups (doubleScore, magnet, timeWarp, ghost) — bright two-note. */
+export function playPickupScore() {
+  playArpeggio({ notes: [988, 1480], type: "square", spacing: 0.05, attack: 0.008, peak: 0.5, decay: 0.18 });
+}
+
+/** Nitro pickup — short noise whoosh layered over the score ding. */
+export function playNitroWhoosh() {
+  if (!ctx || !masterGain) return;
+  const buf = noiseBuffer(0.35);
+  if (!buf) return;
+  const src = ctx.createBufferSource();
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  src.buffer = buf;
+  filter.type = "bandpass";
+  filter.Q.value = 1.2;
+  const t = now();
+  // Sweep the band upward so it reads as "speed up"
+  filter.frequency.setValueAtTime(400, t);
+  filter.frequency.exponentialRampToValueAtTime(2400, t + 0.32);
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(masterGain);
+  envelope(gain, 0.005, 0.7, 0.32);
+  src.start();
+}
+
+/** Tiny tick used to warn the player their combo is about to drop. */
+export function playComboTick() {
+  if (!ctx || !masterGain) return;
+  const t = now();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = "square";
+  o.frequency.value = 1760;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.18, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  o.connect(g);
+  g.connect(masterGain);
+  o.start(t);
+  o.stop(t + 0.08);
+}
+
+/** Soft descending sting played when a high combo expires. */
+export function playComboLost() {
+  playArpeggio({ notes: [880, 660, 440], type: "triangle", spacing: 0.07, attack: 0.01, peak: 0.45, decay: 0.22 });
 }
 
 /**

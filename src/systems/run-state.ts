@@ -2,7 +2,7 @@ import type * as THREE from "three";
 import type * as CANNON from "cannon-es";
 import type { Car } from "../entities/car";
 import { isRoad, TILE_SIZE } from "../world/terrain";
-import { LEVEL_DEFS } from "./leveling";
+import { LEVEL_DEFS, getLevelProgress, getHeat } from "./leveling";
 import { MAX_HP, SCORE_BASE_TILE, COMBO_MULT_PER_COUNT, COMBO_MULT_MAX, BUSTED_TIME_THRESHOLD } from "../constants";
 
 // Bootstrap context shared by every system constructor. Held for the
@@ -15,12 +15,15 @@ import {
   hp,
   score,
   level,
+  levelProgress,
+  heat,
   survivalTime,
   nitroRemaining,
   shieldUp,
   combo,
   comboTimerRatio,
   comboMultiplier,
+  comboInDanger,
   bustedProgress,
   scoreMultRemaining,
   timeWarpRemaining,
@@ -169,12 +172,18 @@ export class RunState {
     hp.value = Math.max(0, this.hp);
     score.value = this.score;
     level.value = this.level;
+    levelProgress.value = getLevelProgress(this.score, this.level);
+    heat.value = getHeat(this.score, this.level);
     survivalTime.value = this.survivalTime;
     nitroRemaining.value = this.nitroTimer;
     shieldUp.value = this.shieldActive;
     combo.value = this.comboCount;
-    comboTimerRatio.value = Math.max(0, this.comboTimer / COMBO_DECAY);
+    const ratio = Math.max(0, this.comboTimer / COMBO_DECAY);
+    comboTimerRatio.value = ratio;
     comboMultiplier.value = Math.min(1 + this.comboCount * COMBO_MULT_PER_COUNT, COMBO_MULT_MAX);
+    // "In danger" once the timer falls below 25% on a chain of 5+. Threshold
+    // mirrors the audio tick window in main.ts so the visual + sound match.
+    comboInDanger.value = this.comboCount >= 5 && ratio > 0 && ratio < 0.25;
     bustedProgress.value = Math.min(1, this.bustedTimer / BUSTED_TIME_THRESHOLD);
     scoreMultRemaining.value = this.scoreMultTimer;
     timeWarpRemaining.value = this.timeWarpTimer;

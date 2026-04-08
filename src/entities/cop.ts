@@ -31,6 +31,22 @@ function tierForLevel(level: number): ICopTier {
   if (level === 3) return COP_TIERS[1];
   return COP_TIERS[0];
 }
+
+// SWAT mini-boss tier — its own materials so the silhouette reads as
+// "different threat" instantly, even at distance through fog.
+const SWAT_BODY_MAT = new THREE.MeshStandardMaterial({
+  color: 0x111111,
+  emissive: 0x550000,
+  emissiveIntensity: 0.3,
+  ...matProps,
+});
+const SWAT_CABIN_MAT = new THREE.MeshStandardMaterial({
+  color: 0xff2222,
+  emissive: 0xaa0000,
+  emissiveIntensity: 0.4,
+  ...cabinProps,
+});
+const SWAT_TIER: ICopTier = { bodyMat: SWAT_BODY_MAT, cabinMat: SWAT_CABIN_MAT };
 const COP_RED_LIGHT_MAT = new THREE.MeshStandardMaterial({
   color: 0xff1111,
   emissive: 0xff1111,
@@ -129,9 +145,13 @@ export class Cop {
   flankSide: number; // +1 or -1
   damageCooldown: number; // seconds until this cop can deal damage again
   nearMissArmed: boolean; // becomes true when far from player; consumed on next near-miss
+  // Mini-boss flag — set by spawning. SWAT cops are bigger, hit harder, and
+  // are immune to EMP. Cop-system reads this on collision + drown for bonus
+  // payout, and skips them in empBlast().
+  isSwat: boolean;
   preStepCallback: () => void;
 
-  constructor(scene: THREE.Scene, world: CANNON.World, position: THREE.Vector3, level: number = 1) {
+  constructor(scene: THREE.Scene, world: CANNON.World, position: THREE.Vector3, level: number = 1, isSwat: boolean = false) {
     this.scene = scene;
     this.world = world;
     this.level = Math.max(1, Math.min(5, level));
@@ -139,6 +159,7 @@ export class Cop {
     this.flankSide = Math.random() < 0.5 ? 1 : -1;
     this.damageCooldown = 0;
     this.nearMissArmed = false;
+    this.isSwat = isSwat;
 
     // Voxel dimensions
     const unit = UNIT;
@@ -146,7 +167,7 @@ export class Cop {
     // --- Visuals (Three.js) ---
     this.mesh = new THREE.Group();
 
-    const tier = tierForLevel(this.level);
+    const tier = isSwat ? SWAT_TIER : tierForLevel(this.level);
 
     // Chassis (Body)
     const bodyMesh = new THREE.Mesh(COP_BODY_GEO, tier.bodyMat);
@@ -203,6 +224,11 @@ export class Cop {
       this.mesh.add(wheel);
     });
 
+    // SWAT: visible scale-up so the silhouette pops as a mini-boss. The
+    // physics shape stays cop-sized — SWAT power comes from speed/mass, not
+    // a hitbox grow that would feel unfair on grazes.
+    if (isSwat) this.mesh.scale.set(1.4, 1.4, 1.4);
+
     scene.add(this.mesh);
 
     // --- Physics (Cannon-es) ---
@@ -228,6 +254,16 @@ export class Cop {
     this.forwardForce = this.config.forwardForce;
     this.turnSpeed = this.config.turnSpeed;
     this.maxSpeed = this.config.speed;
+
+    // SWAT mini-boss: heavier mass + extra accel so it feels like a tank
+    // bearing down on you. Top speed only nudged so it can still be outrun
+    // — the threat is "you can't take a hit", not "it catches you for free".
+    if (isSwat) {
+      this.body.mass = this.config.mass * 1.8;
+      this.body.updateMassProperties();
+      this.forwardForce *= 1.3;
+      this.maxSpeed += 3;
+    }
 
     // Collision bounce-back state (same as player car)
     this.bounceBackTimer = 0;

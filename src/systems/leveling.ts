@@ -30,3 +30,34 @@ export function getLevelDef(level: number): ILevelDef {
   const idx = Math.max(0, Math.min(level - 1, LEVEL_DEFS.length - 1));
   return LEVEL_DEFS[idx];
 }
+
+// Endgame heat — at max level, every additional `HEAT_STEP_SCORE` points
+// adds one heat tier. Each tier shaves a small amount off cop spawn
+// interval so a long survivor run keeps escalating instead of plateauing.
+export const HEAT_STEP_SCORE = 1500;
+export const HEAT_INTERVAL_SHAVE = 0.05;
+export const HEAT_INTERVAL_FLOOR = 0.4;
+
+/**
+ * Returns the current heat tier (0 = pre-cap, 1+ = past max level). Caller
+ * uses this for spawn-rate adjustment + the HUD chip.
+ */
+export function getHeat(score: number, level: number): number {
+  if (level < LEVEL_DEFS.length) return 0;
+  const top = LEVEL_DEFS[LEVEL_DEFS.length - 1].scoreThreshold;
+  if (score <= top) return 0;
+  return Math.floor((score - top) / HEAT_STEP_SCORE) + 1;
+}
+
+/**
+ * 0..1 fraction of the way from the current level's score threshold to the
+ * next level's threshold. At max level the bar fills completely so the HUD
+ * doesn't render a phantom "almost there" tease forever.
+ */
+export function getLevelProgress(score: number, level: number): number {
+  if (level >= LEVEL_DEFS.length) return 1;
+  const cur = LEVEL_DEFS[Math.max(0, level - 1)].scoreThreshold;
+  const next = LEVEL_DEFS[level].scoreThreshold;
+  if (next <= cur) return 1;
+  return Math.max(0, Math.min(1, (score - cur) / (next - cur)));
+}

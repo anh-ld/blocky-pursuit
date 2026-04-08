@@ -28,6 +28,12 @@ export const hp = signal(100);
 export const score = signal(0);
 export const level = signal(1);
 export const survivalTime = signal(0);
+// 0..1 fraction toward the next level threshold; powers the thin progress
+// bar under the HUD level chip so long runs always have a visible carrot.
+export const levelProgress = signal(0);
+// Endgame heat tier — non-zero past max level. HUD shows a 🔥 chip and the
+// cop spawn rate gets shaved by this much per tier. Pure-progression knob.
+export const heat = signal(0);
 export const gameOverReason = signal("BUSTED");
 export const nitroRemaining = signal(0);
 export const shieldUp = signal(false);
@@ -40,6 +46,9 @@ export const tankRemaining = signal(0);
 export const combo = signal(0);
 export const comboTimerRatio = signal(0); // 0..1, fraction of decay window remaining
 export const comboMultiplier = signal(1); // road-tile score multiplier from current combo
+// True when the combo timer is about to expire on a non-trivial chain. Drives
+// the HUD red pulse + audio tick warning so the player can rescue it.
+export const comboInDanger = signal(false);
 // 0..1, fraction of BUSTED_TIME_THRESHOLD elapsed — drives the warning vignette
 // so the player can see the busted countdown and break free before game over.
 export const bustedProgress = signal(0);

@@ -3,9 +3,8 @@ import * as CANNON from "cannon-es";
 import { Cop } from "../entities/cop";
 import { Civilian } from "../entities/civilian";
 import { isRoad } from "../world/city-generator";
+import { TILE_SIZE } from "../world/terrain";
 import { COP_SPAWN_DIST_MIN, COP_SPAWN_DIST_RANGE } from "../constants";
-
-const TILE_SIZE = 10;
 
 export type ISpawnCopArgs = {
   scene: THREE.Scene;
@@ -15,11 +14,14 @@ export type ISpawnCopArgs = {
   level: number;
   playerPosition: THREE.Vector3;
   playerVelocity: CANNON.Vec3;
+  // SWAT mini-boss override. Bypasses the maxCops check (it lives outside
+  // the per-level cap) and constructs the cop with its mini-boss flag set.
+  isSwat?: boolean;
 };
 
 export function spawnCop(args: ISpawnCopArgs) {
-  const { scene, world, cops, maxCops, level, playerPosition, playerVelocity } = args;
-  if (cops.length >= maxCops) return;
+  const { scene, world, cops, maxCops, level, playerPosition, playerVelocity, isSwat } = args;
+  if (!isSwat && cops.length >= maxCops) return;
 
   // Spawn out of camera view
   const distance = COP_SPAWN_DIST_MIN + Math.random() * COP_SPAWN_DIST_RANGE;
@@ -64,7 +66,7 @@ export function spawnCop(args: ISpawnCopArgs) {
   if (!foundRoad) return;
 
   const pos = new THREE.Vector3(tileX * TILE_SIZE, 1, tileZ * TILE_SIZE);
-  const cop = new Cop(scene, world, pos, level);
+  const cop = new Cop(scene, world, pos, level, isSwat);
   cops.push(cop);
 }
 

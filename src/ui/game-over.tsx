@@ -1,4 +1,5 @@
 import { attemptAsync } from "es-toolkit";
+import { useEffect, useState } from "preact/hooks";
 import {
   score,
   bestScore,
@@ -26,6 +27,31 @@ function formatTime(seconds: number) {
   return `${secs}.${ms.toString().padStart(2, "0")}s`;
 }
 
+/**
+ * Animate a numeric value from 0 → target over `duration` ms with an
+ * ease-out cubic curve. Used for the game-over score reveal so the panel
+ * lands like a payoff instead of a static dump of numbers.
+ */
+function useCountUp(target: number, duration: number): number {
+  // Initial state is 0 (not target) so the very first render of the panel
+  // shows the count starting from zero — otherwise there's a 1-frame flash
+  // of the final score before the effect resets it.
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - k, 3);
+      setValue(target * eased);
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
+
 async function shareRun() {
   const text = `I scored ${Math.floor(score.value)} in Blocky Pursuit — survived ${formatTime(survivalTime.value)} with a x${runBiggestCombo.value} combo as ${playerName.value}. Can you beat me?`;
   const url = window.location.href;
@@ -48,6 +74,11 @@ export function GameOver() {
   const tile = Math.floor(runTileScore.value);
   const cmb = Math.floor(runComboScore.value);
   const cop = Math.floor(runCopScore.value);
+  // Animated score reveal — counts from 0 to the final score over ~800ms.
+  // The hook reads `score.value` once at mount; signal changes after the
+  // panel appears would re-trigger the effect, but the run is over so the
+  // value stays stable.
+  const animatedScore = useCountUp(score.value, 800);
   const handleRetry = () => {
     haptics.pickup();
     actions.startGame();
@@ -69,7 +100,7 @@ export function GameOver() {
           </div>
         )}
         <div class="text-amber-400 text-5xl font-extrabold tabular-nums leading-none">
-          {Math.floor(score.value).toLocaleString()}
+          {Math.floor(animatedScore).toLocaleString()}
         </div>
         <div class="flex items-center gap-4 text-[10px] uppercase tracking-widest text-gray-400">
           <div class="flex flex-col items-center">

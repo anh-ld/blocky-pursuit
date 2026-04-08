@@ -1,6 +1,15 @@
 import * as CANNON from "cannon-es";
 import type { Car } from "./car";
 
+// Per-step scratch — reused across the player car's preStep callback. Safe
+// because physics steps run single-threaded and none of these values need
+// to outlive a single preStep invocation. Mirrors the same trick used in
+// cop.ts / civilian.ts to keep GC pressure off the hot loop.
+const _localVel = new CANNON.Vec3();
+const _force = new CANNON.Vec3();
+const _forceOffset = new CANNON.Vec3(0, 0, 0);
+const _q = new CANNON.Quaternion();
+
 /**
  * Install the player car's physics behavior on the cannon-es world preStep:
  * arcade auto-drive with reverse-on-collision recovery, lateral grip,
@@ -28,9 +37,8 @@ export function installCarPhysics(car: Car) {
     if (body.position.y > 1.5) return;
 
     // 1. Auto-drive with acceleration curve (both directions start from 0)
-    const localVel = new CANNON.Vec3();
-    body.vectorToLocalFrame(body.velocity, localVel);
-    const forwardSpeed = -localVel.z; // positive = moving forward
+    body.vectorToLocalFrame(body.velocity, _localVel);
+    const forwardSpeed = -_localVel.z; // positive = moving forward
     const maxReverseSpeed = car.maxSpeed * 0.25;
 
     if (car.bounceBackTimer > 0) {
@@ -38,13 +46,13 @@ export function installCarPhysics(car: Car) {
       const reverseSpeed = Math.max(0, -forwardSpeed);
       const reverseRatio = Math.min(reverseSpeed / maxReverseSpeed, 1);
       const reverseScale = 0.2 * (1 - reverseRatio * 0.8);
-      const force = new CANNON.Vec3(0, 0, car.forwardForce * reverseScale);
-      body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
+      _force.set(0, 0, car.forwardForce * reverseScale);
+      body.applyLocalForce(_force, _forceOffset);
 
       // Cap reverse speed
       if (reverseSpeed > maxReverseSpeed) {
-        localVel.z = maxReverseSpeed;
-        body.vectorToWorldFrame(localVel, body.velocity);
+        _localVel.z = maxReverseSpeed;
+        body.vectorToWorldFrame(_localVel, body.velocity);
       }
     } else {
       // Forward: peak torque at low speed, tapering toward top speed
@@ -62,24 +70,24 @@ export function installCarPhysics(car: Car) {
         forceScale *= 0.15 + 0.85 * recoveryProgress;
       }
 
-      const force = new CANNON.Vec3(0, 0, -car.forwardForce * forceScale);
-      body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
+      _force.set(0, 0, -car.forwardForce * forceScale);
+      body.applyLocalForce(_force, _forceOffset);
     }
 
-    // 2. Custom Arcade Friction (Drift Mechanics)
-    const localVelocity = new CANNON.Vec3();
-    body.vectorToLocalFrame(body.velocity, localVelocity);
+    // 2. Custom Arcade Friction (Drift Mechanics).
+    // Re-read into the same scratch — applyLocalForce can mutate body.velocity.
+    body.vectorToLocalFrame(body.velocity, _localVel);
 
     // Capture lateral speed BEFORE friction kills it — used by skid emitter
-    car.lateralSpeed = Math.abs(localVelocity.x);
+    car.lateralSpeed = Math.abs(_localVel.x);
 
     // Lateral grip is per-skin (gripFactor). Recovery loosens it so steering
     // can redirect the car after a bounce-back.
     const isRecovering = car.bounceBackTimer > 0 || car.recoveryTimer > 0;
-    localVelocity.x *= isRecovering ? 0.95 : car.gripFactor;
-    localVelocity.z *= 0.98;
+    _localVel.x *= isRecovering ? 0.95 : car.gripFactor;
+    _localVel.z *= 0.98;
 
-    body.vectorToWorldFrame(localVelocity, body.velocity);
+    body.vectorToWorldFrame(_localVel, body.velocity);
 
     // Cap max speed
     const speed = body.velocity.length();
@@ -92,7 +100,7 @@ export function installCarPhysics(car: Car) {
     // retain more authority at top speed (less twitchy / easier to drive).
     body.angularVelocity.y = 0;
     if (speed > 0.5) {
-      const dir = localVelocity.z < 0 ? 1 : -1;
+      const dir = _localVel.z < 0 ? 1 : -1;
       const speedRatio = Math.min(speed / car.maxSpeed, 1);
       // 1 at 0 speed → stabilityFactor at top speed
       const steerScale = 1 - speedRatio * (1 - car.stabilityFactor);
@@ -101,9 +109,8 @@ export function installCarPhysics(car: Car) {
       if (car.keys.left) steerAngle = effectiveTurn * dir;
       if (car.keys.right) steerAngle = -effectiveTurn * dir;
 
-      const q = new CANNON.Quaternion();
-      q.setFromEuler(0, steerAngle * (1 / 60), 0);
-      body.quaternion = body.quaternion.mult(q);
+      _q.setFromEuler(0, steerAngle * (1 / 60), 0);
+      body.quaternion = body.quaternion.mult(_q);
     }
   });
 }

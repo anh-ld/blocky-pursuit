@@ -2,11 +2,14 @@ import {
   hp,
   score,
   level,
+  levelProgress,
+  heat,
   nitroRemaining,
   shieldUp,
   combo,
   comboTimerRatio,
   comboMultiplier,
+  comboInDanger,
   scoreMultRemaining,
   timeWarpRemaining,
   magnetRemaining,
@@ -46,24 +49,44 @@ export function Hud() {
           {Math.floor(score.value)}
         </span>
       </div>
-      <span class="text-orange-500 text-xs font-extrabold tracking-widest">
-        LV {level.value}
-      </span>
+      <div class="flex flex-col items-start gap-0.5">
+        <span class="text-orange-500 text-xs font-extrabold tracking-widest leading-none">
+          LV {level.value}
+        </span>
+        <div class="w-10 h-0.5 bg-orange-900/60 overflow-hidden">
+          <div
+            class="h-full bg-orange-400"
+            style={{ width: `${levelProgress.value * 100}%` }}
+          />
+        </div>
+      </div>
+      {heat.value > 0 && (
+        <span class="text-red-400 text-xs font-extrabold tracking-widest">
+          🔥{heat.value}
+        </span>
+      )}
       {c > 0 && (
-        <div class="flex flex-col items-start gap-0.5">
+        <div class={`flex flex-col items-start gap-0.5 ${comboInDanger.value ? "animate-busted-pulse" : ""}`}>
           <div class="flex items-baseline gap-1">
             <span
               key={`combo-tier-${comboTier}`}
-              class="text-pink-400 text-xs font-extrabold tracking-widest inline-block animate-combo-pop origin-left"
+              class={`text-xs font-extrabold tracking-widest inline-block animate-combo-pop origin-left ${
+                comboInDanger.value ? "text-red-400" : "text-pink-400"
+              }`}
             >
               x{c}
             </span>
-            <span class="text-pink-300/70 text-[9px] font-bold tabular-nums">
+            <span class={`text-[9px] font-bold tabular-nums ${
+              comboInDanger.value ? "text-red-300/80" : "text-pink-300/70"
+            }`}>
               {cMult.toFixed(1)}x
             </span>
           </div>
-          <div class="w-10 h-0.5 bg-pink-900/60 overflow-hidden">
-            <div class="h-full bg-pink-400" style={{ width: `${cRatio * 100}%` }} />
+          <div class={`w-10 h-0.5 overflow-hidden ${comboInDanger.value ? "bg-red-900/60" : "bg-pink-900/60"}`}>
+            <div
+              class={`h-full ${comboInDanger.value ? "bg-red-400" : "bg-pink-400"}`}
+              style={{ width: `${cRatio * 100}%` }}
+            />
           </div>
         </div>
       )}

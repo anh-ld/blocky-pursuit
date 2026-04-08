@@ -14,6 +14,7 @@ import {
   spawnConfetti,
 } from "../world/effects";
 import { spawnPopup } from "../world/popups";
+import { damageDirAngle, damageDirSeq } from "../state";
 import { playCrash, playSplash, playPickup, playComboTier } from "../audio/sound";
 import { haptics } from "../audio/haptics";
 import { COMBO_DECAY, type RunState, type IGameContext } from "./run-state";
@@ -290,6 +291,14 @@ export class CopSystem {
             // Combo reset on a real hit
             run.comboCount = 0;
             run.comboTimer = 0;
+            // Damage direction indicator: angle from player → cop in world
+            // XZ. The UI uses this to render a brief red arc on the matching
+            // screen edge so the player learns to evade the right way.
+            damageDirAngle.value = Math.atan2(
+              cop.body.position.z - car.body.position.z,
+              cop.body.position.x - car.body.position.x,
+            );
+            damageDirSeq.value++;
           }
         }
       }

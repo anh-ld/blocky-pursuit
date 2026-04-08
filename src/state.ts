@@ -34,6 +34,12 @@ export const levelProgress = signal(0);
 // Endgame heat tier — non-zero past max level. HUD shows a 🔥 chip and the
 // cop spawn rate gets shaved by this much per tier. Pure-progression knob.
 export const heat = signal(0);
+// Damage-direction indicator state. `damageDirAngle` is the world-space
+// angle (radians) from the player to the cop that just dealt damage. The
+// `damageDirSeq` counter increments on every new hit so the UI can use it
+// as a `useEffect` dep to re-trigger its fade animation.
+export const damageDirAngle = signal(0);
+export const damageDirSeq = signal(0);
 export const gameOverReason = signal("BUSTED");
 export const nitroRemaining = signal(0);
 export const shieldUp = signal(false);

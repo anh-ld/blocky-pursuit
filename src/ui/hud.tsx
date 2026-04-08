@@ -36,8 +36,8 @@ export function Hud() {
   // at the same instant the milestone sound + popup fire.
   const comboTier = Math.floor(c / COMBO_MILESTONE);
   return (
-    <div class="flex items-center gap-2">
-      <div class="w-25 h-3.5 bg-gray-700 relative overflow-hidden">
+    <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+      <div class="w-16 sm:w-25 h-3.5 bg-gray-700 relative overflow-hidden shrink-0">
         <div
           class={`h-full ${color} transition-all duration-200`}
           style={{ width: `${Math.max(0, v)}%` }}

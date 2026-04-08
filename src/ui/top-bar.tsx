@@ -55,8 +55,11 @@ export function TopBar() {
   const start = state === "start";
 
   return (
-    <div class="flex flex-wrap gap-2 items-center justify-between px-5 h-13 bg-gray-900 shrink-0">
-      <div class="flex items-center gap-2">
+    <div class="flex flex-nowrap items-center justify-between gap-2 px-3 sm:px-5 h-13 min-h-13 bg-gray-900 shrink-0">
+      {/* Left group: HUD + time. `min-w-0` lets it shrink below content size
+          and `overflow-hidden` clips the rightmost HUD chips when there's
+          no room — the right group (pause + avatar) stays fully visible. */}
+      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-hidden">
         {start && (
           <h1 class="text-orange-500 text-lg font-extrabold uppercase tracking-widest m-0 leading-none">
             blocky pursuit
@@ -64,12 +67,13 @@ export function TopBar() {
         )}
         {(playing || paused || over) && <Hud />}
         {(playing || paused || over) && (
-          <div class="text-gray-400 text-xs font-semibold tracking-widest">
+          <div class="text-gray-400 text-xs font-semibold tracking-widest hidden sm:block shrink-0">
             {formatTime(survivalTime.value)}
           </div>
         )}
       </div>
-      <div class="flex items-center gap-2">
+      {/* Right group: stays fixed, never shrinks. */}
+      <div class="flex items-center gap-2 shrink-0">
         {(playing || paused) && (
           <button
             aria-label={paused ? "Resume" : "Pause"}

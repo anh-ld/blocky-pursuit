@@ -29,6 +29,9 @@ import {
   setBgmDuck,
   playComboTick,
   playComboLost,
+  playMilestone,
+  playEscape,
+  playHeartbeat,
 } from "./audio/sound";
 import { haptics } from "./audio/haptics";
 import {
@@ -50,6 +53,13 @@ import { initPopups, spawnPopup, updatePopups, clearPopups } from "./world/popup
 import { initPortals } from "./world/portals";
 import { getSkin } from "./entities/car-skins";
 import { initSkids, spawnSkid, updateSkids, clearSkids } from "./world/skids";
+import {
+  initGhostTrail,
+  captureGhost,
+  updateGhostTrail,
+  clearGhostTrail,
+  setGhostTrailColor,
+} from "./world/ghost-trail";
 import {
   applyWeather,
   createRain,
@@ -100,6 +110,12 @@ import {
   SPEED_STREAK_MIN_RATIO,
   SIREN_MAX_RANGE,
   DEATH_MOMENT_MS,
+  SCORE_MILESTONES,
+  ESCAPE_DIST,
+  ESCAPE_TIME,
+  ESCAPE_REWARD,
+  ESCAPE_HEAL,
+  LOW_HP_THRESHOLD,
 } from "./constants";
 
 // --- Mount Preact UI first so #game-area exists for the canvas ---
@@ -201,6 +217,7 @@ world.addBody(groundBody);
 initEffects(scene);
 initPopups(scene);
 initSkids(scene);
+initGhostTrail(scene);
 initScreenFlash(gameArea);
 
 // --- City Generation ---
@@ -221,7 +238,14 @@ const portals = initPortals({
 function selectSkin(skinId: string) {
   setSelectedSkin(skinId);
   car.applySkin(skinId);
+  // Keep the nitro ghost trail in sync with the active car color so the
+  // silhouettes match the player's currently-driven body paint.
+  setGhostTrailColor(getSkin(skinId).bodyColor);
 }
+
+// Initialize ghost trail color for the starting skin so the very first
+// nitro burst already paints the right color (no first-frame flash).
+setGhostTrailColor(getSkin(selectedSkin.value).bodyColor);
 
 // Apply the current weather's driving modifiers to the freshly built car, then
 // wire the setWeather action so future weather changes update sky, particles
@@ -259,6 +283,10 @@ const _rearWorld = new CANNON.Vec3();
 let _prevComboCount = 0;
 let _comboTickAccum = 0;
 const COMBO_TICK_INTERVAL = 0.18; // seconds between warning ticks while in danger
+
+// Low-HP heartbeat scheduler. Interval scales from 1.1s at HP=threshold
+// down to 0.45s at HP=1 so the player feels the danger ramping up.
+let _heartbeatAccum = 0;
 
 function pauseGame() {
   if (currentState !== "playing") return;
@@ -354,8 +382,10 @@ function startGame() {
   clearSkids();
   clearPopups();
   clearParticles();
+  clearGhostTrail();
   _prevComboCount = 0;
   _comboTickAccum = 0;
+  _heartbeatAccum = 0;
 
   // Audio: kick everything on
   initAudio();
@@ -560,6 +590,60 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     run.hp = Math.min(MAX_HP, run.hp + HP_REGEN_PER_SEC * dt);
   }
 
+  // --- Score milestones — fire on the first frame the score crosses each
+  // round-number threshold. Walks the index forward so each milestone fires
+  // exactly once per run.
+  while (
+    run.nextMilestoneIdx < SCORE_MILESTONES.length &&
+    run.score >= SCORE_MILESTONES[run.nextMilestoneIdx]
+  ) {
+    const value = SCORE_MILESTONES[run.nextMilestoneIdx];
+    run.nextMilestoneIdx++;
+    spawnPopup(car.body.position.x, car.body.position.y + 4, car.body.position.z, `${value.toLocaleString()}!`, "#ffdd44", 1.6, 14);
+    triggerScreenFlash(0.35);
+    playMilestone();
+    haptics.levelUp();
+  }
+
+  // --- Escape reward — disengage from the chase pays off so the player
+  // has a reason to use cover/distance instead of just orbiting cops.
+  if (nearestCopDist >= ESCAPE_DIST) {
+    if (run.escapeArmed) {
+      run.escapeTimer += dt;
+      if (run.escapeTimer >= ESCAPE_TIME) {
+        run.escapeArmed = false;
+        run.escapeTimer = 0;
+        run.score += ESCAPE_REWARD;
+        run.copScore += ESCAPE_REWARD;
+        run.hp = Math.min(MAX_HP, run.hp + ESCAPE_HEAL);
+        spawnPopup(car.body.position.x, car.body.position.y + 4, car.body.position.z, "ESCAPED!", "#66ff88", 1.6, 14);
+        spawnPopup(car.body.position.x, car.body.position.y + 2.5, car.body.position.z, `+${ESCAPE_REWARD}`, "#ffcc22");
+        triggerScreenFlash(0.25);
+        playEscape();
+      }
+    }
+  } else {
+    // Cop came back into range — re-arm and reset the timer so the next
+    // disengage takes a fresh 1.5s.
+    run.escapeTimer = 0;
+    run.escapeArmed = true;
+  }
+
+  // --- Low-HP heartbeat — interval scales with how close to dying the
+  // player is. Audio only; the visual vignette is a UI component reacting
+  // to the same hp signal.
+  if (run.hp > 0 && run.hp < LOW_HP_THRESHOLD) {
+    _heartbeatAccum += dt;
+    const danger = 1 - run.hp / LOW_HP_THRESHOLD; // 0..1
+    const interval = 1.1 - danger * 0.65; // 1.1s → 0.45s
+    if (_heartbeatAccum >= interval) {
+      _heartbeatAccum = 0;
+      playHeartbeat(danger);
+    }
+  } else {
+    _heartbeatAccum = 0;
+  }
+
   // --- Siren: on when any cop within range, intensity scales with closeness ---
   let sirenIntensity = 0;
   if (currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE) {
@@ -634,6 +718,15 @@ function animate(time: number) {
   // popups freeze on game-over so the run summary isn't crowded by stale text.
   updateEffects(dt);
   updateSkids(dt);
+  updateGhostTrail(dt);
+  // Capture a fresh ghost slot when nitro is active. Real-time dt — not the
+  // slow-mo dt — so the trail spacing stays even regardless of time slow.
+  captureGhost(
+    dt,
+    currentState === "playing" && run.nitroTimer > 0,
+    car.body.position,
+    car.body.quaternion,
+  );
   updateTimeSlow(dt);
   cityGenerator.tick(timeInSeconds);
   updateRain(rain, dt, car.mesh.position.x, car.mesh.position.z);

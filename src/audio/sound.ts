@@ -448,6 +448,59 @@ export function playLevelUp() {
   playArpeggio({ notes: [523, 659, 784, 1047], type: "square", spacing: 0.08, attack: 0.02, peak: 0.5, decay: 0.2 });
 }
 
+/**
+ * Score milestone — slightly higher and more triumphant than level-up so
+ * the two events don't feel identical when they happen close together.
+ */
+export function playMilestone() {
+  playArpeggio({
+    notes: [659, 988, 1319, 1568],
+    type: "triangle",
+    spacing: 0.06,
+    attack: 0.01,
+    peak: 0.55,
+    decay: 0.22,
+  });
+}
+
+/**
+ * Quick warm two-note used when the player shakes off a chase. Distinct
+ * from pickup audio so the "ESCAPED!" beat reads as its own moment.
+ */
+export function playEscape() {
+  playArpeggio({
+    notes: [784, 1175],
+    type: "triangle",
+    spacing: 0.07,
+    attack: 0.01,
+    peak: 0.5,
+    decay: 0.25,
+  });
+}
+
+/**
+ * Low-HP heartbeat — short sub-thump scheduled by main.ts at an interval
+ * that scales with how close to dying the player is. Single oscillator,
+ * cheap, doesn't fight other sounds because it sits in the very low end.
+ */
+export function playHeartbeat(intensity: number) {
+  if (!ctx || !masterGain) return;
+  const t = now();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = "sine";
+  o.frequency.setValueAtTime(80, t);
+  o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+  const peak = 0.4 + intensity * 0.4;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  o.connect(g);
+  g.connect(masterGain);
+  o.start(t);
+  o.stop(t + 0.2);
+}
+
 export function playGameOver() {
   // C Bb G Eb — descending sting
   playArpeggio({ notes: [523, 466, 392, 311], type: "sawtooth", spacing: 0.15, attack: 0.03, peak: 0.55, decay: 0.4 });

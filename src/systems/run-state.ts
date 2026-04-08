@@ -68,6 +68,17 @@ export class RunState {
   comboCount = 0;
   comboTimer = 0;
 
+  // Index into SCORE_MILESTONES — points at the next un-crossed milestone.
+  // main.ts walks this forward whenever score crosses a threshold.
+  nextMilestoneIdx = 0;
+  // Escape reward state — accumulates while no cop is within ESCAPE_DIST,
+  // fires once it crosses ESCAPE_TIME, and re-arms when a cop returns.
+  // `escapeArmed` starts FALSE so the very first 4 seconds of a fresh run
+  // (before the first cop has even spawned) don't count as an "escape".
+  // Becomes true the first time a cop enters ESCAPE_DIST.
+  escapeTimer = 0;
+  escapeArmed = false;
+
   // Run summary
   drownedThisRun = 0;
   biggestCombo = 0;
@@ -156,6 +167,9 @@ export class RunState {
     this.bustedTimer = 0;
     this.comboCount = 0;
     this.comboTimer = 0;
+    this.nextMilestoneIdx = 0;
+    this.escapeTimer = 0;
+    this.escapeArmed = false;
     this.drownedThisRun = 0;
     this.biggestCombo = 0;
     this.topSpeed = 0;

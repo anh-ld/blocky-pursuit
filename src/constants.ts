@@ -95,3 +95,21 @@ export const GHOST_DURATION = 3;
 // --- Tank (kill cops on contact) ---
 export const TANK_DURATION = 5;
 export const TANK_KILL_SCORE = 25;
+
+// --- Score milestones (psychological round-number celebration) ---
+// Crossed once per run, ascending. Each crossing fires a popup + small flash
+// + milestone sting so the player feels "I just hit a number that matters".
+export const SCORE_MILESTONES = [1000, 5000, 10000, 25000, 50000, 100000];
+
+// --- Escape reward (no cop within radius for N seconds) ---
+// Pays out a flat score + heal so disengaging from a chase feels rewarding
+// instead of empty. Re-arms once a cop comes back into range.
+export const ESCAPE_DIST = 60;
+export const ESCAPE_TIME = 1.5;
+export const ESCAPE_REWARD = 50;
+export const ESCAPE_HEAL = 5;
+
+// --- Low-HP danger threshold ---
+// HP at which the screen-edge red vignette + heartbeat kicks in. Tuned so
+// the warning shows up while the player still has time to react.
+export const LOW_HP_THRESHOLD = 30;

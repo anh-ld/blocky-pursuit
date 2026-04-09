@@ -4,10 +4,10 @@
  *
  * Encoding: VP8 @ 150 Kbps / 15 FPS — ~3.3 MB for a 3-min run.
  * VP8 is preferred over VP9 because software VP9 encoding is much
- * heavier on the main thread.
- *
- * Skipped entirely on low-power devices (mobile, ≤4 cores) where
- * software encoding would degrade gameplay FPS.
+ * heavier on the main thread. At this bitrate/FPS even budget mobile
+ * devices encode without dropping frames, so we let the natural
+ * capability gates (captureStream, isTypeSupported, MediaRecorder
+ * construction) decide whether recording can happen.
  */
 
 import { attempt } from "es-toolkit";
@@ -25,23 +25,6 @@ let isRecording = false;
 let durationCapTimer: number | null = null;
 
 /**
- * Returns true if this device is too underpowered to encode video
- * alongside the game without dropping frames. We bail completely on
- * these devices — recording is non-essential.
- */
-function isLowPowerDevice(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const cores = navigator.hardwareConcurrency ?? 0;
-  if (cores > 0 && cores <= 4) return true;
-  // Coarse pointer = touch-primary device. Mobile chips rarely have
-  // hardware WebM encoders, so software encode tanks FPS.
-  if (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) {
-    return true;
-  }
-  return false;
-}
-
-/**
  * Start recording the current gameplay session.
  * Captures the game canvas at 15 FPS / 150 Kbps VP8.
  */
@@ -50,11 +33,6 @@ export async function startRecording(canvas: HTMLCanvasElement): Promise<void> {
 
   if (!canvas.captureStream) {
     console.warn("[recorder] canvas.captureStream not supported");
-    return;
-  }
-
-  if (isLowPowerDevice()) {
-    console.log("[recorder] Skipped on low-power device");
     return;
   }
 

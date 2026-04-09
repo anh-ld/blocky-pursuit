@@ -2,18 +2,31 @@
  * Auto-records gameplay sessions and uploads only when the score
  * qualifies for the top-50 leaderboard.
  *
- * Encoding: VP8 @ 150 Kbps / 15 FPS — ~3.3 MB for a 3-min run.
- * VP8 is preferred over VP9 because software VP9 encoding is much
- * heavier on the main thread. At this bitrate/FPS even budget mobile
- * devices encode without dropping frames, so we let the natural
- * capability gates (captureStream, isTypeSupported, MediaRecorder
- * construction) decide whether recording can happen.
+ * Encoding: H.264 (MP4) ONLY. No software-encoder fallback.
+ *
+ * Rationale: software VP8/VP9 encoding competes with the WebGL
+ * renderer for CPU/GPU bandwidth and visibly stutters the game,
+ * especially on Apple Silicon. Hardware H.264 via MediaRecorder is
+ * the only path with truly zero perf impact. If the browser doesn't
+ * expose it, recording is silently disabled — gameplay always wins
+ * over the optional replay feature.
+ *
+ * Coverage with hardware H.264 in MediaRecorder:
+ *   ✓ Chrome 122+ on Mac (VideoToolbox)
+ *   ✓ Chrome 122+ on Windows (Media Foundation)
+ *   ✓ Chrome on Android (depends on chipset, usually yes)
+ *   ✓ Safari 14.1+ on macOS / iOS
+ *   ✓ Edge (Chromium)
+ *   ✗ Firefox (no MP4 in MediaRecorder as of 2025)
+ *   ✗ Old Chrome (<122)
+ *
+ * Bitrate: 150 Kbps. FPS: 10. ~2 MB for a 3-min run.
  */
 
 import { attempt } from "es-toolkit";
 
 const VIDEO_BITRATE = 150_000; // 150 kbps — superlightweight
-const CAPTURE_FPS = 15; // 15 FPS — still legible for arcade replays
+const CAPTURE_FPS = 10; // 10 FPS — replays are for "look at this moment", not analysis
 const CHUNK_INTERVAL_MS = 4000; // ~75 KB per chunk; 4 s keeps ondataavailable churn low
 // Hard cap so memory + final upload don't grow unbounded on marathon runs.
 const MAX_DURATION_MS = 4 * 60 * 1000;
@@ -132,14 +145,21 @@ export function getSessionId(): string | null {
 // --- Internal helpers ---
 
 function getSupportedMimeType(): string | null {
-  // VP8 first: software VP9 encoding is significantly heavier on the
-  // main thread. No audio track is captured so codec strings omit ",opus".
-  const types = ["video/webm;codecs=vp8", "video/webm;codecs=vp9", "video/webm"];
+  // Hardware H.264 only. No software-encoder fallback — see header doc.
+  // Browsers that expose MediaRecorder MP4 support do so because the
+  // platform has a hardware video encoder behind it. If neither type
+  // matches, we return null and recording is silently skipped.
+  const types = [
+    "video/mp4;codecs=avc1.42E01F", // H.264 baseline profile, level 3.1
+    "video/mp4",
+  ];
   for (const type of types) {
     if (MediaRecorder.isTypeSupported(type)) {
+      console.log(`[recorder] Using HW codec: ${type}`);
       return type;
     }
   }
+  console.log("[recorder] No HW-accelerated codec available — recording disabled");
   return null;
 }
 

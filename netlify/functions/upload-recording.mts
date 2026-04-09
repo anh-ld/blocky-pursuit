@@ -76,9 +76,22 @@ export default async function handler(req: Request, _context: Context) {
     return new Response("Replay already uploaded for this session", { status: 409 });
   }
 
+  // Allowlist MIME types to keep play-recording's Content-Type header safe.
+  // Anything outside this set falls back to webm (the legacy default).
+  const ALLOWED_MIMES = new Set([
+    "video/mp4",
+    "video/webm",
+  ]);
+  // recording.type is the full codec string (e.g. "video/mp4;codecs=avc1.42E01F").
+  // We only need the container part for the response Content-Type.
+  const containerType = (recording.type || "video/webm").split(";")[0]!.trim();
+  const mimeType = ALLOWED_MIMES.has(containerType) ? containerType : "video/webm";
+
   const arrayBuffer = await recording.arrayBuffer();
-  const videoBlob = new Blob([arrayBuffer], { type: "video/webm" });
+  const videoBlob = new Blob([arrayBuffer], { type: mimeType });
   // Never trust client-provided IDs for storage keys; generate server-side.
+  // The .webm extension is just an internal storage convention — playback
+  // uses the Content-Type from metadata, not the URL extension.
   const blobKey = `recordings/${Date.now()}-${crypto.randomUUID()}.webm`;
   const recordingUrl = `/.netlify/functions/play-recording?key=${encodeURIComponent(blobKey)}`;
 
@@ -89,6 +102,7 @@ export default async function handler(req: Request, _context: Context) {
       sessionId,
       uploadedAt: Date.now().toString(),
       size: recording.size.toString(),
+      mimeType,
     },
   });
 

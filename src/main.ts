@@ -99,6 +99,7 @@ import {
   getSessionId,
   discardRecording,
 } from "./systems/screen-recorder";
+// `getSessionId` is still used inside `gameOver` to capture the dying session.
 import {
   MAX_HP,
   HP_REGEN_PER_SEC,
@@ -390,17 +391,28 @@ function getQualificationThreshold(): number {
  * for the top-50 leaderboard. Client-side gate uses the cached
  * leaderboard so non-qualifying runs never even attempt the upload.
  */
-async function handleRecordingUpload() {
-  const sessionId = getSessionId(); // Capture BEFORE stopping (cleanup nulls it)
+/**
+ * Stop the current recording and upload it ONLY if the score qualifies
+ * for the top-50 leaderboard.
+ *
+ * IMPORTANT: `sessionId` must be passed in by the caller (captured at
+ * gameOver time, not re-read here). If we called `getSessionId()` from
+ * inside this function, a quick PLAY AGAIN click between submitScore
+ * and the upload would have already started a NEW recorder session,
+ * and we'd POST the new session id while submit-score wrote the old
+ * one — server returns 409 "Score entry not found".
+ */
+async function handleRecordingUpload(sessionId: string | undefined) {
   const myScore = Math.floor(run.score);
   const threshold = getQualificationThreshold();
+  const myName = playerName.value;
 
   console.log(
     `[recorder] gameOver score=${myScore} threshold=${threshold} sessionId=${sessionId ?? "(none)"}`,
   );
 
   if (!sessionId) {
-    console.log("[recorder] No active session — recorder was never started (low-power skip?)");
+    console.log("[recorder] No active session — recorder was never started");
     return null;
   }
 
@@ -418,7 +430,7 @@ async function handleRecordingUpload() {
   }
   console.log(`[recorder] Captured ${(blob.size / 1024).toFixed(0)} KB, uploading…`);
 
-  const url = await uploadRecording(blob, sessionId, playerName.value, myScore);
+  const url = await uploadRecording(blob, sessionId, myName, myScore);
   if (!url) {
     console.log("[recorder] Upload failed (see preceding log for reason)");
     return null;
@@ -524,7 +536,7 @@ function finishGameOver(reason: string) {
       return;
     }
 
-    const [uploadErr, uploadedUrl] = await attemptAsync(() => handleRecordingUpload());
+    const [uploadErr, uploadedUrl] = await attemptAsync(() => handleRecordingUpload(sid));
     if (uploadErr) {
       console.warn("[recorder] Upload failed:", uploadErr);
     } else if (uploadedUrl) {

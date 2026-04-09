@@ -16,10 +16,18 @@ import {
   runTileScore,
   runComboScore,
   runCopScore,
+  selectedSkin,
   gameState,
   screen,
 } from "../state";
 import { haptics } from "../audio/haptics";
+import {
+  downloadShareCard,
+  copyShareCardToClipboard,
+  buildShareCardDataUrl,
+  type IShareCardData,
+} from "../systems/share-card";
+import { wreckScreenshot } from "../state";
 
 function formatTime(seconds: number) {
   const secs = Math.floor(seconds);
@@ -52,6 +60,24 @@ function useCountUp(target: number, duration: number): number {
   return value;
 }
 
+function buildShareData(): IShareCardData {
+  return {
+    score: Math.floor(score.value),
+    best: bestScore.value,
+    isNewBest: isNewBest.value,
+    reason: gameOverReason.value,
+    survivalSec: survivalTime.value,
+    drowned: runDrowned.value,
+    biggestCombo: runBiggestCombo.value,
+    topSpeed: runTopSpeed.value,
+    distance: runDistance.value,
+    level: level.value,
+    playerName: playerName.value,
+    skinId: selectedSkin.value,
+    screenshot: wreckScreenshot.value,
+  };
+}
+
 async function shareRun() {
   const text = `I scored ${Math.floor(score.value)} in Blocky Pursuit — survived ${formatTime(survivalTime.value)} with a x${runBiggestCombo.value} combo as ${playerName.value}. Can you beat me?`;
   const url = window.location.href;
@@ -79,6 +105,27 @@ export function GameOver() {
   // panel appears would re-trigger the effect, but the run is over so the
   // value stays stable.
   const animatedScore = useCountUp(score.value, 800);
+  // Card-action transient state. `cardStatus` flips to "copied" or "saved"
+  // for ~1.6s after a successful card action so the button shows a brief
+  // confirmation instead of silently completing.
+  const [cardBusy, setCardBusy] = useState(false);
+  const [cardStatus, setCardStatus] = useState<"" | "copied" | "saved" | "error">("");
+  // Preview data URL of the rendered share card. Built once on mount so
+  // the player sees exactly what will be copied/downloaded before they
+  // click. Uses the same screenshot capture as the export path.
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  useEffect(() => {
+    let cancelled = false;
+    buildShareCardDataUrl(buildShareData()).then((url) => {
+      if (!cancelled) setPreviewUrl(url);
+    }).catch((err) => {
+      console.warn("[game-over] preview build failed", err);
+    });
+    return () => { cancelled = true; };
+    // Mount-only build — the underlying signals are stable for the panel's
+    // lifetime so a fresh effect on every render would just thrash.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const handleRetry = () => {
     haptics.pickup();
     actions.startGame();
@@ -86,6 +133,32 @@ export function GameOver() {
   const handleBack = () => {
     gameState.value = "start";
     screen.value = "howToPlay";
+  };
+  const flashStatus = (s: typeof cardStatus) => {
+    setCardStatus(s);
+    setTimeout(() => setCardStatus(""), 1600);
+  };
+  const handleDownloadCard = async () => {
+    if (cardBusy) return;
+    setCardBusy(true);
+    const [err] = await attemptAsync(() => downloadShareCard(buildShareData()));
+    setCardBusy(false);
+    flashStatus(err ? "error" : "saved");
+  };
+  const handleCopyCard = async () => {
+    if (cardBusy) return;
+    setCardBusy(true);
+    const [err, ok] = await attemptAsync(() => copyShareCardToClipboard(buildShareData()));
+    setCardBusy(false);
+    if (err || !ok) {
+      // Fallback: trigger a download so the player still walks away with
+      // the card. Browsers without ClipboardItem (older Firefox/Safari)
+      // hit this path silently.
+      await attemptAsync(() => downloadShareCard(buildShareData()));
+      flashStatus("saved");
+    } else {
+      flashStatus("copied");
+    }
   };
 
   return (
@@ -102,6 +175,20 @@ export function GameOver() {
         <div class="text-amber-400 text-5xl font-extrabold tabular-nums leading-none">
           {Math.floor(animatedScore).toLocaleString()}
         </div>
+        {/* Share card preview — exactly what gets copied/downloaded. The
+            wreck-moment screenshot is rendered as the hero so the player
+            sees the cinematic frame from their own death. Aspect ratio
+            matches the underlying canvas (1200x630 ≈ 1.9:1). */}
+        {previewUrl && (
+          <div class="w-full mt-1 border border-gray-700/60">
+            <img
+              src={previewUrl}
+              alt="Run summary card"
+              class="block w-full h-auto"
+              style={{ aspectRatio: "1200 / 630" }}
+            />
+          </div>
+        )}
         <div class="flex items-center gap-4 text-[10px] uppercase tracking-widest text-gray-400">
           <div class="flex flex-col items-center">
             <span class="text-gray-500">Best</span>
@@ -160,11 +247,29 @@ export function GameOver() {
           >
             RETRY
           </button>
+          {/* Share card action row — copy lands the PNG on the clipboard
+              for one-tap pasting; download is the always-works fallback. */}
+          <div class="flex gap-2 w-full">
+            <button
+              onClick={handleCopyCard}
+              disabled={cardBusy}
+              class="flex-1 py-2 bg-amber-500/15 text-amber-300 text-[11px] font-extrabold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 disabled:opacity-60 disabled:cursor-wait"
+            >
+              {cardStatus === "copied" ? "✓ Copied" : "Copy Card"}
+            </button>
+            <button
+              onClick={handleDownloadCard}
+              disabled={cardBusy}
+              class="flex-1 py-2 bg-amber-500/15 text-amber-300 text-[11px] font-extrabold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 disabled:opacity-60 disabled:cursor-wait"
+            >
+              {cardStatus === "saved" ? "✓ Saved" : "Download"}
+            </button>
+          </div>
           <button
             onClick={shareRun}
             class="w-full py-2 bg-cyan-500/20 text-cyan-300 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30"
           >
-            Share Score
+            Share Text
           </button>
           <button
             onClick={handleBack}

@@ -1,0 +1,62 @@
+{
+  "start": {
+    "voice": "dispatch",
+    "count": 8
+  },
+  "cop_spawn": {
+    "voice": "unit",
+    "count": 10
+  },
+  "swat_spawn": {
+    "voice": "swat",
+    "count": 6
+  },
+  "near_miss": {
+    "voice": "unit",
+    "count": 8
+  },
+  "combo_big": {
+    "voice": "dispatch",
+    "count": 6
+  },
+  "damage": {
+    "voice": "unit",
+    "count": 7
+  },
+  "cop_drown": {
+    "voice": "dispatch",
+    "count": 8
+  },
+  "swat_drown": {
+    "voice": "swat",
+    "count": 4
+  },
+  "emp": {
+    "voice": "dispatch",
+    "count": 6
+  },
+  "tank_kill": {
+    "voice": "unit",
+    "count": 5
+  },
+  "level_up": {
+    "voice": "dispatch",
+    "count": 6
+  },
+  "escape": {
+    "voice": "unit",
+    "count": 7
+  },
+  "wrecked": {
+    "voice": "dispatch",
+    "count": 5
+  },
+  "drowned_self": {
+    "voice": "dispatch",
+    "count": 4
+  },
+  "busted": {
+    "voice": "unit",
+    "count": 5
+  }
+}

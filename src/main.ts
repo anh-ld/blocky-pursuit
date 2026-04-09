@@ -19,6 +19,8 @@ import {
   startSiren,
   stopSiren,
   setSirenVolume,
+  startRadioHiss,
+  stopRadioHiss,
   playSplash,
   playLevelUp,
   playGameOver,
@@ -50,6 +52,8 @@ import {
   triggerShake,
 } from "./world/effects";
 import { initPopups, spawnPopup, updatePopups, clearPopups } from "./world/popups";
+import { pushChatter, clearChatter } from "./world/radio";
+import { preloadRadioVoices, stopRadioVoice } from "./world/radio-voice";
 import { initPortals } from "./world/portals";
 import { getSkin } from "./entities/car-skins";
 import { initSkids, spawnSkid, updateSkids, clearSkids } from "./world/skids";
@@ -87,6 +91,7 @@ import {
   runTileScore,
   runComboScore,
   runCopScore,
+  wreckScreenshot,
   selectedSkin,
   setSelectedSkin,
   incrementRuns,
@@ -168,15 +173,25 @@ const scene = new THREE.Scene();
 
 
 // --- Isometric Camera Setup ---
+// `cameraD` is the half-extent of the orthographic frustum. Normally 50,
+// but the dying-phase wreck zoom interpolates it down to ~18 so the death
+// shot fills the frame with the car + nearby cops. `BASE_CAMERA_D` is the
+// resting value the camera lerps back to when a fresh run starts.
+const BASE_CAMERA_D = 50;
+const WRECK_CAMERA_D = 15;
+let cameraD = BASE_CAMERA_D;
 const aspect = 1;
-const d = 50;
-const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
+const camera = new THREE.OrthographicCamera(-cameraD * aspect, cameraD * aspect, cameraD, -cameraD, 1, 1000);
 camera.position.set(50, 50, 50);
 camera.lookAt(scene.position);
 
 // --- Renderer Setup ---
 const gameArea = document.getElementById("game-area") as HTMLElement;
-const renderer = new THREE.WebGLRenderer({ antialias: false });
+// `preserveDrawingBuffer` lets us call `renderer.domElement.toDataURL()`
+// at any time to capture the wreck-moment screenshot used by the share
+// card. The perf cost is a single backbuffer copy per frame and is
+// negligible for an arcade-scale scene.
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
 renderer.setSize(gameArea.clientWidth, gameArea.clientHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = false;
@@ -288,6 +303,21 @@ const COMBO_TICK_INTERVAL = 0.18; // seconds between warning ticks while in dang
 // down to 0.45s at HP=1 so the player feels the danger ramping up.
 let _heartbeatAccum = 0;
 
+// --- Death slow-mo ("dying" state) ---
+// When the player triggers a fail condition, the run enters a brief
+// cinematic slow-motion phase where physics + cops + the player car keep
+// simulating but at ~12% real time. After the timer expires we capture a
+// screenshot of the wreck moment, fire the explosion juice, and reveal the
+// panel. The dying state is internal — `gameState.value` stays "playing"
+// throughout so the HUD remains visible during the slow-mo sequence.
+const DYING_DURATION_SEC = 1.0;
+const DYING_TIMESCALE = 0.12;
+let dyingTimer = 0;
+let dyingReason: string | null = null;
+// Set true on the frame the slow-mo expires; consumed AFTER the next render
+// so we capture the actual frame the player saw before the explosion fires.
+let pendingScreenshot = false;
+
 function pauseGame() {
   if (currentState !== "playing") return;
   currentState = "paused";
@@ -295,6 +325,7 @@ function pauseGame() {
   stopEngine();
   stopSiren();
   stopBgm();
+  stopRadioHiss();
 }
 
 function resumeGame() {
@@ -308,6 +339,7 @@ function resumeGame() {
   resumeAudio();
   startEngine();
   startBgm();
+  startRadioHiss();
 }
 
 function togglePause() {
@@ -334,14 +366,30 @@ function resizeRenderer() {
     const w = gameArea.clientWidth;
     const h = gameArea.clientHeight;
     const a = w / h;
-    camera.left = -d * a;
-    camera.right = d * a;
-    camera.top = d;
-    camera.bottom = -d;
+    camera.left = -cameraD * a;
+    camera.right = cameraD * a;
+    camera.top = cameraD;
+    camera.bottom = -cameraD;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
   });
   if (err) console.error("[resizeRenderer]", err);
+}
+
+/**
+ * Update the orthographic frustum to the current `cameraD`. Called every
+ * frame the dying-phase zoom is animating; cheap (just 4 assignments + a
+ * matrix recompute).
+ */
+function applyCameraZoom() {
+  const w = gameArea.clientWidth;
+  const h = gameArea.clientHeight;
+  const a = w / h;
+  camera.left = -cameraD * a;
+  camera.right = cameraD * a;
+  camera.top = cameraD;
+  camera.bottom = -cameraD;
+  camera.updateProjectionMatrix();
 }
 resizeRenderer();
 window.addEventListener("resize", resizeRenderer, { signal: listenerSignal });
@@ -365,8 +413,10 @@ function startGame() {
   // Reset all per-run state
   run.reset(car);
 
-  // Camera teleport
+  // Camera teleport + reset wreck-zoom in case the previous run died.
   camera.position.set(50, 55, 50);
+  cameraD = BASE_CAMERA_D;
+  applyCameraZoom();
 
   // Reset systems
   cops.reset();
@@ -383,40 +433,83 @@ function startGame() {
   clearPopups();
   clearParticles();
   clearGhostTrail();
+  clearChatter();
+  // Reset death-sequence state so a fresh run starts cleanly even after
+  // a previous run died mid slow-mo.
+  dyingTimer = 0;
+  dyingReason = null;
+  pendingScreenshot = false;
+  wreckScreenshot.value = null;
   _prevComboCount = 0;
   _comboTickAccum = 0;
   _heartbeatAccum = 0;
+  // Opening radio call so the chatter feed has life from the first frame.
+  pushChatter("start");
 
   // Audio: kick everything on
   initAudio();
   resumeAudio();
   startEngine();
   startBgm();
+  startRadioHiss();
+  // Background-load all voice files so subsequent radio calls are
+  // instantaneous. Idempotent — only fetches once across the app's life.
+  void preloadRadioVoices();
 }
 
 function gameOver(reason: string = "BUSTED") {
-  if (currentState === "gameover") return;
-  // Stop gameplay immediately so cops/civilians/scoring freeze, but keep
-  // the panel hidden until the death moment plays out.
+  // Already dying or game over — ignore further fail triggers so a busted
+  // hit during the dying slow-mo can't restart the sequence.
+  if (currentState === "gameover" || dyingTimer > 0) return;
+  // Latch the reason and enter the slow-mo dying phase. The state machine
+  // stays in "playing" so tickPlaying keeps simulating cops + physics, but
+  // animate() scales dt by DYING_TIMESCALE for the duration of the timer.
+  dyingReason = reason;
+  dyingTimer = DYING_DURATION_SEC;
+
+  // Audio: duck loops immediately so the slow-mo silence reads as cinematic.
+  // The "wreck" sting will fire AFTER slow-mo, on the explosion frame.
+  stopEngine();
+  stopSiren();
+  stopBgm();
+  stopRadioHiss();
+  stopRadioVoice();
+
+  // Radio sign-off — dispatch announces the end of the chase based on cause.
+  if (reason === "DROWNED") pushChatter("drowned_self");
+  else if (reason === "BUSTED") pushChatter("busted");
+  else pushChatter("wrecked");
+}
+
+/**
+ * Second half of the death sequence — runs once the slow-mo dying phase
+ * finishes. Triggers the explosion juice, persists progression, then
+ * schedules the panel reveal. Always called from the animate loop, never
+ * directly from a fail trigger.
+ */
+function finishGameOver(reason: string) {
   currentState = "gameover";
   gameOverReason.value = reason;
 
-  // --- Death moment juice (plays on the playfield, no panel yet) ---
-  triggerScreenFlash(0.85);
-  triggerShake(0.9);
-  // Debris burst at the wreck site — confetti + sparks for visible chunks.
-  spawnConfetti(car.body.position.x, car.body.position.y + 1, car.body.position.z);
-  spawnSparks(car.body.position.x, car.body.position.y + 1, car.body.position.z);
-  spawnSparks(car.body.position.x, car.body.position.y + 1.5, car.body.position.z);
+  // --- Explosion juice — bigger than a regular crash because this is the
+  // end of the run and the player just sat through 1 second of cinematic
+  // slow-mo. Multiple confetti + sparks bursts read as a real wreck.
+  triggerScreenFlash(0.95);
+  triggerShake(1.1);
+  for (let i = 0; i < 3; i++) {
+    const ox = (Math.random() - 0.5) * 4;
+    const oz = (Math.random() - 0.5) * 4;
+    spawnConfetti(car.body.position.x + ox, car.body.position.y + 1.5, car.body.position.z + oz);
+    spawnSparks(car.body.position.x + ox, car.body.position.y + 1, car.body.position.z + oz);
+  }
+  spawnSparks(car.body.position.x, car.body.position.y + 2, car.body.position.z);
   // Drowned wrecks get an extra splash so the cause-of-death reads.
   if (reason === "DROWNED") {
     spawnSplash(car.body.position.x, car.body.position.y, car.body.position.z);
   }
 
-  // Audio: kill loops immediately, play sting once.
-  stopEngine();
-  stopSiren();
-  stopBgm();
+  // Sting + haptic — only here, after the replay (so it punctuates the
+  // wreck moment instead of competing with the slow-mo).
   playGameOver();
   haptics.death();
 
@@ -516,6 +609,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     haptics.levelUp();
     spawnPopup(car.body.position.x, car.body.position.y + 1, car.body.position.z, `LV ${run.level}`, "#ffaa22");
     spawnPopup(car.body.position.x, car.body.position.y + 2, car.body.position.z, `+${HP_HEAL_ON_LEVEL_UP} HP`, "#66ff88");
+    pushChatter("level_up");
   }
 
   // Engine pitch follows speed
@@ -620,6 +714,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
         spawnPopup(car.body.position.x, car.body.position.y + 2.5, car.body.position.z, `+${ESCAPE_REWARD}`, "#ffcc22");
         triggerScreenFlash(0.25);
         playEscape();
+        pushChatter("escape");
       }
     }
   } else {
@@ -644,9 +739,12 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     _heartbeatAccum = 0;
   }
 
-  // --- Siren: on when any cop within range, intensity scales with closeness ---
+  // --- Siren: on when any cop within range, intensity scales with closeness.
+  // Suppressed entirely during the dying slow-mo so the wreck moment plays
+  // out in cinematic silence (the siren restarts every frame here while
+  // currentState is still "playing", so we have to gate on dyingTimer too).
   let sirenIntensity = 0;
-  if (currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE) {
+  if (currentState === "playing" && dyingTimer === 0 && nearestCopDist < SIREN_MAX_RANGE) {
     startSiren();
     sirenIntensity = 1 - nearestCopDist / SIREN_MAX_RANGE;
     setSirenVolume(sirenIntensity);
@@ -739,15 +837,51 @@ function animate(time: number) {
   if (currentState === "playing") {
     // Scale gameplay dt by the active time-slow factor (combo milestone juice).
     // Particles, popups, skids and the camera follow stay at real-time above.
+    // Stack the dying-phase slow-mo on top so the wreck moment plays out
+    // cinematically while cops + physics keep simulating.
     const slowFactor = getTimeSlowFactor();
-    tickPlaying(dt * slowFactor, timeInSeconds);
+    const deathScale = dyingTimer > 0 ? DYING_TIMESCALE : 1;
+    tickPlaying(dt * slowFactor * deathScale, timeInSeconds);
+
+    // Real-dt countdown of the dying phase. When it expires we mark the
+    // frame for screenshot capture (consumed AFTER renderer.render below)
+    // so the saved image shows the slow-mo wreck moment, NOT the explosion
+    // flash that fires inside finishGameOver().
+    if (dyingTimer > 0) {
+      dyingTimer -= dt;
+      if (dyingTimer <= 0) {
+        dyingTimer = 0;
+        pendingScreenshot = true;
+      }
+    }
   }
 
-  // Camera follow car
+  // Wreck zoom: ease cameraD from BASE down to WRECK over the dying phase
+  // so the screenshot at the end captures the car + collision close-up.
+  // `progress` is 0 at the start of dying, 1 the moment slow-mo expires.
+  if (dyingTimer > 0) {
+    const progress = 1 - dyingTimer / DYING_DURATION_SEC;
+    // ease-in-out cubic so the zoom feels intentional, not mechanical
+    const eased = progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    cameraD = BASE_CAMERA_D + (WRECK_CAMERA_D - BASE_CAMERA_D) * eased;
+    applyCameraZoom();
+  } else if (currentState === "gameover" && cameraD !== WRECK_CAMERA_D) {
+    // Hold the wreck zoom while the explosion + panel play out.
+    cameraD = WRECK_CAMERA_D;
+    applyCameraZoom();
+  }
+
+  // Camera follow car. The follow offset shrinks alongside cameraD so the
+  // camera physically pulls in toward the car as it zooms — without this
+  // the orthographic frame would just shrink in place.
+  const followScale = cameraD / BASE_CAMERA_D;
+  const followOffset = 50 * followScale;
   camera.position.set(
-    car.mesh.position.x + 50,
-    car.mesh.position.y + 50,
-    car.mesh.position.z + 50,
+    car.mesh.position.x + followOffset,
+    car.mesh.position.y + followOffset,
+    car.mesh.position.z + followOffset,
   );
   applyShake(camera, dt);
 
@@ -760,6 +894,20 @@ function animate(time: number) {
   directionalLight.target.position.copy(car.mesh.position);
 
   renderer.render(scene, camera);
+
+  // End-of-frame screenshot capture for the share card. Runs in the same
+  // frame as the final slow-mo render so the saved image shows the wreck
+  // moment cleanly, BEFORE finishGameOver() schedules the explosion flash.
+  if (pendingScreenshot) {
+    pendingScreenshot = false;
+    const [err, url] = attempt(() => renderer.domElement.toDataURL("image/png"));
+    if (!err && url) wreckScreenshot.value = url;
+    if (dyingReason) {
+      const reason = dyingReason;
+      dyingReason = null;
+      finishGameOver(reason);
+    }
+  }
 }
 
 // Pause loop + audio when tab is hidden
@@ -776,6 +924,7 @@ document.addEventListener("visibilitychange", () => {
       resumeAudio();
       startEngine();
       startBgm();
+      startRadioHiss();
     }
   });
 }, { signal: listenerSignal });

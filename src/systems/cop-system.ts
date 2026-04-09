@@ -14,6 +14,7 @@ import {
   spawnConfetti,
 } from "../world/effects";
 import { spawnPopup } from "../world/popups";
+import { pushChatter } from "../world/radio";
 import { damageDirAngle, damageDirSeq } from "../state";
 import { playCrash, playSplash, playPickup, playComboTier } from "../audio/sound";
 import { haptics } from "../audio/haptics";
@@ -105,6 +106,7 @@ export class CopSystem {
         this.cops.splice(ci, 1);
       }
     }
+    if (kills > 0) pushChatter("emp");
     return kills;
   }
 
@@ -129,6 +131,7 @@ export class CopSystem {
         playerVelocity: car.body.velocity,
       });
       this.lastSpawnTime = timeInSeconds;
+      pushChatter("cop_spawn");
     }
 
     // SWAT mini-boss spawn — at most one alive at a time, level 5+. Lives
@@ -153,6 +156,7 @@ export class CopSystem {
       // map. Popup floats above the player rather than the SWAT cop itself
       // so it's always visible regardless of where the cop is.
       spawnPopup(car.body.position.x, car.body.position.y + 5, car.body.position.z, "⚠ SWAT", "#ff4444", 1.6, 12);
+      pushChatter("swat_spawn");
     }
 
     let nearbyCount = 0;
@@ -231,12 +235,14 @@ export class CopSystem {
           // their multiplier climb in addition to seeing it.
           playComboTier(run.comboCount / COMBO_MILESTONE);
           haptics.comboMilestone();
+          pushChatter("near_miss");
         }
         // Big-combo juice: time slow + flash + extra shake at the big milestone
         if (run.comboCount > 0 && run.comboCount % COMBO_BIG_MILESTONE === 0) {
           triggerTimeSlow();
           triggerScreenFlash(0.55);
           triggerShake(0.5);
+          pushChatter("combo_big");
         }
       }
 
@@ -270,6 +276,7 @@ export class CopSystem {
             playCrash();
             haptics.hit();
             triggerShake(cop.isSwat ? 0.7 : 0.5);
+            pushChatter("tank_kill");
             cop.destroy();
             this.cops.splice(i, 1);
             continue;
@@ -299,6 +306,7 @@ export class CopSystem {
               cop.body.position.x - car.body.position.x,
             );
             damageDirSeq.value++;
+            pushChatter("damage");
           }
         }
       }
@@ -330,6 +338,7 @@ export class CopSystem {
           triggerShake(0.5);
         }
         spawnPopup(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z, `+${Math.round(reward)}`, cop.isSwat ? "#ff4444" : "#ffcc22");
+        pushChatter(cop.isSwat ? "swat_drown" : "cop_drown");
         cop.destroy();
         this.cops.splice(i, 1);
       }

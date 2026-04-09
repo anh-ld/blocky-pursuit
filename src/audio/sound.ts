@@ -55,6 +55,17 @@ export function isMuted(): boolean {
   return muted;
 }
 
+/** Expose the shared AudioContext + master bus so other audio modules
+ *  (e.g. the radio voice player) can route their nodes into the same
+ *  graph instead of spinning up a second context. Returns null until
+ *  `initAudio()` has run successfully. */
+export function getAudioContext(): AudioContext | null {
+  return ctx;
+}
+export function getMasterGain(): GainNode | null {
+  return masterGain;
+}
+
 export function toggleMute(): boolean {
   muted = !muted;
   if (masterGain) masterGain.gain.value = muted ? 0 : MASTER_VOL;
@@ -617,4 +628,118 @@ export function resumeAudio() {
   if (ctx?.state === "suspended") {
     attemptAsync(() => ctx!.resume());
   }
+}
+
+// --- Continuous radio hiss (open channel) ---
+// A low-volume looping noise routed through a bandpass filter so the police
+// channel feels "open" — that constant background fizzle real radios have
+// between transmissions. Started when the run begins and stopped on
+// game-over alongside the engine + siren so the dying slow-mo plays out
+// in proper silence.
+
+let radioHissNodes: {
+  src: AudioBufferSourceNode;
+  filter: BiquadFilterNode;
+  gain: GainNode;
+  lfo: OscillatorNode;
+  lfoGain: GainNode;
+} | null = null;
+
+export function startRadioHiss() {
+  if (!ctx || !masterGain || radioHissNodes) return;
+  // 2-second noise loop — long enough that the loop point isn't audible.
+  const buf = noiseBuffer(2.0);
+  if (!buf) return;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+
+  // Bandpass narrow on the speech-radio range, with a gentle resonance so
+  // the hiss has that "tinny squelch" character instead of pure white noise.
+  const filter = ctx.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = 1800;
+  filter.Q.value = 1.4;
+
+  const gain = ctx.createGain();
+  gain.gain.value = 0.06; // very quiet — must sit under the BGM + engine
+
+  // Slow LFO modulating the gain so the hiss "breathes" like a live channel
+  // instead of being a flat wall of noise. Real PD radios have squelch
+  // gating that opens and closes faintly between transmissions.
+  const lfo = ctx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.value = 0.35;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 0.02; // ±0.02 around the 0.06 base
+  lfo.connect(lfoGain);
+  lfoGain.connect(gain.gain);
+
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(masterGain);
+  src.start();
+  lfo.start();
+  radioHissNodes = { src, filter, gain, lfo, lfoGain };
+}
+
+export function stopRadioHiss() {
+  if (!radioHissNodes) return;
+  const t = now();
+  // Quick fade so the channel cuts out cleanly without a click on game over.
+  radioHissNodes.gain.gain.cancelScheduledValues(t);
+  radioHissNodes.gain.gain.setValueAtTime(radioHissNodes.gain.gain.value, t);
+  radioHissNodes.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  const nodes = radioHissNodes;
+  radioHissNodes = null;
+  setTimeout(() => {
+    safeDispose(nodes.src, nodes.lfo, nodes.lfoGain, nodes.filter, nodes.gain);
+  }, 200);
+}
+
+/**
+ * Short "kchk" radio static burst — used by the chatter system to punctuate
+ * each voice line so the feed sounds like an actual police channel keying
+ * up. Two staggered noise bursts through a bandpass filter give the
+ * characteristic squelch tone without any sample assets.
+ */
+export function playRadioStatic() {
+  if (!ctx || !masterGain) return;
+  const buf = noiseBuffer(0.18);
+  if (!buf) return;
+  const t = now();
+
+  // First burst — short squelch tail at the start of the line.
+  const src1 = ctx.createBufferSource();
+  const filter1 = ctx.createBiquadFilter();
+  const gain1 = ctx.createGain();
+  src1.buffer = buf;
+  filter1.type = "bandpass";
+  filter1.frequency.value = 2200;
+  filter1.Q.value = 6;
+  src1.connect(filter1);
+  filter1.connect(gain1);
+  gain1.connect(masterGain);
+  gain1.gain.setValueAtTime(0.0001, t);
+  gain1.gain.exponentialRampToValueAtTime(0.45, t + 0.005);
+  gain1.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+  src1.start(t);
+  src1.stop(t + 0.12);
+
+  // Second tighter chirp — completes the "kchk-chk" feel of a real PTT key.
+  const src2 = ctx.createBufferSource();
+  const filter2 = ctx.createBiquadFilter();
+  const gain2 = ctx.createGain();
+  src2.buffer = buf;
+  filter2.type = "bandpass";
+  filter2.frequency.value = 1600;
+  filter2.Q.value = 8;
+  src2.connect(filter2);
+  filter2.connect(gain2);
+  gain2.connect(masterGain);
+  gain2.gain.setValueAtTime(0.0001, t + 0.11);
+  gain2.gain.exponentialRampToValueAtTime(0.3, t + 0.115);
+  gain2.gain.exponentialRampToValueAtTime(0.0001, t + 0.17);
+  src2.start(t + 0.11);
+  src2.stop(t + 0.18);
 }

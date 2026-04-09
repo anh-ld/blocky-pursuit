@@ -12,6 +12,7 @@ import { PreGame } from "./pre-game";
 import { BustedWarning } from "./busted-warning";
 import { LowHpWarning } from "./low-hp-warning";
 import { DamageIndicator } from "./damage-indicator";
+import { Radio } from "./radio";
 
 export function App() {
   const state = gameState.value;
@@ -31,6 +32,7 @@ export function App() {
         <LowHpWarning />
         <DamageIndicator />
         <BustedWarning />
+        <Radio />
         {showHowToPlay && <HowToPlay />}
         {showGameOver && <GameOver />}
         {showPaused && (

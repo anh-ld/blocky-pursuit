@@ -59,6 +59,11 @@ export const comboInDanger = signal(false);
 // so the player can see the busted countdown and break free before game over.
 export const bustedProgress = signal(0);
 
+// Wreck screenshot — data URL of the canvas captured at the end of the
+// dying slow-mo, used as the share-card hero background. Cleared on each
+// new run; written by main.ts during the death-sequence frame.
+export const wreckScreenshot = signal<string | null>(null);
+
 // --- Per-run summary stats (shown on game-over) ---
 export const runDrowned = signal(0);
 export const runTopSpeed = signal(0);

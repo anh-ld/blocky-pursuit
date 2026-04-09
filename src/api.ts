@@ -27,10 +27,7 @@ export async function submitScore(
   sessionId?: string,
 ): Promise<boolean> {
   if (finalScore <= 0) return false;
-  if (DEV) {
-    console.log("[score] DEV mode — submit skipped");
-    return true;
-  }
+  if (DEV) return true;
   const [, res] = await attemptAsync(() =>
     fetch("/.netlify/functions/submit-score", {
       method: "POST",
@@ -57,11 +54,7 @@ export async function uploadRecording(
   playerName: string,
   score: number,
 ): Promise<string | null> {
-  if (DEV) {
-    console.log("[recorder] DEV mode — upload skipped (would have sent",
-      `${(recording.size / 1024).toFixed(0)} KB)`);
-    return null;
-  }
+  if (DEV) return null;
 
   const formData = new FormData();
   formData.append("recording", recording, `${sessionId}.webm`);
@@ -69,21 +62,13 @@ export async function uploadRecording(
   formData.append("playerName", playerName);
   formData.append("score", String(Math.floor(score)));
 
-  const [fetchErr, res] = await attemptAsync(() =>
+  const [, res] = await attemptAsync(() =>
     fetch("/.netlify/functions/upload-recording", {
       method: "POST",
       body: formData,
     }),
   );
-  if (fetchErr || !res) {
-    console.warn("[recorder] Upload network error:", fetchErr);
-    return null;
-  }
-  if (!res.ok) {
-    const [, text] = await attemptAsync(() => res.text());
-    console.warn(`[recorder] Upload rejected ${res.status}: ${text ?? ""}`);
-    return null;
-  }
+  if (!res || !res.ok) return null;
 
   const [, data] = await attemptAsync(
     () => res.json() as Promise<{ url?: string }>,

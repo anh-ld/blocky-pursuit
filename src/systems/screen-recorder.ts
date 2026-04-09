@@ -20,14 +20,23 @@
  *   ✗ Firefox (no MP4 in MediaRecorder as of 2025)
  *   ✗ Old Chrome (<122)
  *
- * Bitrate: 150 Kbps. FPS: 10. ~2 MB for a 3-min run.
+ * Bitrate: 150 Kbps. Capture FPS: 3 (played back at 3× = 9 effective
+ * fps time-lapse). ~3.3 MB for a 3-min real-time run.
  */
 
 import { attempt } from "es-toolkit";
 
 const VIDEO_BITRATE = 150_000; // 150 kbps — superlightweight
-const CAPTURE_FPS = 10; // 10 FPS — replays are for "look at this moment", not analysis
-const CHUNK_INTERVAL_MS = 4000; // ~75 KB per chunk; 4 s keeps ondataavailable churn low
+// Capture at 3 fps and let the replay modal play it back at 3× speed.
+// MediaRecorder's bit budget is per real second regardless of FPS, so
+// 3 fps × 150 kbps = ~50 kbit/frame (vs ~15 kbit/frame at 10 fps) —
+// each frame gets 3.3× more bits → visibly sharper at the same file
+// size. See REPLAY_PLAYBACK_RATE below and src/ui/replay-modal.tsx.
+const CAPTURE_FPS = 3;
+// Applied by the replay modal to convert the 3 fps capture into a
+// 9 effective-fps time-lapse when the recording is watched back.
+export const REPLAY_PLAYBACK_RATE = 3;
+const CHUNK_INTERVAL_MS = 4000;
 // Hard cap so memory + final upload don't grow unbounded on marathon runs.
 const MAX_DURATION_MS = 4 * 60 * 1000;
 
@@ -39,21 +48,15 @@ let durationCapTimer: number | null = null;
 
 /**
  * Start recording the current gameplay session.
- * Captures the game canvas at 15 FPS / 150 Kbps VP8.
+ * Silently no-ops if the browser can't capture the canvas or doesn't
+ * expose a hardware H.264 encoder.
  */
 export async function startRecording(canvas: HTMLCanvasElement): Promise<void> {
   if (isRecording) return;
-
-  if (!canvas.captureStream) {
-    console.warn("[recorder] canvas.captureStream not supported");
-    return;
-  }
+  if (!canvas.captureStream) return;
 
   const mimeType = getSupportedMimeType();
-  if (!mimeType) {
-    console.warn("[recorder] No supported MIME type for recording");
-    return;
-  }
+  if (!mimeType) return;
 
   const [err, recorder] = attempt(() => {
     const stream = canvas.captureStream(CAPTURE_FPS);
@@ -62,20 +65,14 @@ export async function startRecording(canvas: HTMLCanvasElement): Promise<void> {
       videoBitsPerSecond: VIDEO_BITRATE,
     });
   });
-
-  if (err || !recorder) {
-    console.warn("[recorder] Failed to start recording:", err);
-    return;
-  }
+  if (err || !recorder) return;
 
   recordedChunks = [];
   recordingSessionId = generateSessionId();
   mediaRecorder = recorder;
 
   recorder.ondataavailable = (event) => {
-    if (event.data.size > 0) {
-      recordedChunks.push(event.data);
-    }
+    if (event.data.size > 0) recordedChunks.push(event.data);
   };
 
   recorder.start(CHUNK_INTERVAL_MS);
@@ -87,11 +84,8 @@ export async function startRecording(canvas: HTMLCanvasElement): Promise<void> {
     if (isRecording && mediaRecorder && mediaRecorder.state === "recording") {
       attempt(() => mediaRecorder!.requestData());
       attempt(() => mediaRecorder!.pause());
-      console.log("[recorder] Hit max duration, paused");
     }
   }, MAX_DURATION_MS);
-
-  console.log(`[recorder] Started session ${recordingSessionId}`);
 }
 
 /**
@@ -111,9 +105,6 @@ export function stopRecording(): Promise<Blob | null> {
       const blob = new Blob(recordedChunks, {
         type: recorder.mimeType || "video/webm",
       });
-      console.log(
-        `[recorder] Stopped session ${recordingSessionId}, size: ${(blob.size / (1024 * 1024)).toFixed(2)} MB`,
-      );
       attempt(() => recorder.stream.getTracks().forEach((t) => t.stop()));
       resolve(blob);
       cleanup();
@@ -127,12 +118,10 @@ export function stopRecording(): Promise<Blob | null> {
  * Discard the current recording without uploading.
  */
 export function discardRecording(): void {
-  const sid = recordingSessionId; // Capture before cleanup nulls it
   if (mediaRecorder && isRecording) {
     attempt(() => mediaRecorder!.stream.getTracks().forEach((t) => t.stop()));
   }
   cleanup();
-  if (sid) console.log(`[recorder] Discarded session ${sid}`);
 }
 
 /**
@@ -154,12 +143,8 @@ function getSupportedMimeType(): string | null {
     "video/mp4",
   ];
   for (const type of types) {
-    if (MediaRecorder.isTypeSupported(type)) {
-      console.log(`[recorder] Using HW codec: ${type}`);
-      return type;
-    }
+    if (MediaRecorder.isTypeSupported(type)) return type;
   }
-  console.log("[recorder] No HW-accelerated codec available — recording disabled");
   return null;
 }
 

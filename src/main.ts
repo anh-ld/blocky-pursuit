@@ -406,38 +406,18 @@ async function handleRecordingUpload(
   myName: string,
   myScore: number,
 ) {
-  const threshold = getQualificationThreshold();
-
-  console.log(
-    `[recorder] upload check score=${myScore} threshold=${threshold} name="${myName}" sessionId=${sessionId ?? "(none)"}`,
-  );
-
-  if (!sessionId) {
-    console.log("[recorder] No active session — recorder was never started");
-    return null;
-  }
+  if (!sessionId) return null;
 
   // Cheap client-side gate first — bail before paying the stop+blob cost.
-  if (myScore <= threshold) {
+  if (myScore <= getQualificationThreshold()) {
     discardRecording();
-    console.log(`[recorder] Score didn't qualify (bar: ${threshold}) — discarded`);
     return null;
   }
 
   const blob = await stopRecording();
-  if (!blob) {
-    console.log("[recorder] stopRecording returned null");
-    return null;
-  }
-  console.log(`[recorder] Captured ${(blob.size / 1024).toFixed(0)} KB, uploading…`);
+  if (!blob) return null;
 
-  const url = await uploadRecording(blob, sessionId, myName, myScore);
-  if (!url) {
-    console.log("[recorder] Upload failed (see preceding log for reason)");
-    return null;
-  }
-  console.log(`[recorder] Uploaded: ${url}`);
-  return url;
+  return await uploadRecording(blob, sessionId, myName, myScore);
 }
 
 function gameOver(reason: string = "BUSTED") {
@@ -531,29 +511,21 @@ function finishGameOver(reason: string) {
     const sid = dyingSessionId ?? undefined;
     dyingSessionId = null;
 
+    // Capture name + score at submit time and thread the exact same
+    // triple through to the upload — reading from live state inside
+    // the upload helper caused 409s when values drifted between calls.
     const nameAtSubmit = playerName.value;
     const scoreAtSubmit = Math.floor(run.score);
-    console.log(
-      `[score] submitting name="${nameAtSubmit}" score=${scoreAtSubmit} sessionId=${sid ?? "(none)"}`,
-    );
+
     const submitted = await submitScore(nameAtSubmit, scoreAtSubmit, undefined, sid);
     if (!submitted) {
-      console.warn("[score] submit failed — refreshing leaderboard and bailing");
       await fetchLeaderboard();
       return;
     }
 
-    const [uploadErr, uploadedUrl] = await attemptAsync(() =>
+    await attemptAsync(() =>
       handleRecordingUpload(sid, nameAtSubmit, scoreAtSubmit),
     );
-    if (uploadErr) {
-      console.warn("[recorder] Upload failed:", uploadErr);
-    } else if (uploadedUrl) {
-      // upload-recording attaches the replay URL server-side to avoid
-      // upload-then-submit orphaned blobs.
-      console.log("[recorder] Replay attached to score entry");
-    }
-
     await fetchLeaderboard();
   })();
 

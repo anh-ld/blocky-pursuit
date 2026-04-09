@@ -98,6 +98,7 @@ import {
   stopRecording,
   getSessionId,
   discardRecording,
+  MAX_UPLOAD_SIZE,
 } from "./systems/screen-recorder";
 // `getSessionId` is still used inside `gameOver` to capture the dying session.
 import {
@@ -387,36 +388,49 @@ function getQualificationThreshold(): number {
 }
 
 /**
- * Stop the current recording and upload it ONLY if the score qualifies
- * for the top-50 leaderboard. Client-side gate uses the cached
- * leaderboard so non-qualifying runs never even attempt the upload.
- */
-/**
- * Stop the current recording and upload it ONLY if the score qualifies
+ * Stop the current recording and upload it if the score qualifies
  * for the top-50 leaderboard.
  *
- * The caller MUST pass in the exact same `sessionId`, `playerName`, and
- * `score` triple that was sent to `submitScore`. Reading these from
- * live state inside the upload helper caused 409s previously because
- * values could drift between the two calls (sessionId reset by a quick
- * PLAY AGAIN click, player name edited, etc.).
+ * The caller MUST pass in the exact same `sessionId`, `playerName`,
+ * and `score` triple that was sent to `submitScore`. Reading these
+ * from live state inside the upload helper caused 409s previously
+ * because values could drift between the two calls (sessionId reset
+ * by a quick PLAY AGAIN click, player name edited, etc.).
  */
 async function handleRecordingUpload(
   sessionId: string | undefined,
   myName: string,
   myScore: number,
 ) {
-  if (!sessionId) return null;
+  if (!sessionId) {
+    console.log("[recorder] no sessionId, skip");
+    return null;
+  }
 
   // Cheap client-side gate first — bail before paying the stop+blob cost.
   if (myScore <= getQualificationThreshold()) {
+    console.log(`[recorder] score ${myScore} below threshold, skip`);
     discardRecording();
     return null;
   }
 
   const blob = await stopRecording();
-  if (!blob) return null;
+  if (!blob) {
+    console.log("[recorder] stopRecording returned null, skip");
+    return null;
+  }
+  const sizeKB = (blob.size / 1024).toFixed(0);
 
+  // Hard size ceiling: Netlify sync functions cap the request body
+  // around 6 MB. The HW H.264 encoder sometimes ignores our bitrate
+  // hint and produces larger blobs on long runs, so drop anything we
+  // can't reliably upload rather than letting the function 500.
+  if (blob.size > MAX_UPLOAD_SIZE) {
+    console.log(`[recorder] blob ${sizeKB} KB exceeds ${MAX_UPLOAD_SIZE / 1024} KB cap, skip`);
+    return null;
+  }
+
+  console.log(`[recorder] Captured ${sizeKB} KB, uploading…`);
   return await uploadRecording(blob, sessionId, myName, myScore);
 }
 
@@ -526,6 +540,9 @@ function finishGameOver(reason: string) {
     await attemptAsync(() =>
       handleRecordingUpload(sid, nameAtSubmit, scoreAtSubmit),
     );
+    // The upload function is synchronous and we awaited it above, so
+    // by the time fetchLeaderboard runs the recordingUrl has already
+    // been attached to the score entry. One refresh is enough.
     await fetchLeaderboard();
   })();
 

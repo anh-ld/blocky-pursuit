@@ -56,16 +56,25 @@ export async function uploadRecording(
 ): Promise<string | null> {
   if (DEV) return null;
 
-  const formData = new FormData();
-  formData.append("recording", recording, `${sessionId}.webm`);
-  formData.append("sessionId", sessionId);
-  formData.append("playerName", playerName);
-  formData.append("score", String(Math.floor(score)));
+  // Send the recording as the raw request body and put metadata in
+  // the query string. Avoiding `multipart/form-data` sidesteps a
+  // longstanding Netlify Functions quirk where binary multipart
+  // bodies trigger "Internal Error" 500s on the sync runtime even
+  // though the body is well under the 6 MB limit. Raw body upload is
+  // also lighter on the wire (no multipart boundaries / headers) and
+  // matches the simpler Netlify Blobs upload pattern.
+  const params = new URLSearchParams({
+    sessionId,
+    playerName,
+    score: String(Math.floor(score)),
+  });
+  const url = `/.netlify/functions/upload-recording?${params.toString()}`;
 
   const [, res] = await attemptAsync(() =>
-    fetch("/.netlify/functions/upload-recording", {
+    fetch(url, {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": recording.type || "application/octet-stream" },
+      body: recording,
     }),
   );
   if (!res) {

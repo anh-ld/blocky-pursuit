@@ -26,6 +26,7 @@ could become:
 - **Progression** — meta-layer between runs
 - **Core Loop** — changes how the game _plays_
 - **Identity** — changes what the game _is_
+- **✅ Done** — already shipped in the current build
 
 ---
 
@@ -36,7 +37,7 @@ could become:
 | 1   | Daily Challenge                    | Retention       | M      | High      | A     |
 | 2   | Weekly rotating modifier           | Retention       | S      | Med       | A     |
 | 3   | Cop bounties                       | Content         | S      | Med       | A     |
-| 4   | Run summary share card             | Growth          | S      | Med       | A     |
+| 4   | ✅ Run summary share card          | Growth          | S      | Med       | A     |
 | 5   | Garage progression stars           | Progression     | M      | Med       | A     |
 | 6   | Combo timer ring                   | Polish/UX       | S      | Low       | A     |
 | 7   | Threat compass                     | Polish/UX       | S      | Med       | A     |
@@ -47,7 +48,7 @@ could become:
 | 12  | Web Worker for cop AI              | Tech/Perf       | M      | Low       | A     |
 | 13  | Deterministic seed mode            | Tech/Foundation | S      | Low       | A     |
 | 14  | Object pooling audit               | Tech/Perf       | S      | Low       | A     |
-| 15  | PWA / installable                  | Tech/Growth     | S      | Low       | A     |
+| 15  | ✅ PWA / installable               | Tech/Growth     | S      | Low       | A     |
 | 16  | Manual ability button              | Core Loop       | M      | High      | A, B  |
 | 17  | Mid-run perk cards                 | Core Loop       | M      | High      | A     |
 | 18  | Zones with mechanical identity     | Core Loop       | M      | High      | A, B  |
@@ -57,7 +58,7 @@ could become:
 | 22  | The river is the game              | Identity        | L      | Very High | B, C  |
 | 23  | The city remembers                 | Identity        | M      | High      | C     |
 | 24  | The driver is a character          | Identity        | S      | High      | C     |
-| 25  | Cop radio chatter                  | Identity        | S      | Med-High  | C     |
+| 25  | ✅ Cop radio chatter               | Identity        | S      | Med-High  | C     |
 | 26  | Honk button                        | Core Loop       | S      | Med       | A     |
 | 27  | One rewind rule                    | Core Loop       | M      | Very High | B     |
 | 28  | Cop corpses are obstacles          | Identity        | S      | High      | B, C  |
@@ -108,7 +109,7 @@ drowned. Adds mid-run micro-objectives.
 **Why:** Breaks up the sameness between milestones; gives players a target.
 **How:** Tag cop on spawn, gold material, multiplier on kill payout.
 
-#### 4. Run summary share card
+#### 4. ✅ Run summary share card
 
 **What:** Auto-generate a PNG at game-over (skin + score + heat tier + best
 combo + cops drowned), one-tap copy/share.
@@ -190,7 +191,7 @@ Cannot do #1, #11, #41 without this.
 **Why:** At high combo, popup allocation thrashes GC.
 **How:** Pre-allocate N entries, reuse via `active` flag.
 
-#### 15. PWA / installable
+#### 15. ✅ PWA / installable
 
 **What:** Service worker + manifest. Installable to home screen, plays
 offline after first load.
@@ -359,7 +360,7 @@ has. Almost zero new physics.
 **How:** Portrait sprite, state machine for driver mood, override hook
 into steering input.
 
-#### 25. Cop radio chatter
+#### 25. ✅ Cop radio chatter
 
 **What:** Procedural voice/text bubbles in HUD as cops coordinate:
 "Suspect headed for the river — cut him off on 5th!" "We lost visual."

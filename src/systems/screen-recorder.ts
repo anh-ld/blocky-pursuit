@@ -20,54 +20,139 @@
  *   ✗ Firefox (no MP4 in MediaRecorder as of 2025)
  *   ✗ Old Chrome (<122)
  *
- * Bitrate: 150 Kbps. FPS: 10. ~2 MB for a 3-min run.
+ * Bitrate hint: 150 Kbps. FPS: 10. Source downscaled to 640×360
+ * before encoding so the encoder's natural rate is well below the
+ * hint and a 3-minute run lands around 1.5 MB.
  */
 
 import { attempt } from "es-toolkit";
 
-const VIDEO_BITRATE = 150_000; // 150 kbps — superlightweight
-const CAPTURE_FPS = 10; // 10 FPS — replays are for "look at this moment", not analysis
-const CHUNK_INTERVAL_MS = 4000; // ~75 KB per chunk; 4 s keeps ondataavailable churn low
-// Hard cap so memory + final upload don't grow unbounded on marathon runs.
-const MAX_DURATION_MS = 4 * 60 * 1000;
+// 150 kbps target. The encoder will actually honor this hint at 360p
+// source resolution (it ignored 100–250 kbps hints when fed a 1440p
+// source because they're below its minimum for high-res content).
+const VIDEO_BITRATE = 150_000;
+const CAPTURE_FPS = 10;
+const CHUNK_INTERVAL_MS = 4000;
+// Downscale the captured frame to 360p widescreen. The game canvas is
+// rendered at full HiDPI (e.g. 2560×1440 on a DPR=2 Mac), and feeding
+// that straight to MediaRecorder forces the H.264 encoder to spend
+// ~1 Mbps regardless of the bitrate hint. At 640×360 there are ~32×
+// fewer pixels per frame than the source, the encoder's natural rate
+// drops well below 150 kbps, and replays still read fine in the
+// ~640px-wide modal where they're displayed.
+const CAPTURE_WIDTH = 640;
+const CAPTURE_HEIGHT = 360;
+// 3 minutes. Combined with the size ceiling below, this keeps the worst
+// case comfortably under Netlify's 6 MB request body limit even when the
+// HW encoder decides to ignore the bitrate hint.
+const MAX_DURATION_MS = 3 * 60 * 1000;
+// Hard client-side ceiling for uploads. Anything bigger is silently
+// dropped — the player's score still counts, they just don't get a
+// replay. Netlify sync functions cap at 6 MB body; we leave 1 MB
+// headroom for HTTP overhead and pick 5 MB as the safe ceiling.
+export const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
+
+// Canvas-capture pipeline. The encoder reads from a small, fixed
+// 360p canvas, not the live game canvas. A setInterval at CAPTURE_FPS
+// blits the game canvas into it via drawImage (GPU-side downscale,
+// ~1 ms per call) and asks the track for a frame.
+type ICanvasCaptureTrack = MediaStreamTrack & { requestFrame?: () => void };
 
 let mediaRecorder: MediaRecorder | null = null;
 let recordedChunks: Blob[] = [];
 let recordingSessionId: string | null = null;
 let isRecording = false;
 let durationCapTimer: number | null = null;
+// Capture pipeline state. The canvas itself isn't held — its 2D
+// context keeps it alive until cleanup nulls captureCtx.
+let captureCtx: CanvasRenderingContext2D | null = null;
+let captureTrack: ICanvasCaptureTrack | null = null;
+let captureFrameTimer: number | null = null;
 
 /**
  * Start recording the current gameplay session.
  * Silently no-ops if the browser can't capture the canvas or doesn't
  * expose a hardware H.264 encoder.
  */
-export async function startRecording(canvas: HTMLCanvasElement): Promise<void> {
+export async function startRecording(gameCanvas: HTMLCanvasElement): Promise<void> {
   if (isRecording) return;
-  if (!canvas.captureStream) return;
 
   const mimeType = getSupportedMimeType();
   if (!mimeType) return;
 
-  const [err, recorder] = attempt(() => {
-    const stream = canvas.captureStream(CAPTURE_FPS);
-    return new MediaRecorder(stream, {
+  // Build the downscale pipeline:
+  //   gameCanvas (HiDPI WebGL, e.g. 2560×1440)
+  //     ↓ drawImage (GPU downscale, ~1 ms)
+  //   captureCanvas (640×360 2D)
+  //     ↓ captureStream(0) + manual requestFrame()
+  //   MediaStream → MediaRecorder → H.264 encoder
+  //
+  // Driving the blit from a setInterval at CAPTURE_FPS keeps the cost
+  // off the per-frame render path: 10 Hz × ~1 ms = ~1.5% main-thread
+  // budget at 60 FPS, well below anything that could cause stutter.
+  const [setupErr, setup] = attempt(() => {
+    const c = document.createElement("canvas");
+    c.width = CAPTURE_WIDTH;
+    c.height = CAPTURE_HEIGHT;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+
+    // Seed an initial frame so the captured stream has content the
+    // moment MediaRecorder.start() runs.
+    ctx.drawImage(gameCanvas, 0, 0, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+
+    if (!c.captureStream) return null;
+    const stream = c.captureStream(0); // manual frame mode
+    const track = stream.getVideoTracks()[0] as ICanvasCaptureTrack | undefined;
+    if (!track) return null;
+    // Manual frame mode requires `requestFrame()` to actually emit any
+    // frames. Without it the stream stays empty and MediaRecorder
+    // produces a zero-byte file. Bail rather than record garbage.
+    if (typeof track.requestFrame !== "function") return null;
+
+    const recorder = new MediaRecorder(stream, {
       mimeType,
       videoBitsPerSecond: VIDEO_BITRATE,
     });
+
+    return { ctx, track, recorder };
   });
-  if (err || !recorder) return;
 
-  recordedChunks = [];
+  if (setupErr || !setup) return;
+
+  // Each recording session owns its own chunks array. The recorder's
+  // ondataavailable closes over this LOCAL array — not the module
+  // variable — so a future startRecording cannot hijack the old
+  // recorder's pushes by reassigning the module reference. The module
+  // variable is updated in lockstep so stopRecording can find the
+  // active array without an extra registry.
+  const chunks: Blob[] = [];
+  recordedChunks = chunks;
+
+  captureCtx = setup.ctx;
+  captureTrack = setup.track;
+  mediaRecorder = setup.recorder;
   recordingSessionId = generateSessionId();
-  mediaRecorder = recorder;
 
-  recorder.ondataavailable = (event) => {
-    if (event.data.size > 0) recordedChunks.push(event.data);
+  setup.recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) chunks.push(event.data);
   };
 
-  recorder.start(CHUNK_INTERVAL_MS);
+  setup.recorder.start(CHUNK_INTERVAL_MS);
   isRecording = true;
+
+  // Drive the capture: every 1000/CAPTURE_FPS ms, downscale the game
+  // canvas into the small capture canvas and commit a frame to the
+  // track. attempt() guards against the rare case where the GL context
+  // is lost mid-run — the interval keeps ticking but no-ops.
+  const frameMs = Math.round(1000 / CAPTURE_FPS);
+  captureFrameTimer = window.setInterval(() => {
+    if (!captureCtx || !captureTrack) return;
+    attempt(() => {
+      captureCtx!.drawImage(gameCanvas, 0, 0, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+      captureTrack!.requestFrame?.();
+    });
+  }, frameMs);
 
   // Auto-pause after MAX_DURATION_MS so the buffer can't grow unbounded.
   // Pause (not stop) so the next gameOver still gets whatever we captured.
@@ -81,7 +166,8 @@ export async function startRecording(canvas: HTMLCanvasElement): Promise<void> {
 
 /**
  * Stop recording and return the recorded blob.
- * Returns null if recording wasn't active or failed.
+ * Returns null if recording wasn't active, the final blob is empty,
+ * or the recorder failed.
  */
 export function stopRecording(): Promise<Blob | null> {
   return new Promise((resolve) => {
@@ -91,14 +177,41 @@ export function stopRecording(): Promise<Blob | null> {
     }
     const recorder = mediaRecorder;
 
+    // Stop the capture interval immediately so we don't waste cycles
+    // blitting and calling requestFrame on a track that's tearing down
+    // during the (~100-500 ms) window between recorder.stop() and the
+    // onstop event firing.
+    if (captureFrameTimer !== null) {
+      clearInterval(captureFrameTimer);
+      captureFrameTimer = null;
+    }
+
+    // Capture the chunks reference NOW so a racing discardRecording
+    // (which nulls the module-level array) can't strand us with an
+    // empty array when onstop finally fires. ondataavailable still
+    // pushes to the module-level recordedChunks, so the final chunk
+    // arriving after recorder.stop() lands here as long as nothing
+    // reassigned the variable in between.
+    const chunks = recordedChunks;
+    const mimeType = recorder.mimeType || "video/mp4";
+
     recorder.onstop = () => {
       isRecording = false;
-      const blob = new Blob(recordedChunks, {
-        type: recorder.mimeType || "video/webm",
-      });
       attempt(() => recorder.stream.getTracks().forEach((t) => t.stop()));
-      resolve(blob);
+      // Reject empty blobs so handleRecordingUpload short-circuits
+      // instead of POSTing a zero-byte file.
+      if (chunks.length === 0) {
+        cleanup();
+        resolve(null);
+        return;
+      }
+      const blob = new Blob(chunks, { type: mimeType });
       cleanup();
+      if (blob.size === 0) {
+        resolve(null);
+        return;
+      }
+      resolve(blob);
     };
 
     attempt(() => recorder.stop());
@@ -144,10 +257,20 @@ function cleanup(): void {
     clearTimeout(durationCapTimer);
     durationCapTimer = null;
   }
+  if (captureFrameTimer !== null) {
+    clearInterval(captureFrameTimer);
+    captureFrameTimer = null;
+  }
   mediaRecorder = null;
-  recordedChunks = [];
+  // recordedChunks is intentionally NOT reset here. A racing
+  // discardRecording during a pending stopRecording must not strand
+  // the captured chunks reference held in stopRecording's closure.
+  // startRecording assigns a fresh array on the next run, so leftover
+  // data is released as soon as a new recording begins.
   recordingSessionId = null;
   isRecording = false;
+  captureCtx = null;
+  captureTrack = null;
 }
 
 function generateSessionId(): string {

@@ -2,11 +2,26 @@ import { getStore } from "@netlify/blobs";
 import type { Context } from "@netlify/functions";
 
 /**
- * Upload a finished recording for a top-50 score. Single-shot POST
- * called from `gameOver` once. The submitted (sessionId, name, score)
- * must already exist in the stored top-50 leaderboard array — that's
- * how we gate uploads. Anything that didn't make the cut returns 403
- * and the client never even tries.
+ * Upload a finished recording for a top-50 score.
+ *
+ * Synchronous function (60 s Netlify timeout, 6 MB request body
+ * limit). Client caps uploads at 5 MB so we stay under the edge
+ * limit with 1 MB of headroom for HTTP overhead.
+ *
+ * Wire format: the recording is sent as the **raw request body**,
+ * with `sessionId`, `playerName`, and `score` in the query string.
+ * We deliberately avoid `multipart/form-data` because Netlify's sync
+ * function runtime has been unreliable parsing binary multipart
+ * bodies — it returned "Internal Error" 500s on a 2 MB blob without
+ * even invoking our handler, so the try/catch couldn't surface the
+ * real reason. Raw body + query params bypasses the multipart parser
+ * entirely and matches the simpler Netlify Blobs upload pattern.
+ *
+ * Gate: the score entry must already exist in the stored top-50 array
+ * (submit-score runs first). Matched by sessionId only — the name +
+ * score match was causing 409s from tiny drift in either value, and
+ * `submit-score` itself already uses sessionId as the sole idempotency
+ * key, so we stay consistent.
  */
 
 const MAX_RECORDING_SIZE = 25 * 1024 * 1024;
@@ -44,14 +59,14 @@ async function handleUpload(req: Request): Promise<Response> {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const formData = await req.formData();
-  const recording = formData.get("recording") as Blob | null;
-  const sessionId = formData.get("sessionId") as string | null;
-  const playerName = formData.get("playerName") as string | null;
-  const score = formData.get("score") as string | null;
+  // Metadata comes from the query string (small, easy to parse).
+  const url = new URL(req.url);
+  const sessionId = url.searchParams.get("sessionId");
+  const playerName = url.searchParams.get("playerName");
+  const score = url.searchParams.get("score");
 
-  if (!recording || !sessionId || !playerName || !score) {
-    return new Response("Missing required fields", { status: 400 });
+  if (!sessionId || !playerName || !score) {
+    return new Response("Missing required query params", { status: 400 });
   }
   if (!SESSION_ID_RE.test(sessionId)) {
     return new Response("Invalid sessionId", { status: 400 });
@@ -63,11 +78,26 @@ async function handleUpload(req: Request): Promise<Response> {
   if (!Number.isFinite(numericScore) || numericScore <= 0 || numericScore > MAX_SCORE) {
     return new Response("Invalid score", { status: 400 });
   }
+
+  // The body IS the recording — no multipart wrapping.
+  const recording = await req.blob();
+  if (recording.size === 0) {
+    return new Response("Empty recording body", { status: 400 });
+  }
   if (recording.size > MAX_RECORDING_SIZE) {
     return new Response("Recording too large", { status: 413 });
   }
 
-  const store = getStore("leaderboard");
+  // Strong consistency is REQUIRED here. By default Netlify Blobs is
+  // eventually consistent — updates can take up to 60 seconds to
+  // propagate across function instances. Since `submit-score` writes
+  // the entry milliseconds before this function reads it (and the two
+  // run on different Lambda instances), an eventually-consistent read
+  // returns a stale snapshot WITHOUT the just-written entry, and the
+  // sessionId lookup fails with 409 every time. `consistency: "strong"`
+  // forces a single-region read that always sees the latest write.
+  // See: https://docs.netlify.com/build/data-and-storage/netlify-blobs/#consistency
+  const store = getStore({ name: "leaderboard", consistency: "strong" });
   const safeName = String(playerName).slice(0, 20).replace(/[^a-zA-Z0-9 _-]/g, "");
   const flooredScore = Math.floor(numericScore);
 
@@ -111,15 +141,16 @@ async function handleUpload(req: Request): Promise<Response> {
   const containerType = (recording.type || "video/webm").split(";")[0]!.trim();
   const mimeType = ALLOWED_MIMES.has(containerType) ? containerType : "video/webm";
 
-  const arrayBuffer = await recording.arrayBuffer();
-  const videoBlob = new Blob([arrayBuffer], { type: mimeType });
   // Never trust client-provided IDs for storage keys; generate server-side.
   // The .webm extension is just an internal storage convention — playback
   // uses the Content-Type from metadata, not the URL extension.
   const blobKey = `recordings/${Date.now()}-${crypto.randomUUID()}.webm`;
   const recordingUrl = `/.netlify/functions/play-recording?key=${encodeURIComponent(blobKey)}`;
 
-  await store.set(blobKey, videoBlob, {
+  // Pass the Blob directly — skipping the arrayBuffer() + new Blob()
+  // roundtrip halves the memory footprint and avoids a full copy of
+  // several-MB payloads through the function heap.
+  await store.set(blobKey, recording, {
     metadata: {
       playerName: safeName,
       score: String(flooredScore),

@@ -2,12 +2,13 @@ import { signal } from "@preact/signals";
 import { loadProgress, saveProgress } from "./entities/car-skins";
 import { StorageKey, storageGet } from "./storage";
 
-export type IScreen = "howToPlay" | "leaderboard" | "feedback" | "garage" | "preGame" | "none";
+export type IScreen = "howToPlay" | "leaderboard" | "recordings" | "feedback" | "garage" | "preGame" | "none";
 export type IGameStateValue = "start" | "playing" | "paused" | "gameover";
 
 export type ILeaderboardEntry = {
   name: string;
   score: number;
+  recordingUrl?: string;
 };
 
 export type IWeather = "sunny" | "fog" | "rain" | "sunset" | "snowy";

@@ -85,8 +85,14 @@ import {
   weather,
   type IGameStateValue,
 } from "./state";
-import { fetchLeaderboard, submitScore, getPlayerName } from "./api";
+import { fetchLeaderboard, submitScore, getPlayerName, uploadRecording } from "./api";
 import { attempt, attemptAsync } from "es-toolkit";
+import {
+  startRecording,
+  stopRecording,
+  getSessionId,
+  discardRecording,
+} from "./systems/screen-recorder";
 import {
   MAX_HP,
   HP_REGEN_PER_SEC,
@@ -285,6 +291,10 @@ function startGame() {
   screen.value = "none";
   isNewBest.value = false;
 
+  // Discard any previous recording that didn't get uploaded
+  discardRecording();
+  dyingSessionId = null;
+
   // Reset Player
   car.body.position.set(0, 1, 0);
   car.body.velocity.set(0, 0, 0);
@@ -336,15 +346,84 @@ function startGame() {
   startEngine();
   startBgm();
   startRadioHiss();
+
+  // Start auto-recording the gameplay session.
+  // 800 Kbps bitrate caps file size regardless of canvas resolution.
+  // Recording is uploaded only if the score makes the leaderboard.
+  startRecording(renderer.domElement).catch(() => {
+    // Silently fail — recording is non-blocking
+  });
   // Background-load all voice files so subsequent radio calls are
   // instantaneous. Idempotent — only fetches once across the app's life.
   void preloadRadioVoices();
+}
+
+// --- Recording helpers ---
+// Session ID captured at gameOver time.
+let dyingSessionId: string | null = null;
+
+const TOP_BOARD_SIZE = 10;
+
+/**
+ * Fetch current leaderboard top scores to check qualification.
+ * Returns the lowest score in the top N, or 0 if fewer than N entries.
+ */
+async function getQualificationThreshold(): Promise<number> {
+  const [, res] = await attemptAsync(async () =>
+    fetch("/.netlify/functions/leaderboard"),
+  );
+  if (!res || !res.ok) return 0; // Unknown → allow upload
+
+  const [, entries] = await attemptAsync(
+    () => res.json() as Promise<{ name: string; score: number }[]>,
+  );
+  if (!entries || entries.length < TOP_BOARD_SIZE) return 0; // Room for anyone
+  // The Nth entry's score is the bar to beat
+  return entries[TOP_BOARD_SIZE - 1]?.score ?? 0;
+}
+
+/**
+ * Stop the current recording and upload it ONLY if the score qualifies
+ * for the top board. Saves storage and bandwidth.
+ */
+async function handleRecordingUpload() {
+  const sessionId = getSessionId(); // Capture BEFORE stopping (cleanup nulls it)
+  const blob = await stopRecording();
+  if (!blob || !sessionId) return null;
+
+  // Check if score would make the top board
+  const threshold = await getQualificationThreshold();
+  if (run.score <= threshold) {
+    console.log(
+      `[recorder] Score ${Math.floor(run.score)} didn't qualify (bar: ${threshold}) — discarded`,
+    );
+    return null;
+  }
+
+  const url = await uploadRecording(
+    blob,
+    sessionId,
+    playerName.value,
+    run.score,
+  );
+
+  if (!url) {
+    console.log("[recorder] Upload failed");
+    return null;
+  }
+  console.log(`[recorder] Uploaded: ${url}`);
+  return url;
 }
 
 function gameOver(reason: string = "BUSTED") {
   // Already dying or game over — ignore further fail triggers so a
   // busted/wreck/drown that fires during the slow-mo can't restart it.
   if (currentState === "gameover" || currentState === "dying") return;
+
+  // Capture the recording session ID at death time so submitScoreWithRecording
+  // can verify the pending URL belongs to THIS session (not a stale one).
+  dyingSessionId = getSessionId();
+
   // Enter the cinematic dying phase. tickPlaying keeps running (animate
   // routes through it during "dying" too) so cops + physics simulate in
   // slow motion, but the death-trigger blocks inside tickPlaying short-
@@ -421,8 +500,29 @@ function finishGameOver(reason: string) {
   runComboScore.value = run.comboScore;
   runCopScore.value = run.copScore;
 
-  // Submit score in the background — doesn't block the panel.
-  submitScore(playerName.value, run.score).then(() => fetchLeaderboard());
+  // Submit score first, then upload/attach replay for the same session ID.
+  // This avoids creating orphaned recordings when initial score submit fails.
+  void (async () => {
+    const sid = dyingSessionId ?? undefined;
+    dyingSessionId = null;
+
+    const submitted = await submitScore(playerName.value, run.score, undefined, sid);
+    if (!submitted) {
+      await fetchLeaderboard();
+      return;
+    }
+
+    const [uploadErr, uploadedUrl] = await attemptAsync(() => handleRecordingUpload());
+    if (uploadErr) {
+      console.warn("[recorder] Upload failed:", uploadErr);
+    } else if (uploadedUrl) {
+      // upload-recording attaches the replay URL server-side to avoid
+      // upload-then-submit orphaned blobs.
+      console.log("[recorder] Replay attached to score entry");
+    }
+
+    await fetchLeaderboard();
+  })();
 
   // After the death moment, reveal the panel.
   setTimeout(() => {

@@ -20,16 +20,58 @@ export async function fetchLeaderboard() {
   leaderboardLoading.value = false;
 }
 
-export async function submitScore(name: string, finalScore: number) {
-  if (finalScore <= 0) return;
-  if (DEV) return;
-  await attemptAsync(() =>
+export async function submitScore(
+  name: string,
+  finalScore: number,
+  recordingUrl?: string,
+  sessionId?: string,
+): Promise<boolean> {
+  if (finalScore <= 0) return false;
+  if (DEV) return true;
+  const [, res] = await attemptAsync(() =>
     fetch("/.netlify/functions/submit-score", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, score: Math.floor(finalScore) }),
+      body: JSON.stringify({
+        name,
+        score: Math.floor(finalScore),
+        recordingUrl,
+        sessionId,
+      }),
     })
   );
+  return !!res?.ok;
+}
+
+/**
+ * Upload a recording blob to Netlify storage.
+ * Returns the URL if successful, or null if it failed.
+ */
+export async function uploadRecording(
+  recording: Blob,
+  sessionId: string,
+  playerName: string,
+  score: number,
+): Promise<string | null> {
+  if (DEV) return null;
+
+  const formData = new FormData();
+  formData.append("recording", recording, `${sessionId}.webm`);
+  formData.append("sessionId", sessionId);
+  formData.append("playerName", playerName);
+  formData.append("score", String(score));
+
+  const [, res] = await attemptAsync(async () =>
+    fetch("/.netlify/functions/upload-recording", {
+      method: "POST",
+      body: formData,
+    }),
+  );
+
+  if (!res || !res.ok) return null;
+
+  const data = (await res.json()) as { url: string };
+  return data.url ?? null;
 }
 
 const ADJECTIVES = ["Swift","Sneaky","Turbo","Crazy","Wild","Rapid","Slick","Bold","Lucky","Blazing","Nitro","Shadow","Ghost","Rogue","Neon"];

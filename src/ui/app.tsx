@@ -2,6 +2,7 @@ import { gameState, screen, actions } from "../state";
 import { TopBar } from "./top-bar";
 import { HowToPlay } from "./how-to-play";
 import { Leaderboard } from "./leaderboard";
+import { Recordings } from "./recordings";
 import { Feedback } from "./feedback";
 import { MobileCta } from "./mobile-cta";
 import { MobileControls } from "./mobile-controls";
@@ -13,12 +14,13 @@ import { BustedWarning } from "./busted-warning";
 import { LowHpWarning } from "./low-hp-warning";
 import { DamageIndicator } from "./damage-indicator";
 import { Radio } from "./radio";
+import { ReplayModal } from "./replay-modal";
 
 export function App() {
   const state = gameState.value;
   const sc = screen.value;
   const showHowToPlay = state === "start" && sc === "howToPlay";
-  const showGameOver = state === "gameover" && sc !== "leaderboard" && sc !== "feedback" && sc !== "preGame";
+  const showGameOver = state === "gameover" && sc !== "leaderboard" && sc !== "recordings" && sc !== "feedback" && sc !== "preGame";
   const showPaused = state === "paused";
   const darken = state !== "playing";
 
@@ -33,6 +35,7 @@ export function App() {
         <DamageIndicator />
         <BustedWarning />
         <Radio />
+        <ReplayModal />
         {showHowToPlay && <HowToPlay />}
         {showGameOver && <GameOver />}
         {showPaused && (
@@ -70,6 +73,7 @@ export function App() {
           </div>
         )}
         {sc === "leaderboard" && <Leaderboard />}
+        {sc === "recordings" && <Recordings />}
         {sc === "feedback" && <Feedback />}
         {sc === "garage" && <Garage />}
         {sc === "preGame" && <PreGame />}

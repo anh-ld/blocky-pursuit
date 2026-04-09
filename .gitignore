@@ -4,6 +4,8 @@ src/uno.css
 .env
 .DS_Store
 .claude
+.qwen
+.codex
 CLAUDE.md
 AGENTS.md
 output

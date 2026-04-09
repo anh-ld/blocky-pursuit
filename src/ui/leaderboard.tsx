@@ -1,10 +1,20 @@
 import { screen, leaderboardEntries, leaderboardLoading, playerName, gameState } from "../state";
+import { replayUrl } from "./replay-modal";
+import { fetchLeaderboard } from "../api";
 
-const MEDAL = ["text-amber-400", "text-gray-300", "text-amber-600"];
+const MEDAL = ["text-amber-400", "text-gray-200", "text-amber-600"];
 
 export function Leaderboard() {
   const back = () => {
     screen.value = gameState.value === "start" ? "howToPlay" : "none";
+  };
+
+  const playRecording = (url: string) => {
+    replayUrl.value = url;
+  };
+  const openRecordings = () => {
+    fetchLeaderboard();
+    screen.value = "recordings";
   };
 
   const entries = leaderboardEntries.value;
@@ -25,15 +35,28 @@ export function Leaderboard() {
             </div>
           ) : (
             entries.slice(0, 10).map((e, i) => {
-              const display = e.name.length > 12 ? e.name.slice(0, 12) + "\u2026" : e.name;
+              const display = e.name;
               const isMe = e.name === me;
               const medal = MEDAL[i] ?? "text-gray-500";
               return (
-                <div class={`flex justify-between ${isMe ? "text-amber-300" : "text-gray-400"}`}>
+                <div class={`flex justify-between items-center ${isMe ? "text-amber-300" : "text-gray-400"}`}>
                   <span>
-                    <span class={medal}>{i + 1}.</span> {display}
+                    <span class={medal}>{i + 1}.</span>
+                    <span> </span>
+                    <span class={medal}>{display}</span>
                   </span>
-                  <span class="tabular-nums">{e.score.toLocaleString()}</span>
+                  <div class="flex items-center gap-2">
+                    <span class="tabular-nums">{e.score.toLocaleString()}</span>
+                    {e.recordingUrl && (
+                      <button
+                        onClick={() => playRecording(e.recordingUrl!)}
+                        class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded"
+                        title="Watch replay"
+                      >
+                        ▶
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })
@@ -44,7 +67,13 @@ export function Leaderboard() {
             You: <span class="text-amber-300">{me}</span>
           </div>
         </div>
-        <div class="mt-auto">
+        <div class="mt-auto flex flex-col gap-2">
+          <button
+            onClick={openRecordings}
+            class="btn bg-sky-500/20 text-sky-300 text-xs py-2 tracking-wider border border-sky-500/30 hover:bg-sky-500/30"
+          >
+            BROWSE RECORDINGS
+          </button>
           <button
             onClick={back}
             class="btn bg-gray-700 text-gray-300 text-xs py-2 tracking-wider hover:bg-gray-600"

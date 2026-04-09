@@ -1,61 +1,106 @@
 /**
  * Auto-records gameplay sessions and uploads only when the score
- * qualifies for the top leaderboard.
+ * qualifies for the top-50 leaderboard.
  *
- * Records at 800 Kbps WebM — bitrate caps file size regardless of
- * canvas resolution (~6 MB/min at this setting).
+ * Encoding: VP8 @ 150 Kbps / 15 FPS — ~3.3 MB for a 3-min run.
+ * VP8 is preferred over VP9 because software VP9 encoding is much
+ * heavier on the main thread.
+ *
+ * Skipped entirely on low-power devices (mobile, ≤4 cores) where
+ * software encoding would degrade gameplay FPS.
  */
 
-// 800 Kbps — bitrate controls file size, not resolution
-const VIDEO_BITRATE = 800_000;
+import { attempt } from "es-toolkit";
+
+const VIDEO_BITRATE = 150_000; // 150 kbps — superlightweight
+const CAPTURE_FPS = 15; // 15 FPS — still legible for arcade replays
+const CHUNK_INTERVAL_MS = 4000; // ~75 KB per chunk; 4 s keeps ondataavailable churn low
+// Hard cap so memory + final upload don't grow unbounded on marathon runs.
+const MAX_DURATION_MS = 4 * 60 * 1000;
 
 let mediaRecorder: MediaRecorder | null = null;
 let recordedChunks: Blob[] = [];
 let recordingSessionId: string | null = null;
 let isRecording = false;
+let durationCapTimer: number | null = null;
+
+/**
+ * Returns true if this device is too underpowered to encode video
+ * alongside the game without dropping frames. We bail completely on
+ * these devices — recording is non-essential.
+ */
+function isLowPowerDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const cores = navigator.hardwareConcurrency ?? 0;
+  if (cores > 0 && cores <= 4) return true;
+  // Coarse pointer = touch-primary device. Mobile chips rarely have
+  // hardware WebM encoders, so software encode tanks FPS.
+  if (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) {
+    return true;
+  }
+  return false;
+}
 
 /**
  * Start recording the current gameplay session.
- * Captures the game canvas output at 480p / 800 Kbps.
+ * Captures the game canvas at 15 FPS / 150 Kbps VP8.
  */
 export async function startRecording(canvas: HTMLCanvasElement): Promise<void> {
   if (isRecording) return;
 
-  // Check browser support
   if (!canvas.captureStream) {
     console.warn("[recorder] canvas.captureStream not supported");
     return;
   }
 
-  try {
-    const stream = canvas.captureStream(30); // 30 FPS
-    const mimeType = getSupportedMimeType();
+  if (isLowPowerDevice()) {
+    console.log("[recorder] Skipped on low-power device");
+    return;
+  }
 
-    if (!mimeType) {
-      console.warn("[recorder] No supported MIME type for recording");
-      return;
-    }
+  const mimeType = getSupportedMimeType();
+  if (!mimeType) {
+    console.warn("[recorder] No supported MIME type for recording");
+    return;
+  }
 
-    recordedChunks = [];
-    recordingSessionId = generateSessionId();
-
-    mediaRecorder = new MediaRecorder(stream, {
+  const [err, recorder] = attempt(() => {
+    const stream = canvas.captureStream(CAPTURE_FPS);
+    return new MediaRecorder(stream, {
       mimeType,
       videoBitsPerSecond: VIDEO_BITRATE,
     });
+  });
 
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        recordedChunks.push(event.data);
-      }
-    };
-
-    mediaRecorder.start(1000); // Collect data every 1 second
-    isRecording = true;
-    console.log(`[recorder] Started session ${recordingSessionId}`);
-  } catch (err) {
+  if (err || !recorder) {
     console.warn("[recorder] Failed to start recording:", err);
+    return;
   }
+
+  recordedChunks = [];
+  recordingSessionId = generateSessionId();
+  mediaRecorder = recorder;
+
+  recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      recordedChunks.push(event.data);
+    }
+  };
+
+  recorder.start(CHUNK_INTERVAL_MS);
+  isRecording = true;
+
+  // Auto-pause after MAX_DURATION_MS so the buffer can't grow unbounded.
+  // Pause (not stop) so the next gameOver still gets whatever we captured.
+  durationCapTimer = window.setTimeout(() => {
+    if (isRecording && mediaRecorder && mediaRecorder.state === "recording") {
+      attempt(() => mediaRecorder!.requestData());
+      attempt(() => mediaRecorder!.pause());
+      console.log("[recorder] Hit max duration, paused");
+    }
+  }, MAX_DURATION_MS);
+
+  console.log(`[recorder] Started session ${recordingSessionId}`);
 }
 
 /**
@@ -78,12 +123,12 @@ export function stopRecording(): Promise<Blob | null> {
       console.log(
         `[recorder] Stopped session ${recordingSessionId}, size: ${(blob.size / (1024 * 1024)).toFixed(2)} MB`,
       );
-      recorder.stream.getTracks().forEach((t) => t.stop());
+      attempt(() => recorder.stream.getTracks().forEach((t) => t.stop()));
       resolve(blob);
       cleanup();
     };
 
-    recorder.stop();
+    attempt(() => recorder.stop());
   });
 }
 
@@ -93,17 +138,10 @@ export function stopRecording(): Promise<Blob | null> {
 export function discardRecording(): void {
   const sid = recordingSessionId; // Capture before cleanup nulls it
   if (mediaRecorder && isRecording) {
-    mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+    attempt(() => mediaRecorder!.stream.getTracks().forEach((t) => t.stop()));
   }
   cleanup();
   if (sid) console.log(`[recorder] Discarded session ${sid}`);
-}
-
-/**
- * Check if we're currently recording.
- */
-export function getRecordingStatus(): boolean {
-  return isRecording;
 }
 
 /**
@@ -116,13 +154,9 @@ export function getSessionId(): string | null {
 // --- Internal helpers ---
 
 function getSupportedMimeType(): string | null {
-  const types = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8",
-    "video/webm",
-  ];
+  // VP8 first: software VP9 encoding is significantly heavier on the
+  // main thread. No audio track is captured so codec strings omit ",opus".
+  const types = ["video/webm;codecs=vp8", "video/webm;codecs=vp9", "video/webm"];
   for (const type of types) {
     if (MediaRecorder.isTypeSupported(type)) {
       return type;
@@ -132,6 +166,10 @@ function getSupportedMimeType(): string | null {
 }
 
 function cleanup(): void {
+  if (durationCapTimer !== null) {
+    clearTimeout(durationCapTimer);
+    durationCapTimer = null;
+  }
   mediaRecorder = null;
   recordedChunks = [];
   recordingSessionId = null;

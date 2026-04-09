@@ -44,8 +44,9 @@ export async function submitScore(
 }
 
 /**
- * Upload a recording blob to Netlify storage.
- * Returns the URL if successful, or null if it failed.
+ * Upload a finished recording for a top-50 score. Single-shot POST
+ * called once at gameOver, gated client-side on the cached top-50
+ * threshold so non-qualifying runs never even try.
  */
 export async function uploadRecording(
   recording: Blob,
@@ -59,19 +60,20 @@ export async function uploadRecording(
   formData.append("recording", recording, `${sessionId}.webm`);
   formData.append("sessionId", sessionId);
   formData.append("playerName", playerName);
-  formData.append("score", String(score));
+  formData.append("score", String(Math.floor(score)));
 
-  const [, res] = await attemptAsync(async () =>
+  const [, res] = await attemptAsync(() =>
     fetch("/.netlify/functions/upload-recording", {
       method: "POST",
       body: formData,
     }),
   );
-
   if (!res || !res.ok) return null;
 
-  const data = (await res.json()) as { url: string };
-  return data.url ?? null;
+  const [, data] = await attemptAsync(
+    () => res.json() as Promise<{ url?: string }>,
+  );
+  return data?.url ?? null;
 }
 
 const ADJECTIVES = ["Swift","Sneaky","Turbo","Crazy","Wild","Rapid","Slick","Bold","Lucky","Blazing","Nitro","Shadow","Ghost","Rogue","Neon"];

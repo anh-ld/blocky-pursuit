@@ -1,13 +1,23 @@
 import { getStore } from "@netlify/blobs";
 import type { Context } from "@netlify/functions";
 
-// Keep replay uploads bounded to reduce storage abuse impact.
+/**
+ * Upload a finished recording for a top-50 score. Single-shot POST
+ * called from `gameOver` once. The submitted (sessionId, name, score)
+ * must already exist in the stored top-50 leaderboard array — that's
+ * how we gate uploads. Anything that didn't make the cut returns 403
+ * and the client never even tries.
+ */
+
 const MAX_RECORDING_SIZE = 25 * 1024 * 1024;
 const MAX_SCORE = 500_000;
 const SESSION_ID_RE = /^[a-z0-9-]{8,64}$/;
 const SCORE_RE = /^\d{1,7}$/;
 const MAX_RETRIES = 5;
-const TOP_BOARD_SIZE = 10;
+// Recordings are stored for any run that lands in the top 50, not
+// just the displayed top 10 — gives a deeper replay archive without
+// the overhead of streaming uploads.
+const QUALIFY_BOARD_SIZE = 50;
 
 type IScoreEntry = {
   name: string;
@@ -31,11 +41,9 @@ export default async function handler(req: Request, _context: Context) {
   if (!recording || !sessionId || !playerName || !score) {
     return new Response("Missing required fields", { status: 400 });
   }
-
   if (!SESSION_ID_RE.test(sessionId)) {
     return new Response("Invalid sessionId", { status: 400 });
   }
-
   if (!SCORE_RE.test(score)) {
     return new Response("Invalid score", { status: 400 });
   }
@@ -43,8 +51,6 @@ export default async function handler(req: Request, _context: Context) {
   if (!Number.isFinite(numericScore) || numericScore <= 0 || numericScore > MAX_SCORE) {
     return new Response("Invalid score", { status: 400 });
   }
-
-  // Validate recording size
   if (recording.size > MAX_RECORDING_SIZE) {
     return new Response("Recording too large", { status: 413 });
   }
@@ -53,19 +59,17 @@ export default async function handler(req: Request, _context: Context) {
   const safeName = String(playerName).slice(0, 20).replace(/[^a-zA-Z0-9 _-]/g, "");
   const flooredScore = Math.floor(numericScore);
 
-  // Server-side gate: allow upload only for an existing top-board score entry
-  // of the same session/name/score and only once per session.
+  // Server-side gate: the score entry must already exist in the top-50
+  // array (submit-score runs first) and must not already have a replay.
   const firstRead = await store.getWithMetadata("top-scores", { type: "json" });
   const firstEntries: IScoreEntry[] = (firstRead?.data as IScoreEntry[] | undefined) ?? [];
-  const candidateIndex = firstEntries.findIndex((e) =>
-    e.sessionId === sessionId &&
-    e.name === safeName &&
-    e.score === flooredScore
+  const candidateIndex = firstEntries.findIndex(
+    (e) => e.sessionId === sessionId && e.name === safeName && e.score === flooredScore,
   );
   if (candidateIndex < 0) {
     return new Response("Score entry not found for session", { status: 409 });
   }
-  if (candidateIndex >= TOP_BOARD_SIZE) {
+  if (candidateIndex >= QUALIFY_BOARD_SIZE) {
     return new Response("Score did not qualify for replay upload", { status: 403 });
   }
   if (firstEntries[candidateIndex]?.recordingUrl) {
@@ -78,7 +82,6 @@ export default async function handler(req: Request, _context: Context) {
   const blobKey = `recordings/${Date.now()}-${crypto.randomUUID()}.webm`;
   const recordingUrl = `/.netlify/functions/play-recording?key=${encodeURIComponent(blobKey)}`;
 
-  // Upload blob first.
   await store.set(blobKey, videoBlob, {
     metadata: {
       playerName: safeName,
@@ -89,23 +92,17 @@ export default async function handler(req: Request, _context: Context) {
     },
   });
 
-  // Attach replay URL to the existing score entry via CAS retries.
+  // Attach replay URL to the score entry via CAS retries.
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const result = await store.getWithMetadata("top-scores", { type: "json" });
     const entries: IScoreEntry[] = (result?.data as IScoreEntry[] | undefined) ?? [];
     const etag = result?.etag;
 
-    const idx = entries.findIndex((e) =>
-      e.sessionId === sessionId &&
-      e.name === safeName &&
-      e.score === flooredScore
+    const idx = entries.findIndex(
+      (e) => e.sessionId === sessionId && e.name === safeName && e.score === flooredScore,
     );
-    if (idx < 0) {
-      break;
-    }
-    if (idx >= TOP_BOARD_SIZE) {
-      break;
-    }
+    if (idx < 0) break;
+    if (idx >= QUALIFY_BOARD_SIZE) break;
     if (entries[idx]?.recordingUrl) {
       return Response.json({ ok: true, key: blobKey, url: entries[idx]!.recordingUrl });
     }
@@ -121,7 +118,7 @@ export default async function handler(req: Request, _context: Context) {
     }
   }
 
-  // Could not safely attach URL to score entry — remove blob to avoid orphan.
+  // Could not safely attach URL — clean up the orphan blob.
   await store.delete(blobKey);
   return new Response("Failed to attach replay to score", { status: 409 });
 }

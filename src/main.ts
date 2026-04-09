@@ -83,9 +83,15 @@ import {
   addDrownedCops,
   audioMuted,
   weather,
+  leaderboardEntries,
   type IGameStateValue,
 } from "./state";
-import { fetchLeaderboard, submitScore, getPlayerName, uploadRecording } from "./api";
+import {
+  fetchLeaderboard,
+  submitScore,
+  getPlayerName,
+  uploadRecording,
+} from "./api";
 import { attempt, attemptAsync } from "es-toolkit";
 import {
   startRecording,
@@ -291,7 +297,7 @@ function startGame() {
   screen.value = "none";
   isNewBest.value = false;
 
-  // Discard any previous recording that didn't get uploaded
+  // Discard any previous recording that didn't get uploaded.
   discardRecording();
   dyingSessionId = null;
 
@@ -362,51 +368,45 @@ function startGame() {
 // Session ID captured at gameOver time.
 let dyingSessionId: string | null = null;
 
-const TOP_BOARD_SIZE = 10;
+// Recordings are kept for any run that lands in the top 50 — bigger
+// archive than the displayed top 10, but still small enough that the
+// upload-on-gameover path stays cheap.
+const QUALIFY_BOARD_SIZE = 50;
 
 /**
- * Fetch current leaderboard top scores to check qualification.
- * Returns the lowest score in the top N, or 0 if fewer than N entries.
+ * Compute the upload qualification threshold from the cached
+ * leaderboard signal. The leaderboard endpoint returns up to 50
+ * entries; the 50th entry's score is the bar to beat. Returns 0
+ * if fewer than 50 entries exist (room for anyone).
  */
-async function getQualificationThreshold(): Promise<number> {
-  const [, res] = await attemptAsync(async () =>
-    fetch("/.netlify/functions/leaderboard"),
-  );
-  if (!res || !res.ok) return 0; // Unknown → allow upload
-
-  const [, entries] = await attemptAsync(
-    () => res.json() as Promise<{ name: string; score: number }[]>,
-  );
-  if (!entries || entries.length < TOP_BOARD_SIZE) return 0; // Room for anyone
-  // The Nth entry's score is the bar to beat
-  return entries[TOP_BOARD_SIZE - 1]?.score ?? 0;
+function getQualificationThreshold(): number {
+  const entries = leaderboardEntries.value;
+  if (!entries || entries.length < QUALIFY_BOARD_SIZE) return 0;
+  return entries[QUALIFY_BOARD_SIZE - 1]?.score ?? 0;
 }
 
 /**
  * Stop the current recording and upload it ONLY if the score qualifies
- * for the top board. Saves storage and bandwidth.
+ * for the top-50 leaderboard. Client-side gate uses the cached
+ * leaderboard so non-qualifying runs never even attempt the upload.
  */
 async function handleRecordingUpload() {
   const sessionId = getSessionId(); // Capture BEFORE stopping (cleanup nulls it)
-  const blob = await stopRecording();
-  if (!blob || !sessionId) return null;
 
-  // Check if score would make the top board
-  const threshold = await getQualificationThreshold();
+  // Cheap client-side gate first — bail before paying the stop+blob cost.
+  const threshold = getQualificationThreshold();
   if (run.score <= threshold) {
+    discardRecording();
     console.log(
       `[recorder] Score ${Math.floor(run.score)} didn't qualify (bar: ${threshold}) — discarded`,
     );
     return null;
   }
 
-  const url = await uploadRecording(
-    blob,
-    sessionId,
-    playerName.value,
-    run.score,
-  );
+  const blob = await stopRecording();
+  if (!blob || !sessionId) return null;
 
+  const url = await uploadRecording(blob, sessionId, playerName.value, run.score);
   if (!url) {
     console.log("[recorder] Upload failed");
     return null;

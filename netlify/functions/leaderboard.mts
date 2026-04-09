@@ -12,6 +12,7 @@ export default async function handler(_req: Request, _context: Context) {
   const raw = await store.get("top-scores", { type: "json" }) as IScoreEntry[] | null;
   const entries: IScoreEntry[] = raw ?? [];
 
-  // Return top 10
-  return Response.json(entries.slice(0, 10));
+  // Return up to 50 — the UI displays the top 10 but the client uses
+  // entry #50 as the "would my recording qualify for upload" threshold.
+  return Response.json(entries.slice(0, 50));
 }

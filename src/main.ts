@@ -392,23 +392,35 @@ function getQualificationThreshold(): number {
  */
 async function handleRecordingUpload() {
   const sessionId = getSessionId(); // Capture BEFORE stopping (cleanup nulls it)
+  const myScore = Math.floor(run.score);
+  const threshold = getQualificationThreshold();
+
+  console.log(
+    `[recorder] gameOver score=${myScore} threshold=${threshold} sessionId=${sessionId ?? "(none)"}`,
+  );
+
+  if (!sessionId) {
+    console.log("[recorder] No active session — recorder was never started (low-power skip?)");
+    return null;
+  }
 
   // Cheap client-side gate first — bail before paying the stop+blob cost.
-  const threshold = getQualificationThreshold();
-  if (run.score <= threshold) {
+  if (myScore <= threshold) {
     discardRecording();
-    console.log(
-      `[recorder] Score ${Math.floor(run.score)} didn't qualify (bar: ${threshold}) — discarded`,
-    );
+    console.log(`[recorder] Score didn't qualify (bar: ${threshold}) — discarded`);
     return null;
   }
 
   const blob = await stopRecording();
-  if (!blob || !sessionId) return null;
+  if (!blob) {
+    console.log("[recorder] stopRecording returned null");
+    return null;
+  }
+  console.log(`[recorder] Captured ${(blob.size / 1024).toFixed(0)} KB, uploading…`);
 
-  const url = await uploadRecording(blob, sessionId, playerName.value, run.score);
+  const url = await uploadRecording(blob, sessionId, playerName.value, myScore);
   if (!url) {
-    console.log("[recorder] Upload failed");
+    console.log("[recorder] Upload failed (see preceding log for reason)");
     return null;
   }
   console.log(`[recorder] Uploaded: ${url}`);

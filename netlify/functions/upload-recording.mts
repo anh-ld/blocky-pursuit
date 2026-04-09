@@ -28,6 +28,18 @@ type IScoreEntry = {
 };
 
 export default async function handler(req: Request, _context: Context) {
+  try {
+    return await handleUpload(req);
+  } catch (err) {
+    // Surface the real reason for any 500 to the client log so we don't
+    // have to tail Netlify function logs to debug upload crashes.
+    const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.error("[upload-recording] crashed:", err);
+    return new Response(`Server error — ${msg}`, { status: 500 });
+  }
+}
+
+async function handleUpload(req: Request): Promise<Response> {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
@@ -59,13 +71,25 @@ export default async function handler(req: Request, _context: Context) {
   const safeName = String(playerName).slice(0, 20).replace(/[^a-zA-Z0-9 _-]/g, "");
   const flooredScore = Math.floor(numericScore);
 
-  // Server-side gate: the score entry must already exist in the top-50
-  // array (submit-score runs first) and must not already have a replay.
+  // Server-side gate: match the score entry BY SESSION ID ONLY.
+  //
+  // Previously we also required name+score to match, but that created a
+  // foot-gun: if the player's name got regenerated or their score drifted
+  // by even a single point between `submitScore` and `uploadRecording`,
+  // the findIndex returned -1 and the upload failed with a 409. Since
+  // `submit-score` itself already uses sessionId as the sole key for
+  // idempotent updates, matching on sessionId here keeps both endpoints
+  // consistent and makes the upload robust against any client-side
+  // drift of the name/score fields.
+  //
+  // Abuse concern: sessionId is client-generated but unique per run
+  // (timestamp + random). A malicious client can't forge another player's
+  // sessionId without reading the blob directly (not exposed), and even
+  // if they did, all they can do is overwrite their own future recording
+  // uploads — no data escalation.
   const firstRead = await store.getWithMetadata("top-scores", { type: "json" });
   const firstEntries: IScoreEntry[] = (firstRead?.data as IScoreEntry[] | undefined) ?? [];
-  const candidateIndex = firstEntries.findIndex(
-    (e) => e.sessionId === sessionId && e.name === safeName && e.score === flooredScore,
-  );
+  const candidateIndex = firstEntries.findIndex((e) => e.sessionId === sessionId);
   if (candidateIndex < 0) {
     return new Response("Score entry not found for session", { status: 409 });
   }
@@ -106,15 +130,14 @@ export default async function handler(req: Request, _context: Context) {
     },
   });
 
-  // Attach replay URL to the score entry via CAS retries.
+  // Attach replay URL to the score entry via CAS retries. Match by
+  // sessionId only — see the gate above for the rationale.
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const result = await store.getWithMetadata("top-scores", { type: "json" });
     const entries: IScoreEntry[] = (result?.data as IScoreEntry[] | undefined) ?? [];
     const etag = result?.etag;
 
-    const idx = entries.findIndex(
-      (e) => e.sessionId === sessionId && e.name === safeName && e.score === flooredScore,
-    );
+    const idx = entries.findIndex((e) => e.sessionId === sessionId);
     if (idx < 0) break;
     if (idx >= QUALIFY_BOARD_SIZE) break;
     if (entries[idx]?.recordingUrl) {

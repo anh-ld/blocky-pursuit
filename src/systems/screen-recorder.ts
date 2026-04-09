@@ -20,23 +20,14 @@
  *   ✗ Firefox (no MP4 in MediaRecorder as of 2025)
  *   ✗ Old Chrome (<122)
  *
- * Bitrate: 150 Kbps. Capture FPS: 3 (played back at 3× = 9 effective
- * fps time-lapse). ~3.3 MB for a 3-min real-time run.
+ * Bitrate: 150 Kbps. FPS: 10. ~2 MB for a 3-min run.
  */
 
 import { attempt } from "es-toolkit";
 
 const VIDEO_BITRATE = 150_000; // 150 kbps — superlightweight
-// Capture at 3 fps and let the replay modal play it back at 3× speed.
-// MediaRecorder's bit budget is per real second regardless of FPS, so
-// 3 fps × 150 kbps = ~50 kbit/frame (vs ~15 kbit/frame at 10 fps) —
-// each frame gets 3.3× more bits → visibly sharper at the same file
-// size. See REPLAY_PLAYBACK_RATE below and src/ui/replay-modal.tsx.
-const CAPTURE_FPS = 3;
-// Applied by the replay modal to convert the 3 fps capture into a
-// 9 effective-fps time-lapse when the recording is watched back.
-export const REPLAY_PLAYBACK_RATE = 3;
-const CHUNK_INTERVAL_MS = 4000;
+const CAPTURE_FPS = 10; // 10 FPS — replays are for "look at this moment", not analysis
+const CHUNK_INTERVAL_MS = 4000; // ~75 KB per chunk; 4 s keeps ondataavailable churn low
 // Hard cap so memory + final upload don't grow unbounded on marathon runs.
 const MAX_DURATION_MS = 4 * 60 * 1000;
 

@@ -68,7 +68,15 @@ export async function uploadRecording(
       body: formData,
     }),
   );
-  if (!res || !res.ok) return null;
+  if (!res) {
+    console.warn("[recorder] Upload network error");
+    return null;
+  }
+  if (!res.ok) {
+    const [, text] = await attemptAsync(() => res.text());
+    console.warn(`[recorder] Upload rejected ${res.status}: ${text ?? ""}`);
+    return null;
+  }
 
   const [, data] = await attemptAsync(
     () => res.json() as Promise<{ url?: string }>,

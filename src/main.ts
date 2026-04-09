@@ -1,11 +1,10 @@
 import "virtual:uno.css";
 import { render, h } from "preact";
-import * as THREE from "three";
 import * as CANNON from "cannon-es";
-import { Car } from "./entities/car";
 import { updateCopLights } from "./entities/cop";
-import { CityGenerator, isRoad } from "./world/city-generator";
+import { isRoad } from "./world/city-generator";
 import { isWater, TILE_SIZE } from "./world/terrain";
+import { bootstrap, BASE_CAMERA_D, WRECK_CAMERA_D } from "./bootstrap";
 import { RunState, COMBO_DECAY } from "./systems/run-state";
 import { CopSystem } from "./systems/cop-system";
 import { CivilianSystem } from "./systems/civilian-system";
@@ -37,43 +36,29 @@ import {
 } from "./audio/sound";
 import { haptics } from "./audio/haptics";
 import {
-  initEffects,
-  initScreenFlash,
   applyShake,
   spawnSplash,
   spawnSparks,
   spawnConfetti,
   spawnSpeedLine,
   clearParticles,
+  clearEffects,
   updateEffects,
   updateTimeSlow,
   getTimeSlowFactor,
   triggerScreenFlash,
   triggerShake,
 } from "./world/effects";
-import { initPopups, spawnPopup, updatePopups, clearPopups } from "./world/popups";
+import { spawnPopup, updatePopups, clearPopups } from "./world/popups";
 import { pushChatter, clearChatter } from "./world/radio";
 import { preloadRadioVoices, stopRadioVoice } from "./world/radio-voice";
-import { initPortals } from "./world/portals";
-import { getSkin } from "./entities/car-skins";
-import { initSkids, spawnSkid, updateSkids, clearSkids } from "./world/skids";
+import { spawnSkid, updateSkids, clearSkids } from "./world/skids";
 import {
-  initGhostTrail,
   captureGhost,
   updateGhostTrail,
   clearGhostTrail,
-  setGhostTrailColor,
 } from "./world/ghost-trail";
-import {
-  applyWeather,
-  createRain,
-  updateRain,
-  setRainEnabled,
-  createSnow,
-  updateSnow,
-  setSnowEnabled,
-  getWeatherModifiers,
-} from "./world/weather";
+import { updateRain, updateSnow } from "./world/weather";
 import { App } from "./ui/app";
 import {
   gameState,
@@ -168,125 +153,51 @@ async function installPwa() {
   if (result!.outcome === "accepted") canInstallPwa.value = false;
 }
 
-// --- Scene Setup ---
-const scene = new THREE.Scene();
-
-
-// --- Isometric Camera Setup ---
-// `cameraD` is the half-extent of the orthographic frustum. Normally 50,
-// but the dying-phase wreck zoom interpolates it down to ~18 so the death
-// shot fills the frame with the car + nearby cops. `BASE_CAMERA_D` is the
-// resting value the camera lerps back to when a fresh run starts.
-const BASE_CAMERA_D = 50;
-const WRECK_CAMERA_D = 15;
-let cameraD = BASE_CAMERA_D;
-const aspect = 1;
-const camera = new THREE.OrthographicCamera(-cameraD * aspect, cameraD * aspect, cameraD, -cameraD, 1, 1000);
-camera.position.set(50, 50, 50);
-camera.lookAt(scene.position);
-
-// --- Renderer Setup ---
-const gameArea = document.getElementById("game-area") as HTMLElement;
-// `preserveDrawingBuffer` lets us call `renderer.domElement.toDataURL()`
-// at any time to capture the wreck-moment screenshot used by the share
-// card. The perf cost is a single backbuffer copy per frame and is
-// negligible for an arcade-scale scene.
-const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
-renderer.setSize(gameArea.clientWidth, gameArea.clientHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = false;
-renderer.domElement.style.display = "block";
-renderer.domElement.style.touchAction = "none";
-gameArea.appendChild(renderer.domElement);
-
-// --- Lighting Setup ---
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-directionalLight.position.set(50, 100, 50);
-scene.add(directionalLight);
-scene.add(directionalLight.target);
-
-// --- Weather (sky + fog + light tint + rain/snow particles + car modifiers) ---
-const rain = createRain(scene);
-const snow = createSnow(scene);
-applyWeather(scene, ambientLight, directionalLight, weather.value);
-setRainEnabled(rain, weather.value === "rain");
-setSnowEnabled(snow, weather.value === "snowy");
-// `actions.setWeather` is wired later (after `car` exists) so the closure can
-// safely push driving modifiers into the player car. The initial car-side
-// application also happens after construction.
-
-// --- Cannon-es World Setup ---
-const world = new CANNON.World({
-  gravity: new CANNON.Vec3(0, -30, 0),
-  allowSleep: false,
-});
-const groundShape = new CANNON.Plane();
-const groundBody = new CANNON.Body({ mass: 0 });
-groundBody.addShape(groundShape);
-groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-world.addBody(groundBody);
-
-// --- Effects (particles, screen shake, popups, skids, screen flash) ---
-initEffects(scene);
-initPopups(scene);
-initSkids(scene);
-initGhostTrail(scene);
-initScreenFlash(gameArea);
-
-// --- City Generation ---
-const cityGenerator = new CityGenerator(scene, world);
-cityGenerator.update(new THREE.Vector3(0, 0, 0));
-
-// --- Player Car ---
-const car = new Car(scene, world, selectedSkin.value);
-
-// --- Vibe Jam 2026 portals (start + exit webring) ---
-const portals = initPortals({
-  scene,
+// --- Bootstrap: build the entire infrastructure (scene, camera, renderer,
+// lighting, world, weather particles, city, car, portals) in one shot.
+// All scene-level state lives behind `ctx` so main.ts can stay focused on
+// game flow + the animate loop. Camera zoom mutations go through
+// `ctx.setCameraD` instead of a top-level `let`.
+const ctx = bootstrap({
+  selectedSkinId: selectedSkin.value,
+  initialWeather: weather.value,
   getPlayerName: () => playerName.value || "player",
-  getPlayerColorHex: () => "#" + getSkin(selectedSkin.value).bodyColor.toString(16).padStart(6, "0"),
-  getPlayerSpeedMs: () => car.body.velocity.length(),
+  getSelectedSkinId: () => selectedSkin.value,
 });
+const {
+  scene, camera, renderer, world,
+  cityGenerator, car, portals,
+} = ctx;
 
+// `selectSkin` and `setWeather` actions: bootstrap handles the scene-side
+// mutations; main writes the corresponding signal so persisted state stays
+// in sync.
 function selectSkin(skinId: string) {
   setSelectedSkin(skinId);
-  car.applySkin(skinId);
-  // Keep the nitro ghost trail in sync with the active car color so the
-  // silhouettes match the player's currently-driven body paint.
-  setGhostTrailColor(getSkin(skinId).bodyColor);
-}
-
-// Initialize ghost trail color for the starting skin so the very first
-// nitro burst already paints the right color (no first-frame flash).
-setGhostTrailColor(getSkin(selectedSkin.value).bodyColor);
-
-// Apply the current weather's driving modifiers to the freshly built car, then
-// wire the setWeather action so future weather changes update sky, particles
-// AND car physics in one place.
-{
-  const m = getWeatherModifiers(weather.value);
-  car.setWeatherModifiers(m.topSpeedMul, m.accelMul, m.gripAdd);
+  ctx.selectSkin(skinId);
 }
 function setWeather(w: typeof weather.value) {
   weather.value = w;
-  applyWeather(scene, ambientLight, directionalLight, w);
-  setRainEnabled(rain, w === "rain");
-  setSnowEnabled(snow, w === "snowy");
-  const m = getWeatherModifiers(w);
-  car.setWeatherModifiers(m.topSpeedMul, m.accelMul, m.gripAdd);
+  ctx.setWeather(w);
 }
 
 // --- Systems + run state ---
-const ctx = { scene, world };
+const systemsCtx = { scene, world };
 const run = new RunState();
-const cops = new CopSystem(ctx);
-const civilians = new CivilianSystem(ctx);
-const pickups = new PickupSystem(ctx);
+const cops = new CopSystem(systemsCtx);
+const civilians = new CivilianSystem(systemsCtx);
+const pickups = new PickupSystem(systemsCtx);
 
-// --- Game state machine (just the enum — everything else lives in `run`) ---
-let currentState: IGameStateValue = "start";
+// --- Game state machine ---
+//
+// `currentState` is the loop's internal state. It's a strict superset of
+// the public `IGameStateValue` — it adds `"dying"` for the cinematic
+// slow-mo phase between a fail trigger and the panel reveal. The UI keeps
+// reading the public `gameState.value` (which stays "playing" through
+// dying so the HUD remains visible), but the game loop branches on this
+// internal value so every gating decision is type-checked.
+type ICurrentState = IGameStateValue | "dying";
+let currentState: ICurrentState = "start";
 
 // Per-frame scratch for the skid emitter — hoisted to avoid two Vec3
 // allocations every frame the player is drifting or boosting.
@@ -361,37 +272,10 @@ window.addEventListener("keydown", (e) => {
 }, { signal: listenerSignal });
 
 // --- Window resize ---
-function resizeRenderer() {
-  const [err] = attempt(() => {
-    const w = gameArea.clientWidth;
-    const h = gameArea.clientHeight;
-    const a = w / h;
-    camera.left = -cameraD * a;
-    camera.right = cameraD * a;
-    camera.top = cameraD;
-    camera.bottom = -cameraD;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-  });
-  if (err) console.error("[resizeRenderer]", err);
-}
-
-/**
- * Update the orthographic frustum to the current `cameraD`. Called every
- * frame the dying-phase zoom is animating; cheap (just 4 assignments + a
- * matrix recompute).
- */
-function applyCameraZoom() {
-  const w = gameArea.clientWidth;
-  const h = gameArea.clientHeight;
-  const a = w / h;
-  camera.left = -cameraD * a;
-  camera.right = cameraD * a;
-  camera.top = cameraD;
-  camera.bottom = -cameraD;
-  camera.updateProjectionMatrix();
-}
-resizeRenderer();
+// Bootstrap exposes `resizeRenderer` and `setCameraD` as the only ways to
+// touch the camera frustum; main.ts registers the global listeners via
+// the shared AbortController so they can be torn down with everything else.
+const resizeRenderer = () => attempt(() => ctx.resizeRenderer());
 window.addEventListener("resize", resizeRenderer, { signal: listenerSignal });
 window.addEventListener("orientationchange", () => setTimeout(resizeRenderer, 100), { signal: listenerSignal });
 
@@ -415,8 +299,7 @@ function startGame() {
 
   // Camera teleport + reset wreck-zoom in case the previous run died.
   camera.position.set(50, 55, 50);
-  cameraD = BASE_CAMERA_D;
-  applyCameraZoom();
+  ctx.setCameraD(BASE_CAMERA_D);
 
   // Reset systems
   cops.reset();
@@ -432,6 +315,7 @@ function startGame() {
   clearSkids();
   clearPopups();
   clearParticles();
+  clearEffects();
   clearGhostTrail();
   clearChatter();
   // Reset death-sequence state so a fresh run starts cleanly even after
@@ -458,12 +342,14 @@ function startGame() {
 }
 
 function gameOver(reason: string = "BUSTED") {
-  // Already dying or game over — ignore further fail triggers so a busted
-  // hit during the dying slow-mo can't restart the sequence.
-  if (currentState === "gameover" || dyingTimer > 0) return;
-  // Latch the reason and enter the slow-mo dying phase. The state machine
-  // stays in "playing" so tickPlaying keeps simulating cops + physics, but
-  // animate() scales dt by DYING_TIMESCALE for the duration of the timer.
+  // Already dying or game over — ignore further fail triggers so a
+  // busted/wreck/drown that fires during the slow-mo can't restart it.
+  if (currentState === "gameover" || currentState === "dying") return;
+  // Enter the cinematic dying phase. tickPlaying keeps running (animate
+  // routes through it during "dying" too) so cops + physics simulate in
+  // slow motion, but the death-trigger blocks inside tickPlaying short-
+  // circuit on `currentState !== "playing"` so they don't spam effects.
+  currentState = "dying";
   dyingReason = reason;
   dyingTimer = DYING_DURATION_SEC;
 
@@ -644,27 +530,34 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   pickups.update(dt, timeInSeconds, car, run, cops);
   const { nearestCopDist, nearbyCount } = cops.update(dt, timeInSeconds, car, run);
 
-  // --- HP / death checks ---
-  if (run.hp <= 0) {
-    run.hp = 0;
-    gameOver("WRECKED");
-  }
+  // --- Death triggers ---
+  // Gated on `currentState === "playing"` because tickPlaying also runs
+  // during the dying slow-mo. Without the gate, a car coasting through
+  // water during the death sequence would re-call gameOver every frame
+  // (no-op due to its early-return) AND spam playSplash/spawnSplash side
+  // effects. The gate keeps the dying phase visually + audibly clean.
+  if (currentState === "playing") {
+    if (run.hp <= 0) {
+      run.hp = 0;
+      gameOver("WRECKED");
+    }
 
-  // --- Water check (player drowning) ---
-  const carTileX = Math.floor(car.body.position.x / TILE_SIZE);
-  const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
-  if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
-    playSplash();
-    spawnSplash(car.body.position.x, car.body.position.y, car.body.position.z);
-    gameOver("DROWNED");
-  }
+    // Water check (player drowning)
+    const carTileX = Math.floor(car.body.position.x / TILE_SIZE);
+    const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
+    if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
+      playSplash();
+      spawnSplash(car.body.position.x, car.body.position.y, car.body.position.z);
+      gameOver("DROWNED");
+    }
 
-  // --- Busted: enough cops nearby AND stopped for the threshold ---
-  if (nearbyCount >= BUSTED_COP_COUNT && car.body.velocity.length() < BUSTED_STOPPED_SPEED) {
-    run.bustedTimer += dt;
-    if (run.bustedTimer > BUSTED_TIME_THRESHOLD) gameOver("BUSTED");
-  } else {
-    run.bustedTimer = Math.max(0, run.bustedTimer - dt * 2);
+    // Busted: enough cops nearby AND stopped for the threshold
+    if (nearbyCount >= BUSTED_COP_COUNT && car.body.velocity.length() < BUSTED_STOPPED_SPEED) {
+      run.bustedTimer += dt;
+      if (run.bustedTimer > BUSTED_TIME_THRESHOLD) gameOver("BUSTED");
+    } else {
+      run.bustedTimer = Math.max(0, run.bustedTimer - dt * 2);
+    }
   }
 
   // --- Speed streak heal: reward sustained top-speed driving ---
@@ -726,8 +619,9 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
 
   // --- Low-HP heartbeat — interval scales with how close to dying the
   // player is. Audio only; the visual vignette is a UI component reacting
-  // to the same hp signal.
-  if (run.hp > 0 && run.hp < LOW_HP_THRESHOLD) {
+  // to the same hp signal. Suppressed during dying so the slow-mo wreck
+  // moment plays out in cinematic silence.
+  if (currentState === "playing" && run.hp > 0 && run.hp < LOW_HP_THRESHOLD) {
     _heartbeatAccum += dt;
     const danger = 1 - run.hp / LOW_HP_THRESHOLD; // 0..1
     const interval = 1.1 - danger * 0.65; // 1.1s → 0.45s
@@ -740,11 +634,10 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   }
 
   // --- Siren: on when any cop within range, intensity scales with closeness.
-  // Suppressed entirely during the dying slow-mo so the wreck moment plays
-  // out in cinematic silence (the siren restarts every frame here while
-  // currentState is still "playing", so we have to gate on dyingTimer too).
+  // Naturally suppressed during dying because `currentState === "dying"`
+  // here, not "playing".
   let sirenIntensity = 0;
-  if (currentState === "playing" && dyingTimer === 0 && nearestCopDist < SIREN_MAX_RANGE) {
+  if (currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE) {
     startSiren();
     sirenIntensity = 1 - nearestCopDist / SIREN_MAX_RANGE;
     setSirenVolume(sirenIntensity);
@@ -827,27 +720,29 @@ function animate(time: number) {
   );
   updateTimeSlow(dt);
   cityGenerator.tick(timeInSeconds);
-  updateRain(rain, dt, car.mesh.position.x, car.mesh.position.z);
-  updateSnow(snow, dt, car.mesh.position.x, car.mesh.position.z);
-  if (currentState === "playing") updatePopups(dt);
+  updateRain(ctx.rain, dt, car.mesh.position.x, car.mesh.position.z);
+  updateSnow(ctx.snow, dt, car.mesh.position.x, car.mesh.position.z);
+  // Popups freeze when not actively in gameplay or dying — keeps the
+  // game-over panel uncluttered by stale floaters.
+  if (currentState === "playing" || currentState === "dying") updatePopups(dt);
   updateCopLights(timeInSeconds);
 
   if (run.hitPauseTimer > 0) run.hitPauseTimer = Math.max(0, run.hitPauseTimer - dt);
 
-  if (currentState === "playing") {
+  if (currentState === "playing" || currentState === "dying") {
     // Scale gameplay dt by the active time-slow factor (combo milestone juice).
     // Particles, popups, skids and the camera follow stay at real-time above.
     // Stack the dying-phase slow-mo on top so the wreck moment plays out
     // cinematically while cops + physics keep simulating.
     const slowFactor = getTimeSlowFactor();
-    const deathScale = dyingTimer > 0 ? DYING_TIMESCALE : 1;
+    const deathScale = currentState === "dying" ? DYING_TIMESCALE : 1;
     tickPlaying(dt * slowFactor * deathScale, timeInSeconds);
 
     // Real-dt countdown of the dying phase. When it expires we mark the
     // frame for screenshot capture (consumed AFTER renderer.render below)
     // so the saved image shows the slow-mo wreck moment, NOT the explosion
     // flash that fires inside finishGameOver().
-    if (dyingTimer > 0) {
+    if (currentState === "dying") {
       dyingTimer -= dt;
       if (dyingTimer <= 0) {
         dyingTimer = 0;
@@ -859,24 +754,22 @@ function animate(time: number) {
   // Wreck zoom: ease cameraD from BASE down to WRECK over the dying phase
   // so the screenshot at the end captures the car + collision close-up.
   // `progress` is 0 at the start of dying, 1 the moment slow-mo expires.
-  if (dyingTimer > 0) {
+  if (currentState === "dying") {
     const progress = 1 - dyingTimer / DYING_DURATION_SEC;
     // ease-in-out cubic so the zoom feels intentional, not mechanical
     const eased = progress < 0.5
       ? 4 * progress * progress * progress
       : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-    cameraD = BASE_CAMERA_D + (WRECK_CAMERA_D - BASE_CAMERA_D) * eased;
-    applyCameraZoom();
-  } else if (currentState === "gameover" && cameraD !== WRECK_CAMERA_D) {
+    ctx.setCameraD(BASE_CAMERA_D + (WRECK_CAMERA_D - BASE_CAMERA_D) * eased);
+  } else if (currentState === "gameover" && ctx.getCameraD() !== WRECK_CAMERA_D) {
     // Hold the wreck zoom while the explosion + panel play out.
-    cameraD = WRECK_CAMERA_D;
-    applyCameraZoom();
+    ctx.setCameraD(WRECK_CAMERA_D);
   }
 
   // Camera follow car. The follow offset shrinks alongside cameraD so the
   // camera physically pulls in toward the car as it zooms — without this
   // the orthographic frame would just shrink in place.
-  const followScale = cameraD / BASE_CAMERA_D;
+  const followScale = ctx.getCameraD() / BASE_CAMERA_D;
   const followOffset = 50 * followScale;
   camera.position.set(
     car.mesh.position.x + followOffset,
@@ -886,12 +779,12 @@ function animate(time: number) {
   applyShake(camera, dt);
 
   // Move directional light to follow the player
-  directionalLight.position.set(
+  ctx.directionalLight.position.set(
     car.mesh.position.x + 50,
     100,
     car.mesh.position.z + 50,
   );
-  directionalLight.target.position.copy(car.mesh.position);
+  ctx.directionalLight.target.position.copy(car.mesh.position);
 
   renderer.render(scene, camera);
 

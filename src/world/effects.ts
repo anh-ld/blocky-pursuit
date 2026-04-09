@@ -23,6 +23,21 @@ export function updateTimeSlow(dt: number) {
   if (timeSlowTimer > 0) timeSlowTimer = Math.max(0, timeSlowTimer - dt);
 }
 
+/**
+ * Reset the module-level effect timers (shake, time-slow) AND clear the
+ * screen-flash overlay opacity. Called on `startGame()` so a fresh run
+ * never inherits residual shake/slow-mo from the previous run's death.
+ *
+ * Note: this does NOT reset the particle pool — that's `clearParticles()`,
+ * called separately. Splitting them keeps the responsibilities obvious.
+ */
+export function clearEffects() {
+  shakeIntensity = 0;
+  shakeTime = 0;
+  timeSlowTimer = 0;
+  if (flashEl) flashEl.style.opacity = "0";
+}
+
 // --- Screen flash (DOM overlay) ---
 // Initialized lazily with a target element. Triggers a brief white flash via
 // CSS opacity transition — independent of the WebGL canvas.

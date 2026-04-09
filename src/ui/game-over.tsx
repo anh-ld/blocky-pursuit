@@ -163,7 +163,7 @@ export function GameOver() {
 
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/60 md:bg-black px-4 py-5 w-full h-full md:w-72 md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col items-center gap-3 animate-game-over-in">
+      <div class="bg-black/60 md:bg-black px-4 py-5 w-full h-full md:w-160 md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col items-center gap-3 animate-game-over-in">
         <div class="text-red-400 text-xs font-extrabold uppercase tracking-[0.3em]">
           {reasonText[reason] || reason}
         </div>
@@ -178,15 +178,35 @@ export function GameOver() {
         {/* Share card preview — exactly what gets copied/downloaded. The
             wreck-moment screenshot is rendered as the hero so the player
             sees the cinematic frame from their own death. Aspect ratio
-            matches the underlying canvas (1200x630 ≈ 1.9:1). */}
+            matches the underlying canvas (1200x630 ≈ 1.9:1). The Copy /
+            Download buttons sit immediately under the preview so the
+            "see this image → save it" relationship is visually obvious. */}
         {previewUrl && (
-          <div class="w-full mt-1 border border-gray-700/60">
-            <img
-              src={previewUrl}
-              alt="Run summary card"
-              class="block w-full h-auto"
-              style={{ aspectRatio: "1200 / 630" }}
-            />
+          <div class="w-full mt-1 flex flex-col gap-2">
+            <div class="border border-gray-700/60">
+              <img
+                src={previewUrl}
+                alt="Run summary card"
+                class="block w-full h-auto"
+                style={{ aspectRatio: "1200 / 630" }}
+              />
+            </div>
+            <div class="flex gap-2 w-full">
+              <button
+                onClick={handleCopyCard}
+                disabled={cardBusy}
+                class="flex-1 py-2 bg-amber-500/15 text-amber-300 text-[11px] font-extrabold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 disabled:opacity-60 disabled:cursor-wait"
+              >
+                {cardStatus === "copied" ? "✓ Copied" : "Copy Card"}
+              </button>
+              <button
+                onClick={handleDownloadCard}
+                disabled={cardBusy}
+                class="flex-1 py-2 bg-amber-500/15 text-amber-300 text-[11px] font-extrabold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 disabled:opacity-60 disabled:cursor-wait"
+              >
+                {cardStatus === "saved" ? "✓ Saved" : "Download"}
+              </button>
+            </div>
           </div>
         )}
         <div class="flex items-center gap-4 text-[10px] uppercase tracking-widest text-gray-400">
@@ -247,24 +267,6 @@ export function GameOver() {
           >
             RETRY
           </button>
-          {/* Share card action row — copy lands the PNG on the clipboard
-              for one-tap pasting; download is the always-works fallback. */}
-          <div class="flex gap-2 w-full">
-            <button
-              onClick={handleCopyCard}
-              disabled={cardBusy}
-              class="flex-1 py-2 bg-amber-500/15 text-amber-300 text-[11px] font-extrabold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 disabled:opacity-60 disabled:cursor-wait"
-            >
-              {cardStatus === "copied" ? "✓ Copied" : "Copy Card"}
-            </button>
-            <button
-              onClick={handleDownloadCard}
-              disabled={cardBusy}
-              class="flex-1 py-2 bg-amber-500/15 text-amber-300 text-[11px] font-extrabold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 disabled:opacity-60 disabled:cursor-wait"
-            >
-              {cardStatus === "saved" ? "✓ Saved" : "Download"}
-            </button>
-          </div>
           <button
             onClick={shareRun}
             class="w-full py-2 bg-cyan-500/20 text-cyan-300 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30"

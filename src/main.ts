@@ -395,20 +395,21 @@ function getQualificationThreshold(): number {
  * Stop the current recording and upload it ONLY if the score qualifies
  * for the top-50 leaderboard.
  *
- * IMPORTANT: `sessionId` must be passed in by the caller (captured at
- * gameOver time, not re-read here). If we called `getSessionId()` from
- * inside this function, a quick PLAY AGAIN click between submitScore
- * and the upload would have already started a NEW recorder session,
- * and we'd POST the new session id while submit-score wrote the old
- * one — server returns 409 "Score entry not found".
+ * The caller MUST pass in the exact same `sessionId`, `playerName`, and
+ * `score` triple that was sent to `submitScore`. Reading these from
+ * live state inside the upload helper caused 409s previously because
+ * values could drift between the two calls (sessionId reset by a quick
+ * PLAY AGAIN click, player name edited, etc.).
  */
-async function handleRecordingUpload(sessionId: string | undefined) {
-  const myScore = Math.floor(run.score);
+async function handleRecordingUpload(
+  sessionId: string | undefined,
+  myName: string,
+  myScore: number,
+) {
   const threshold = getQualificationThreshold();
-  const myName = playerName.value;
 
   console.log(
-    `[recorder] gameOver score=${myScore} threshold=${threshold} sessionId=${sessionId ?? "(none)"}`,
+    `[recorder] upload check score=${myScore} threshold=${threshold} name="${myName}" sessionId=${sessionId ?? "(none)"}`,
   );
 
   if (!sessionId) {
@@ -530,13 +531,21 @@ function finishGameOver(reason: string) {
     const sid = dyingSessionId ?? undefined;
     dyingSessionId = null;
 
-    const submitted = await submitScore(playerName.value, run.score, undefined, sid);
+    const nameAtSubmit = playerName.value;
+    const scoreAtSubmit = Math.floor(run.score);
+    console.log(
+      `[score] submitting name="${nameAtSubmit}" score=${scoreAtSubmit} sessionId=${sid ?? "(none)"}`,
+    );
+    const submitted = await submitScore(nameAtSubmit, scoreAtSubmit, undefined, sid);
     if (!submitted) {
+      console.warn("[score] submit failed — refreshing leaderboard and bailing");
       await fetchLeaderboard();
       return;
     }
 
-    const [uploadErr, uploadedUrl] = await attemptAsync(() => handleRecordingUpload(sid));
+    const [uploadErr, uploadedUrl] = await attemptAsync(() =>
+      handleRecordingUpload(sid, nameAtSubmit, scoreAtSubmit),
+    );
     if (uploadErr) {
       console.warn("[recorder] Upload failed:", uploadErr);
     } else if (uploadedUrl) {

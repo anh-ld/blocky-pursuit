@@ -67,7 +67,24 @@ export default async function handler(req: Request, _context: Context) {
     (e) => e.sessionId === sessionId && e.name === safeName && e.score === flooredScore,
   );
   if (candidateIndex < 0) {
-    return new Response("Score entry not found for session", { status: 409 });
+    // Dump what we expected vs what we found so the client log is actionable.
+    const sessionMatch = firstEntries.find((e) => e.sessionId === sessionId);
+    const debug = {
+      expected: { sessionId, name: safeName, score: flooredScore },
+      totalEntries: firstEntries.length,
+      entryForSession: sessionMatch
+        ? { name: sessionMatch.name, score: sessionMatch.score }
+        : null,
+      topScores: firstEntries.slice(0, 3).map((e) => ({
+        name: e.name,
+        score: e.score,
+        sid: e.sessionId,
+      })),
+    };
+    return new Response(
+      `Score entry not found for session ${JSON.stringify(debug)}`,
+      { status: 409 },
+    );
   }
   if (candidateIndex >= QUALIFY_BOARD_SIZE) {
     return new Response("Score did not qualify for replay upload", { status: 403 });

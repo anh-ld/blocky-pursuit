@@ -73,6 +73,18 @@ const COP_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
   flatShading: true,
 });
 const COP_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x111111, ...matProps });
+const BOUNTY_MARKER_MAT = new THREE.MeshStandardMaterial({
+  color: 0xffd54a,
+  emissive: 0xb7791f,
+  emissiveIntensity: 0.9,
+  flatShading: true,
+});
+const DAMAGE_MARKER_MAT = new THREE.MeshStandardMaterial({
+  color: 0x7f1d1d,
+  emissive: 0x2b0a0a,
+  emissiveIntensity: 0.35,
+  flatShading: true,
+});
 
 // --- Shared geometries (one set for all cop instances). All cops share the
 // same proportions, so the GPU buffers only need to live once. Disposing
@@ -84,6 +96,11 @@ const COP_GRILLE_GEO = new THREE.BoxGeometry(UNIT * 3.2, UNIT * 0.6, UNIT * 0.2)
 const COP_HEADLIGHT_GEO = new THREE.BoxGeometry(UNIT * 0.6, UNIT * 0.4, UNIT * 0.3);
 const COP_TAILLIGHT_GEO = new THREE.BoxGeometry(UNIT * 0.6, UNIT * 0.4, UNIT * 0.3);
 const COP_WHEEL_GEO = new THREE.BoxGeometry(UNIT, UNIT, UNIT);
+const BOUNTY_MARKER_GEO = new THREE.BoxGeometry(UNIT * 1.1, UNIT * 0.45, UNIT * 1.1);
+const DAMAGE_MARKER_GEO = new THREE.BoxGeometry(UNIT * 2.2, UNIT * 0.3, UNIT * 1.5);
+const DAMAGE_THRESHOLD_SPEED = 8;
+const DAMAGE_TIER1_THRESHOLD = 20;
+const DAMAGE_TIER2_THRESHOLD = 40;
 
 // Per-step scratch — reused across every cop's preStep callback. Safe
 // because physics steps process cops sequentially within a single thread,
@@ -131,12 +148,17 @@ export class Cop {
   world: CANNON.World;
   mesh: THREE.Group;
   body: CANNON.Body;
+  baseForwardForce: number;
   forwardForce: number;
+  baseMaxSpeed: number;
   maxSpeed: number;
+  baseTurnSpeed: number;
   turnSpeed: number;
   bounceBackTimer: number;
+  baseBounceBackDuration: number;
   bounceBackDuration: number;
   recoveryTimer: number;
+  baseRecoveryDuration: number;
   recoveryDuration: number;
   targetPosition: THREE.Vector3 | null = null;
   targetVelocity: CANNON.Vec3 | null = null;
@@ -149,9 +171,21 @@ export class Cop {
   // are immune to EMP. Cop-system reads this on collision + drown for bonus
   // payout, and skips them in empBlast().
   isSwat: boolean;
+  isBounty: boolean;
+  bountyMarker: THREE.Mesh;
+  damageMarker: THREE.Mesh;
+  damageTier: number;
+  damagePoints: number;
   preStepCallback: () => void;
 
-  constructor(scene: THREE.Scene, world: CANNON.World, position: THREE.Vector3, level: number = 1, isSwat: boolean = false) {
+  constructor(
+    scene: THREE.Scene,
+    world: CANNON.World,
+    position: THREE.Vector3,
+    level: number = 1,
+    isSwat: boolean = false,
+    isBounty: boolean = false,
+  ) {
     this.scene = scene;
     this.world = world;
     this.level = Math.max(1, Math.min(5, level));
@@ -160,6 +194,9 @@ export class Cop {
     this.damageCooldown = 0;
     this.nearMissArmed = false;
     this.isSwat = isSwat;
+    this.isBounty = isBounty;
+    this.damageTier = 0;
+    this.damagePoints = 0;
 
     // Voxel dimensions
     const unit = UNIT;
@@ -188,6 +225,11 @@ export class Cop {
     const blueLight = new THREE.Mesh(COP_LIGHT_GEO, COP_BLUE_LIGHT_MAT);
     blueLight.position.set(unit, unit * 3.25, unit * 1.5);
     this.mesh.add(blueLight);
+
+    this.bountyMarker = new THREE.Mesh(BOUNTY_MARKER_GEO, BOUNTY_MARKER_MAT);
+    this.bountyMarker.position.set(0, unit * 4.1, unit * 1.5);
+    this.bountyMarker.visible = this.isBounty;
+    this.mesh.add(this.bountyMarker);
 
     // Front grille
     const grille = new THREE.Mesh(COP_GRILLE_GEO, COP_GRILLE_MAT);
@@ -224,6 +266,11 @@ export class Cop {
       this.mesh.add(wheel);
     });
 
+    this.damageMarker = new THREE.Mesh(DAMAGE_MARKER_GEO, DAMAGE_MARKER_MAT);
+    this.damageMarker.position.set(0, unit * 1.55, -unit * 0.9);
+    this.damageMarker.visible = false;
+    this.mesh.add(this.damageMarker);
+
     // SWAT: visible scale-up so the silhouette pops as a mini-boss. The
     // physics shape stays cop-sized — SWAT power comes from speed/mass, not
     // a hitbox grow that would feel unfair on grazes.
@@ -251,9 +298,9 @@ export class Cop {
     world.addBody(this.body);
 
     // Tuning parameters from level config
-    this.forwardForce = this.config.forwardForce;
-    this.turnSpeed = this.config.turnSpeed;
-    this.maxSpeed = this.config.speed;
+    this.baseForwardForce = this.config.forwardForce;
+    this.baseTurnSpeed = this.config.turnSpeed;
+    this.baseMaxSpeed = this.config.speed;
 
     // SWAT mini-boss: heavier mass + extra accel so it feels like a tank
     // bearing down on you. Top speed only nudged so it can still be outrun
@@ -261,15 +308,20 @@ export class Cop {
     if (isSwat) {
       this.body.mass = this.config.mass * 1.8;
       this.body.updateMassProperties();
-      this.forwardForce *= 1.3;
-      this.maxSpeed += 3;
+      this.baseForwardForce *= 1.3;
+      this.baseMaxSpeed += 3;
     }
+    this.forwardForce = this.baseForwardForce;
+    this.turnSpeed = this.baseTurnSpeed;
+    this.maxSpeed = this.baseMaxSpeed;
 
     // Collision bounce-back state (same as player car)
     this.bounceBackTimer = 0;
-    this.bounceBackDuration = 1.25;
+    this.baseBounceBackDuration = 1.25;
+    this.bounceBackDuration = this.baseBounceBackDuration;
     this.recoveryTimer = 0;
-    this.recoveryDuration = 1.0;
+    this.baseRecoveryDuration = 1.0;
+    this.recoveryDuration = this.baseRecoveryDuration;
 
     // Listen for collisions with static objects (buildings, walls, etc.)
     this.body.addEventListener("collide", (event: { body: CANNON.Body }) => {
@@ -428,6 +480,32 @@ export class Cop {
       this.body.quaternion.z,
       this.body.quaternion.w,
     );
+    if (this.isBounty) {
+      this.bountyMarker.position.y = UNIT * 4.1 + Math.sin(performance.now() * 0.008) * 0.18;
+    }
+  }
+
+  applyDamage(impactSpeed: number): number {
+    if (this.isSwat) return this.damageTier;
+    this.damagePoints += Math.max(0, impactSpeed - DAMAGE_THRESHOLD_SPEED);
+    const nextTier = this.damagePoints >= DAMAGE_TIER2_THRESHOLD ? 2 : this.damagePoints >= DAMAGE_TIER1_THRESHOLD ? 1 : 0;
+    if (nextTier === this.damageTier) return this.damageTier;
+    this.damageTier = nextTier;
+    const speedMul = this.damageTier === 1 ? 0.86 : 0.68;
+    const forceMul = this.damageTier === 1 ? 0.82 : 0.6;
+    const turnMul = this.damageTier === 1 ? 0.88 : 0.7;
+    this.maxSpeed = this.baseMaxSpeed * speedMul;
+    this.forwardForce = this.baseForwardForce * forceMul;
+    this.turnSpeed = this.baseTurnSpeed * turnMul;
+    this.bounceBackDuration = this.baseBounceBackDuration + this.damageTier * 0.2;
+    this.recoveryDuration = this.baseRecoveryDuration + this.damageTier * 0.15;
+    this.damageMarker.visible = true;
+    this.damageMarker.scale.set(
+      this.damageTier === 1 ? 0.8 : 1.15,
+      1,
+      this.damageTier === 1 ? 0.85 : 1.05,
+    );
+    return this.damageTier;
   }
 
   destroy() {

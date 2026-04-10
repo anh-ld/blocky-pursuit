@@ -17,10 +17,11 @@ export type ISpawnCopArgs = {
   // SWAT mini-boss override. Bypasses the maxCops check (it lives outside
   // the per-level cap) and constructs the cop with its mini-boss flag set.
   isSwat?: boolean;
+  isBounty?: boolean;
 };
 
 export function spawnCop(args: ISpawnCopArgs) {
-  const { scene, world, cops, maxCops, level, playerPosition, playerVelocity, isSwat } = args;
+  const { scene, world, cops, maxCops, level, playerPosition, playerVelocity, isSwat, isBounty } = args;
   if (!isSwat && cops.length >= maxCops) return;
 
   // Spawn out of camera view
@@ -66,7 +67,7 @@ export function spawnCop(args: ISpawnCopArgs) {
   if (!foundRoad) return;
 
   const pos = new THREE.Vector3(tileX * TILE_SIZE, 1, tileZ * TILE_SIZE);
-  const cop = new Cop(scene, world, pos, level, isSwat);
+  const cop = new Cop(scene, world, pos, level, isSwat, isBounty);
   cops.push(cop);
 }
 

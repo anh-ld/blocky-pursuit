@@ -34,7 +34,7 @@ export function Recordings() {
             </div>
           ) : (
             entries.map((e, i) => {
-              const display = e.name.length > 12 ? e.name.slice(0, 12) + "\u2026" : e.name;
+              const display = e.name;
               const isMe = e.name === me;
               return (
                 <div class={`flex items-center justify-between ${isMe ? "text-amber-300" : "text-gray-400"}`}>

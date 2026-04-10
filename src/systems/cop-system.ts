@@ -59,6 +59,8 @@ const SWAT_MIN_LEVEL = 5;
 const SWAT_RESPAWN_DELAY = 25; // seconds between SWAT spawns
 const SWAT_KILL_SCORE = 80;
 const SWAT_KILL_HEAL = 25;
+const BOUNTY_SPAWN_CHANCE = 0.16;
+const BOUNTY_MULTIPLIER = 5;
 
 export class CopSystem {
   scene: THREE.Scene;
@@ -121,6 +123,7 @@ export class CopSystem {
       levelDef.spawnInterval - heatTier * HEAT_INTERVAL_SHAVE,
     );
     if (timeInSeconds - this.lastSpawnTime > effectiveInterval) {
+      const isBounty = run.level >= 2 && !this.cops.some((c) => c.isBounty) && Math.random() < BOUNTY_SPAWN_CHANCE;
       spawnCop({
         scene: this.scene,
         world: this.world,
@@ -129,6 +132,7 @@ export class CopSystem {
         level: run.level,
         playerPosition: car.mesh.position,
         playerVelocity: car.body.velocity,
+        isBounty,
       });
       this.lastSpawnTime = timeInSeconds;
       pushChatter("cop_spawn");
@@ -286,6 +290,7 @@ export class CopSystem {
             playPickup();
             cop.damageCooldown = COP_DAMAGE_COOLDOWN;
           } else {
+            const prevDamageTier = cop.damageTier;
             const massRatio = cop.config.mass / 100;
             const damage = (2 + massRatio * impactSpeed * 0.3) * car.damageMul;
             run.hp -= damage;
@@ -307,6 +312,18 @@ export class CopSystem {
             );
             damageDirSeq.value++;
             pushChatter("damage");
+            const nextDamageTier = cop.applyDamage(impactSpeed);
+            if (nextDamageTier > prevDamageTier) {
+              spawnPopup(
+                cop.body.position.x,
+                cop.body.position.y + 3,
+                cop.body.position.z,
+                nextDamageTier === 1 ? "DAMAGED" : "CRIPPLED",
+                "#ff9b66",
+                1.2,
+                11,
+              );
+            }
           }
         }
       }
@@ -319,10 +336,9 @@ export class CopSystem {
       const tx = Math.floor(cop.body.position.x / TILE_SIZE);
       const tz = Math.floor(cop.body.position.z / TILE_SIZE);
       if (!isRoad(tx, tz) && isWater(tx, tz)) {
-        // SWAT kills get a bonus payout + heal so the player feels rewarded
-        // for cornering the mini-boss into water (or tanking it head-on).
-        const baseScore = cop.isSwat ? SWAT_KILL_SCORE : SCORE_DROWNED_COP;
+        let baseScore = cop.isSwat ? SWAT_KILL_SCORE : SCORE_DROWNED_COP;
         const baseHeal = cop.isSwat ? SWAT_KILL_HEAL : HP_HEAL_DROWNED_COP;
+        if (cop.isBounty) baseScore *= BOUNTY_MULTIPLIER;
         const reward = baseScore * mult;
         run.score += reward;
         run.copScore += reward;
@@ -337,7 +353,16 @@ export class CopSystem {
           triggerScreenFlash(0.45);
           triggerShake(0.5);
         }
-        spawnPopup(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z, `+${Math.round(reward)}`, cop.isSwat ? "#ff4444" : "#ffcc22");
+        spawnPopup(
+          cop.body.position.x,
+          cop.body.position.y + 3,
+          cop.body.position.z,
+          `+${Math.round(reward)}`,
+          cop.isBounty ? "#ffd54a" : cop.isSwat ? "#ff4444" : "#ffcc22",
+        );
+        if (cop.isBounty) {
+          spawnPopup(cop.body.position.x, cop.body.position.y + 4.4, cop.body.position.z, "WANTED", "#ffd54a", 1.2, 11);
+        }
         pushChatter(cop.isSwat ? "swat_drown" : "cop_drown");
         cop.destroy();
         this.cops.splice(i, 1);

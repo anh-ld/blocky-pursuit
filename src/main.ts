@@ -356,7 +356,6 @@ function startGame() {
   startRadioHiss();
 
   // Start auto-recording the gameplay session.
-  // 800 Kbps bitrate caps file size regardless of canvas resolution.
   // Recording is uploaded only if the score makes the leaderboard.
   startRecording(renderer.domElement).catch(() => {
     // Silently fail — recording is non-blocking

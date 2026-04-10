@@ -109,6 +109,7 @@ export function bootstrap(opts: IBootstrapOpts): IBootstrap {
   const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
   renderer.setSize(gameArea.clientWidth, gameArea.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = false;
   renderer.domElement.style.display = "block";
   renderer.domElement.style.touchAction = "none";

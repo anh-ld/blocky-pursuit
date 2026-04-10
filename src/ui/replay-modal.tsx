@@ -17,7 +17,7 @@ export function ReplayModal() {
 
   return (
     <div class="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
-      <div class="relative w-full max-w-[90vw] max-h-[80vh] md:w-[640px]">
+      <div class="relative w-full max-w-[90vw] max-h-[80vh] md:w-[768px]">
         {/* Close button */}
         <button
           onClick={close}
@@ -31,6 +31,7 @@ export function ReplayModal() {
           src={url}
           controls
           autoplay
+          playsinline
           class="w-full rounded-lg border-2 border-gray-600"
           style={{ maxHeight: "80vh" }}
         />

@@ -20,28 +20,27 @@
  *   ✗ Firefox (no MP4 in MediaRecorder as of 2025)
  *   ✗ Old Chrome (<122)
  *
- * Bitrate hint: 150 Kbps. FPS: 10. Source downscaled to 640×360
- * before encoding so the encoder's natural rate is well below the
- * hint and a 3-minute run lands around 1.5 MB.
+ * Bitrate hint: 180 Kbps. FPS: 10. Source downscaled to 768×432
+ * before encoding so replay quality stays decent while the average
+ * 3-minute clip remains comfortably under the 5 MB upload ceiling.
  */
 
 import { attempt } from "es-toolkit";
 
-// 150 kbps target. The encoder will actually honor this hint at 360p
+// 180 kbps target. The encoder will actually honor this hint at 432p
 // source resolution (it ignored 100–250 kbps hints when fed a 1440p
 // source because they're below its minimum for high-res content).
-const VIDEO_BITRATE = 150_000;
+const VIDEO_BITRATE = 180_000;
 const CAPTURE_FPS = 10;
 const CHUNK_INTERVAL_MS = 4000;
-// Downscale the captured frame to 360p widescreen. The game canvas is
+// Downscale the captured frame to 432p widescreen. The game canvas is
 // rendered at full HiDPI (e.g. 2560×1440 on a DPR=2 Mac), and feeding
 // that straight to MediaRecorder forces the H.264 encoder to spend
-// ~1 Mbps regardless of the bitrate hint. At 640×360 there are ~32×
+// ~1 Mbps regardless of the bitrate hint. At 768×432 there are ~22×
 // fewer pixels per frame than the source, the encoder's natural rate
-// drops well below 150 kbps, and replays still read fine in the
-// ~640px-wide modal where they're displayed.
-const CAPTURE_WIDTH = 640;
-const CAPTURE_HEIGHT = 360;
+// stays near the upload budget while preserving more scene detail.
+const CAPTURE_WIDTH = 768;
+const CAPTURE_HEIGHT = 432;
 // 3 minutes. Combined with the size ceiling below, this keeps the worst
 // case comfortably under Netlify's 6 MB request body limit even when the
 // HW encoder decides to ignore the bitrate hint.
@@ -53,7 +52,7 @@ const MAX_DURATION_MS = 3 * 60 * 1000;
 export const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
 
 // Canvas-capture pipeline. The encoder reads from a small, fixed
-// 360p canvas, not the live game canvas. A setInterval at CAPTURE_FPS
+// 432p canvas, not the live game canvas. A setInterval at CAPTURE_FPS
 // blits the game canvas into it via drawImage (GPU-side downscale,
 // ~1 ms per call) and asks the track for a frame.
 type ICanvasCaptureTrack = MediaStreamTrack & { requestFrame?: () => void };
@@ -79,11 +78,12 @@ export async function startRecording(gameCanvas: HTMLCanvasElement): Promise<voi
 
   const mimeType = getSupportedMimeType();
   if (!mimeType) return;
+  await waitForPaintFrames(2);
 
   // Build the downscale pipeline:
   //   gameCanvas (HiDPI WebGL, e.g. 2560×1440)
   //     ↓ drawImage (GPU downscale, ~1 ms)
-  //   captureCanvas (640×360 2D)
+  //   captureCanvas (768×432 2D)
   //     ↓ captureStream(0) + manual requestFrame()
   //   MediaStream → MediaRecorder → H.264 encoder
   //
@@ -96,6 +96,8 @@ export async function startRecording(gameCanvas: HTMLCanvasElement): Promise<voi
     c.height = CAPTURE_HEIGHT;
     const ctx = c.getContext("2d");
     if (!ctx) return null;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
     // Seed an initial frame so the captured stream has content the
     // moment MediaRecorder.start() runs.
@@ -277,4 +279,19 @@ function generateSessionId(): string {
   const ts = Date.now();
   const rand = Math.random().toString(36).slice(2, 8);
   return `${ts}-${rand}`;
+}
+
+function waitForPaintFrames(count: number): Promise<void> {
+  return new Promise((resolve) => {
+    let remaining = Math.max(1, count);
+    const tick = () => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        resolve();
+        return;
+      }
+      window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
+  });
 }

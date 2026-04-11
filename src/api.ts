@@ -57,18 +57,19 @@ export async function uploadRecording(
   if (DEV) return null;
 
   // Send the recording as the raw request body and put metadata in
-  // the query string. Avoiding `multipart/form-data` sidesteps a
-  // longstanding Netlify Functions quirk where binary multipart
-  // bodies trigger "Internal Error" 500s on the sync runtime even
-  // though the body is well under the 6 MB limit. Raw body upload is
-  // also lighter on the wire (no multipart boundaries / headers) and
-  // matches the simpler Netlify Blobs upload pattern.
+  // the query string. Multipart is avoided for two reasons: the old
+  // sync runtime had a parser quirk that 500'd on binary multipart
+  // bodies, and raw body is lighter on the wire (no boundaries).
+  //
+  // Routed to an EDGE function (not sync) because sync functions cap
+  // request bodies at ~4.5 MB binary (AWS Lambda Invoke limit). Edge
+  // accepts the full client cap.
   const params = new URLSearchParams({
     sessionId,
     playerName,
     score: String(Math.floor(score)),
   });
-  const url = `/.netlify/functions/upload-recording?${params.toString()}`;
+  const url = `/api/upload-recording?${params.toString()}`;
 
   const [, res] = await attemptAsync(() =>
     fetch(url, {

@@ -420,10 +420,10 @@ async function handleRecordingUpload(
   }
   const sizeKB = (blob.size / 1024).toFixed(0);
 
-  // Hard size ceiling: Netlify sync functions cap the request body
-  // around 6 MB. The HW H.264 encoder sometimes ignores our bitrate
-  // hint and produces larger blobs on long runs, so drop anything we
-  // can't reliably upload rather than letting the function 500.
+  // Hard size ceiling — see MAX_UPLOAD_SIZE in screen-recorder.ts.
+  // The HW H.264 encoder sometimes overshoots the bitrate hint on
+  // long runs; drop anything we can't reliably upload rather than
+  // letting the edge function reject it after the body is on the wire.
   if (blob.size > MAX_UPLOAD_SIZE) {
     console.log(`[recorder] blob ${sizeKB} KB exceeds ${MAX_UPLOAD_SIZE / 1024} KB cap, skip`);
     return null;

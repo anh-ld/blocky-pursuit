@@ -20,39 +20,49 @@
  *   ✗ Firefox (no MP4 in MediaRecorder as of 2025)
  *   ✗ Old Chrome (<122)
  *
- * Bitrate hint: 180 Kbps. FPS: 10. Source downscaled to 768×432
- * before encoding so replay quality stays decent while the average
- * 3-minute clip remains comfortably under the 5 MB upload ceiling.
+ * Bitrate hint: 1 Mbps (ceiling — encoder picks lower based on
+ * content). FPS: 24. Source downscaled to 960×540 before encoding.
+ * Duration capped at 2 min so even high-motion clips at the encoder's
+ * ceiling stay under the 11 MB upload limit.
  */
 
 import { attempt } from "es-toolkit";
 
-// 180 kbps target. The encoder will actually honor this hint at 432p
-// source resolution (it ignored 100–250 kbps hints when fed a 1440p
-// source because they're below its minimum for high-res content).
-const VIDEO_BITRATE = 180_000;
-const CAPTURE_FPS = 10;
+// 1 Mbps target. The hint is a CEILING, not a floor — H.264 emits
+// less if the content doesn't need it (a blocky game with mostly
+// static backgrounds typically lands around 400-600 kbps actual at
+// 540p). Setting the ceiling generously gives the encoder room for
+// action-heavy frames where the natural rate spikes.
+const VIDEO_BITRATE = 1_000_000;
+// 24 fps is cinema standard — the threshold where motion stops
+// reading as a slideshow. Bitrate is the same budget regardless of
+// frame rate (the encoder just spreads bits across more frames via
+// P-frame deltas), so file size doesn't change vs lower fps.
+const CAPTURE_FPS = 24;
 const CHUNK_INTERVAL_MS = 4000;
-// Downscale the captured frame to 432p widescreen. The game canvas is
-// rendered at full HiDPI (e.g. 2560×1440 on a DPR=2 Mac), and feeding
-// that straight to MediaRecorder forces the H.264 encoder to spend
-// ~1 Mbps regardless of the bitrate hint. At 768×432 there are ~22×
-// fewer pixels per frame than the source, the encoder's natural rate
-// stays near the upload budget while preserving more scene detail.
-const CAPTURE_WIDTH = 768;
-const CAPTURE_HEIGHT = 432;
-// 3 minutes. Combined with the size ceiling below, this keeps the worst
-// case comfortably under Netlify's 6 MB request body limit even when the
-// HW encoder decides to ignore the bitrate hint.
-const MAX_DURATION_MS = 3 * 60 * 1000;
+// Downscale to 540p widescreen (960×540). The game canvas renders at
+// full HiDPI (e.g. 2560×1440 on a DPR=2 Mac); feeding that straight
+// to MediaRecorder forces the H.264 encoder to spend ~1 Mbps
+// regardless of the bitrate hint. 540p is the sweet spot — sharp at
+// native playback on any modern display, ~7× fewer pixels than the
+// source so the downscale + encode stay cheap.
+const CAPTURE_WIDTH = 960;
+const CAPTURE_HEIGHT = 540;
+// 2 minutes. At 540p with a 1 Mbps ceiling, the absolute worst case
+// is 1 Mbps × 120 s = 15 MB; realistic clips land around 5-8 MB
+// because the encoder's natural rate is well below the hint. The cap
+// below catches the worst-case overflows.
+const MAX_DURATION_MS = 2 * 60 * 1000;
 // Hard client-side ceiling for uploads. Anything bigger is silently
 // dropped — the player's score still counts, they just don't get a
-// replay. Netlify sync functions cap at 6 MB body; we leave 1 MB
-// headroom for HTTP overhead and pick 5 MB as the safe ceiling.
-export const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
+// replay. The upload endpoint is an edge function, not sync, so the
+// 6 MB Lambda Invoke cap doesn't apply. 11 MB sits 1 MB below the
+// server's MAX_RECORDING_SIZE (12 MB in upload-recording.ts) and
+// covers a typical 2-min / 540p clip with comfortable margin.
+export const MAX_UPLOAD_SIZE = 11 * 1024 * 1024;
 
 // Canvas-capture pipeline. The encoder reads from a small, fixed
-// 432p canvas, not the live game canvas. A setInterval at CAPTURE_FPS
+// 540p canvas, not the live game canvas. A setInterval at CAPTURE_FPS
 // blits the game canvas into it via drawImage (GPU-side downscale,
 // ~1 ms per call) and asks the track for a frame.
 type ICanvasCaptureTrack = MediaStreamTrack & { requestFrame?: () => void };

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
+import { isRoad, isWater, TILE_SIZE } from "../world/terrain";
 
 // --- Shared materials (one set for all cop instances) ---
 const UNIT = 0.5;
@@ -8,6 +9,7 @@ const cabinProps = { roughness: 0.3, flatShading: true, metalness: 0.5 } as cons
 
 // Cop tiers — visual escalation as level rises so high-level threats read at a glance.
 // Tier 0: standard patrol (lvl 1-2). Tier 1: charcoal urban (lvl 3). Tier 2: SWAT red (lvl 4-5).
+// Tier 3: Master (lvl 6+).
 type ICopTier = {
   bodyMat: THREE.MeshStandardMaterial;
   cabinMat: THREE.MeshStandardMaterial;
@@ -25,8 +27,13 @@ const COP_TIERS: ICopTier[] = [
     bodyMat: new THREE.MeshStandardMaterial({ color: 0x080808, ...matProps }),
     cabinMat: new THREE.MeshStandardMaterial({ color: 0xb71c1c, ...cabinProps }),
   },
+  {
+    bodyMat: new THREE.MeshStandardMaterial({ color: 0x050505, ...matProps }),
+    cabinMat: new THREE.MeshStandardMaterial({ color: 0xdaa520, ...cabinProps }), // Goldenrod
+  },
 ];
 function tierForLevel(level: number): ICopTier {
+  if (level >= 6) return COP_TIERS[3];
   if (level >= 4) return COP_TIERS[2];
   if (level === 3) return COP_TIERS[1];
   return COP_TIERS[0];
@@ -132,15 +139,19 @@ export type ICopLevelConfig = {
   forwardForce: number;
   predictAhead: number; // seconds to predict player position (0 = no prediction)
   flank: boolean; // whether this cop tries to flank
+  interceptPower: number; // multiplier for prediction (Lead role)
+  canPit: boolean; // whether this cop tries sideways PIT maneuvers
+  avoidWater: boolean; // whether this cop brakes/steers away from water
 };
 
 // Player: maxSpeed=40, mass=100
 export const COP_LEVEL_CONFIGS: Record<number, ICopLevelConfig> = {
-  1: { mass: 100, speed: 44, ramSpeed: 52, turnSpeed: 2.2, forwardForce: 160000, predictAhead: 0.5, flank: false },
-  2: { mass: 115, speed: 46, ramSpeed: 55, turnSpeed: 2.5, forwardForce: 175000, predictAhead: 0.8, flank: false },
-  3: { mass: 130, speed: 48, ramSpeed: 58, turnSpeed: 2.8, forwardForce: 190000, predictAhead: 1.2, flank: true },
-  4: { mass: 160, speed: 50, ramSpeed: 62, turnSpeed: 3.0, forwardForce: 210000, predictAhead: 1.5, flank: true },
-  5: { mass: 200, speed: 52, ramSpeed: 65, turnSpeed: 3.2, forwardForce: 230000, predictAhead: 1.8, flank: true },
+  1: { mass: 100, speed: 44, ramSpeed: 52, turnSpeed: 2.2, forwardForce: 160000, predictAhead: 0.5, flank: false, interceptPower: 1, canPit: false, avoidWater: false },
+  2: { mass: 115, speed: 46, ramSpeed: 55, turnSpeed: 2.5, forwardForce: 175000, predictAhead: 0.8, flank: false, interceptPower: 1, canPit: false, avoidWater: false },
+  3: { mass: 130, speed: 48, ramSpeed: 58, turnSpeed: 2.8, forwardForce: 190000, predictAhead: 1.2, flank: true, interceptPower: 1, canPit: false, avoidWater: false },
+  4: { mass: 150, speed: 50, ramSpeed: 60, turnSpeed: 3.0, forwardForce: 200000, predictAhead: 1.5, flank: true, interceptPower: 3.5, canPit: false, avoidWater: false },
+  5: { mass: 175, speed: 52, ramSpeed: 63, turnSpeed: 3.2, forwardForce: 220000, predictAhead: 1.8, flank: true, interceptPower: 3.5, canPit: true, avoidWater: false },
+  6: { mass: 210, speed: 54, ramSpeed: 66, turnSpeed: 3.4, forwardForce: 240000, predictAhead: 2.0, flank: true, interceptPower: 4.0, canPit: true, avoidWater: true },
 };
 
 export class Cop {
@@ -176,6 +187,9 @@ export class Cop {
   damageMarker: THREE.Mesh;
   damageTier: number;
   damagePoints: number;
+  // AI Roles
+  role: "chaser" | "lead" = "chaser";
+  pitCooldown = 0;
   preStepCallback: () => void;
 
   constructor(
@@ -188,7 +202,7 @@ export class Cop {
   ) {
     this.scene = scene;
     this.world = world;
-    this.level = Math.max(1, Math.min(5, level));
+    this.level = Math.max(1, Math.min(6, level));
     this.config = COP_LEVEL_CONFIGS[this.level];
     this.flankSide = Math.random() < 0.5 ? 1 : -1;
     this.damageCooldown = 0;
@@ -340,8 +354,26 @@ export class Cop {
       const dxToPlayer = this.targetPosition.x - this.body.position.x;
       const dzToPlayer = this.targetPosition.z - this.body.position.z;
       const distToPlayer = Math.sqrt(dxToPlayer * dxToPlayer + dzToPlayer * dzToPlayer);
+
+      // --- Water Fear (Level 5+) ---
+      // If cop is about to hit water, force brake + steer away.
+      let waterInFront = false;
+      if (this.config.avoidWater) {
+        // Look ahead based on speed
+        const speed = this.body.velocity.length();
+        const lookAhead = 2 + speed * 0.25;
+        this.body.quaternion.vmult(COP_FORWARD, _worldForward);
+        const checkX = this.body.position.x + _worldForward.x * lookAhead;
+        const checkZ = this.body.position.z + _worldForward.z * lookAhead;
+        const tx = Math.floor(checkX / TILE_SIZE);
+        const tz = Math.floor(checkZ / TILE_SIZE);
+        if (!isRoad(tx, tz) && isWater(tx, tz)) {
+          waterInFront = true;
+        }
+      }
+
       // Ram mode: boost speed when within 25 units
-      const isRamming = distToPlayer < 25;
+      const isRamming = distToPlayer < 25 && !waterInFront;
       const activeMaxSpeed = isRamming ? this.config.ramSpeed : this.maxSpeed;
       const activeForce = isRamming ? this.forwardForce * 1.4 : this.forwardForce;
 
@@ -375,6 +407,9 @@ export class Cop {
           forceScale *= 0.3 + 0.7 * recoveryProgress;
         }
 
+        // Brakes if water in front
+        if (waterInFront) forceScale = -0.5;
+
         _force.set(0, 0, -activeForce * forceScale);
         this.body.applyLocalForce(_force, COP_FORCE_OFFSET);
       }
@@ -404,9 +439,12 @@ export class Cop {
         let aimZ = this.targetPosition.z;
 
         // Predict where player will be
-        if (this.config.predictAhead > 0 && this.targetVelocity) {
-          aimX += this.targetVelocity.x * this.config.predictAhead;
-          aimZ += this.targetVelocity.z * this.config.predictAhead;
+        let pTime = this.config.predictAhead;
+        if (this.role === "lead") pTime *= this.config.interceptPower;
+
+        if (pTime > 0 && this.targetVelocity) {
+          aimX += this.targetVelocity.x * pTime;
+          aimZ += this.targetVelocity.z * pTime;
         }
 
         // Flanking: offset aim perpendicular to player's heading
@@ -427,6 +465,24 @@ export class Cop {
           aimZ - this.body.position.z,
         );
         _targetDir.normalize();
+
+        // --- PIT Maneuver (Level 4+) ---
+        if (this.config.canPit && this.pitCooldown <= 0 && distToPlayer < 7 && this.targetVelocity) {
+          // Check if roughly parallel (dot product of headings)
+          this.body.quaternion.vmult(COP_FORWARD, _worldForward);
+          this.body.vectorToLocalFrame(this.targetVelocity, _localVel);
+          // If player is parallel and moving in same direction
+          if (_localVel.z < -10) {
+            // Apply sideways impulse toward player
+            const toPlayerX = this.targetPosition.x - this.body.position.x;
+            const toPlayerZ = this.targetPosition.z - this.body.position.z;
+            const dirX = toPlayerX / distToPlayer;
+            const dirZ = toPlayerZ / distToPlayer;
+            const pitForce = 2500;
+            this.body.applyImpulse(new CANNON.Vec3(dirX * pitForce, 0, dirZ * pitForce), new CANNON.Vec3(0, 0, 0));
+            this.pitCooldown = 4.0; // Don't spam PIT
+          }
+        }
 
         this.body.quaternion.vmult(COP_FORWARD, _worldForward);
         _worldForward.y = 0;
@@ -458,6 +514,7 @@ export class Cop {
 
     // Tick down damage cooldown
     if (this.damageCooldown > 0) this.damageCooldown -= dt;
+    if (this.pitCooldown > 0) this.pitCooldown -= dt;
 
     // Tick down bounce-back timer; start recovery when it expires
     if (this.bounceBackTimer > 0) {

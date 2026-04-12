@@ -625,6 +625,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   // --- Pure-state phases (scoring, combo decay, run stats) ---
   run.scoreRoadTile(car);
   run.decayCombo(dt);
+  run.decayDrownChain(dt);
   run.recordMovement(car);
 
   // --- Combo lifeline: warning tick + "lost it" sting ---

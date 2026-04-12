@@ -68,6 +68,10 @@ export class RunState {
   comboCount = 0;
   comboTimer = 0;
 
+  // Drown Chain
+  drownChainCount = 0;
+  drownChainTimer = 0;
+
   // Index into SCORE_MILESTONES — points at the next un-crossed milestone.
   // main.ts walks this forward whenever score crosses a threshold.
   nextMilestoneIdx = 0;
@@ -137,6 +141,20 @@ export class RunState {
     if (this.comboTimer <= 0) this.comboCount = 0;
   }
 
+  /** Track successive drownings in a short window. */
+  recordDrown(): number {
+    this.drownChainCount++;
+    this.drownChainTimer = 4.0; // 4 seconds to keep the chain alive
+    return this.drownChainCount;
+  }
+
+  /** Decay the drown chain timer. */
+  decayDrownChain(dt: number) {
+    if (this.drownChainTimer <= 0) return;
+    this.drownChainTimer -= dt;
+    if (this.drownChainTimer <= 0) this.drownChainCount = 0;
+  }
+
   /** Track top speed and total distance traveled this run. */
   recordMovement(car: Car) {
     const v = car.body.velocity.length();
@@ -167,6 +185,8 @@ export class RunState {
     this.bustedTimer = 0;
     this.comboCount = 0;
     this.comboTimer = 0;
+    this.drownChainCount = 0;
+    this.drownChainTimer = 0;
     this.nextMilestoneIdx = 0;
     this.escapeTimer = 0;
     this.escapeArmed = false;

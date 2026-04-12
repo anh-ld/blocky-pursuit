@@ -55,7 +55,7 @@ export type ICopUpdateResult = {
 
 // SWAT mini-boss tuning. Lives outside `constants.ts` because it's an
 // emergent escalation feature, not a designer-tunable balance lever.
-const SWAT_MIN_LEVEL = 5;
+const SWAT_MIN_LEVEL = 7;
 const SWAT_RESPAWN_DELAY = 25; // seconds between SWAT spawns
 const SWAT_KILL_SCORE = 80;
 const SWAT_KILL_HEAL = 25;
@@ -172,6 +172,16 @@ export class CopSystem {
 
     for (let i = this.cops.length - 1; i >= 0; i--) {
       const cop = this.cops[i];
+
+      // AI Roles: At level 4+, one cop becomes the 'lead' interceptor.
+      // Every frame we re-verify there is exactly one lead to handle
+      // cases where the previous lead was drowned or despawned.
+      if (run.level >= 4 && i === 0) {
+        cop.role = "lead";
+      } else {
+        cop.role = "chaser";
+      }
+
       cop.update(dt, car.mesh.position, car.body.velocity);
 
       // Time warp: clamp cop velocity to half its normal cap so the player
@@ -336,17 +346,29 @@ export class CopSystem {
       const tx = Math.floor(cop.body.position.x / TILE_SIZE);
       const tz = Math.floor(cop.body.position.z / TILE_SIZE);
       if (!isRoad(tx, tz) && isWater(tx, tz)) {
+        const chain = run.recordDrown();
         let baseScore = cop.isSwat ? SWAT_KILL_SCORE : SCORE_DROWNED_COP;
-        const baseHeal = cop.isSwat ? SWAT_KILL_HEAL : HP_HEAL_DROWNED_COP;
         if (cop.isBounty) baseScore *= BOUNTY_MULTIPLIER;
-        const reward = baseScore * mult;
+
+        // Chain bonus: extra score + extra heal for rapid successions
+        const chainBonus = chain > 1 ? chain * 0.5 : 1;
+        const reward = baseScore * mult * chainBonus;
+
         run.score += reward;
         run.copScore += reward;
-        run.hp = Math.min(MAX_HP, run.hp + baseHeal);
+        run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_DROWNED_COP + (chain - 1) * 5);
         run.drownedThisRun++;
         playSplash();
         spawnSplash(cop.body.position.x, cop.body.position.y, cop.body.position.z);
         spawnConfetti(cop.body.position.x, cop.body.position.y + 2, cop.body.position.z);
+
+        if (chain > 1) {
+          const label = chain === 2 ? "DOUBLE DROWN!" : chain === 3 ? "TRIPLE DROWN!" : "MEGA DROWN!";
+          const color = chain === 2 ? "#66ccff" : chain === 3 ? "#3399ff" : "#0066ff";
+          spawnPopup(car.body.position.x, car.body.position.y + 4.5, car.body.position.z, label, color, 1.8, 12);
+          playComboTier(Math.min(5, chain));
+        }
+
         if (cop.isSwat) {
           // Extra debris + flash so the SWAT kill reads as a bigger event.
           spawnConfetti(cop.body.position.x, cop.body.position.y + 3, cop.body.position.z);

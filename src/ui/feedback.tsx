@@ -6,27 +6,42 @@ export function Feedback() {
   };
 
   return (
-    <div class="absolute inset-0 z-30 flex items-center justify-center">
-      <div class="bg-black/60 md:bg-black p-5 w-full h-full md:w-160 md:max-w-[90vw] md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col">
-        <div class="text-violet-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">Feedback</div>
-        <form name="feedback" method="POST" action="/" data-netlify="true" class="flex flex-col gap-2 mb-2">
+    <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+      <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[480px] md:max-w-[92vw] bg-[var(--bg-1)] pointer-events-auto flex flex-col">
+        <div class="px-5 pt-5 pb-3 border-b-2 border-[var(--line)]">
+          <h2
+            class="font-pixel text-[var(--cyan)] text-xs leading-none"
+            style={{ textShadow: "2px 2px 0 #000" }}
+          >
+            FEEDBACK
+          </h2>
+          <p class="font-mono-ui text-[10px] text-[var(--text-mute)] mt-1.5">
+            Bugs, ideas, anything. One message is enough.
+          </p>
+        </div>
+
+        <form
+          name="feedback"
+          method="POST"
+          action="/"
+          data-netlify="true"
+          class="flex-1 p-5 flex flex-col gap-3"
+        >
           <input type="hidden" name="form-name" value="feedback" />
           <textarea
             name="message"
             required
-            placeholder="What do you think? Bugs, ideas, anything..."
-            class="w-full h-24 bg-gray-800 border border-gray-600 text-gray-200 text-xs p-2 resize-none focus:outline-none focus:border-violet-500"
+            placeholder="What do you think?…"
+            class="w-full flex-1 min-h-32 bg-[var(--bg-2)] border-2 border-[var(--line)] focus:border-[var(--cyan)] text-[var(--text)] font-mono-ui text-xs p-3 resize-none outline-none placeholder:text-[var(--text-mute)]"
           />
-          <button
-            type="submit"
-            class="w-full py-2 bg-violet-500/30 text-violet-300 text-xs font-bold uppercase tracking-wider border border-violet-500/40 cursor-pointer hover:bg-violet-500/40 transition-colors"
-          >
+          <button type="submit" class="arcade-btn arcade-btn-cyan w-full">
             Send
           </button>
         </form>
-        <div class="mt-auto">
-          <button onClick={back} class="btn bg-gray-700 text-gray-300 text-xs py-2 tracking-wider hover:bg-gray-600">
-            BACK
+
+        <div class="border-t-2 border-[var(--line)] p-4">
+          <button onClick={back} class="arcade-btn arcade-btn-ghost w-full">
+            Back
           </button>
         </div>
       </div>

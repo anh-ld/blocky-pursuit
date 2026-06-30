@@ -1,12 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 import { damageDirAngle, damageDirSeq } from "../state";
 
-/** Brief red glow at the screen edge where the latest damaging cop sits — player learns evade direction. */
-/** Triggered on each `damageDirSeq` increment. Self-clears after 400ms via CSS keyframe + setTimeout. */
-/** World→screen angle conversion assumes same isometric camera as `main.ts` (+X +Y +Z → origin). */
-/** World +X → (right, down), world +Z → (left, down). Linear combo falls out of camera basis cross-product. */
+/* Brief red glow at the screen edge where the latest damaging cop sits — player learns evade direction. */
+
 export function DamageIndicator() {
-  const seq = damageDirSeq.value; /* subscribe to new-hit pulses */
+  const seq = damageDirSeq.value;
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -28,16 +26,15 @@ export function DamageIndicator() {
   const sx = dx - dz;
   const sy = (dx + dz) / Math.sqrt(3);
   const screenAngle = Math.atan2(sy, sx);
-  /* Push gradient hot-spot to screen edge in threat direction — reads as "coming from that side". */
   const cx = 50 + Math.cos(screenAngle) * 50;
   const cy = 50 + Math.sin(screenAngle) * 50;
 
   return (
     <div
       key={seq}
-      class="absolute inset-0 z-15 pointer-events-none animate-damage-flash"
+      class="absolute inset-0 z-[15] pointer-events-none animate-damage-flash"
       style={{
-        background: `radial-gradient(circle at ${cx}% ${cy}%, rgba(220,38,38,0.7) 0%, transparent 45%)`,
+        background: `radial-gradient(circle at ${cx}% ${cy}%, rgba(239,68,68,0.7) 0%, transparent 45%)`,
       }}
     />
   );

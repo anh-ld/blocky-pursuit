@@ -1,7 +1,9 @@
 import { screen, canInstallPwa, actions, bestScore, totalRuns, copsDrowned } from "../state";
 import { CAR_SKINS, isUnlocked } from "../entities/car-skins";
 import { fetchLeaderboard } from "../api";
+import { IconSteer, IconCar, IconCop, IconWater, IconBolt, IconSkull, IconStar, IconTrophy, IconDownload } from "./icons";
 
+/* Two columns on desktop: rules left, CTAs right. Single column on mobile — CTAs pinned to bottom. */
 export function HowToPlay() {
   const openLeaderboard = () => {
     fetchLeaderboard();
@@ -14,7 +16,6 @@ export function HowToPlay() {
     screen.value = "garage";
   };
 
-  /* Compute career stats from persisted progress — start screen shows long-term progression, not cold start. */
   const progress = {
     best: bestScore.value,
     totalRuns: totalRuns.value,
@@ -26,106 +27,127 @@ export function HowToPlay() {
 
   return (
     <div class="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/60 md:bg-black md:w-160 md:max-w-[90vw] text-gray-300 px-4 py-5 md:py-3 flex flex-col gap-3 text-xs font-normal tracking-wide w-full h-full md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto">
-        <span class="text-amber-400 font-extrabold uppercase tracking-widest mb-4">How to Play</span>
-        <div class="flex items-center gap-2">
-          <div class="gap-1 shrink-0 hidden md:flex">
-            <span class="kbd-sm">A</span>
-            <span class="kbd-sm">D</span>
+      <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[640px] md:max-w-[92vw] bg-[var(--bg-1)] md:p-6 flex flex-col md:flex-row pointer-events-auto">
+        {/* Left — title + rules */}
+        <div class="flex-1 px-5 pt-6 pb-4 md:p-0 md:pr-6 flex flex-col gap-4 min-w-0">
+          <div class="flex flex-col gap-1">
+            <h1
+              class="font-pixel text-[var(--amber)] text-sm sm:text-base leading-tight"
+              style={{ textShadow: "3px 3px 0 #000" }}
+            >
+              BLOCKY
+              <br />
+              PURSUIT
+            </h1>
+            <p class="font-mono-ui text-[var(--text-dim)] text-xs leading-relaxed">
+              Evade cops in a blocky city. Don't get busted.
+            </p>
           </div>
-          <span class="shrink-0 md:hidden text-sm">👆</span>
-          <span class="text-gray-400 hidden md:inline">Steer left / right</span>
-          <span class="text-gray-400 md:hidden">Tap buttons to steer</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm leading-none shrink-0">🚗</span>
-          <span class="text-gray-400">Car drives automatically</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm leading-none shrink-0">🚔</span>
-          <span class="text-gray-400">Evade cops — don't get busted!</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm leading-none shrink-0">🌊</span>
-          <span class="text-gray-400">Avoid water, lure cops in for bonus</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm leading-none shrink-0">⚡</span>
-          <span class="text-gray-400">Drive fast on roads to score</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm leading-none shrink-0">💥</span>
-          <span class="text-gray-400">Skim past cops for combo x3 score</span>
+
+          <div class="flex flex-col gap-2.5">
+            <Row icon={<IconSteer size={16} />} label="Steer left / right" kbd={["A", "D"]} />
+            <Row icon={<IconCar size={16} />} label="Car drives itself" />
+            <Row icon={<IconCop size={16} />} label="Evade cops" />
+            <Row icon={<IconWater size={16} />} label="Lure cops into water" />
+            <Row icon={<IconBolt size={16} />} label="Stick to the roads" />
+            <Row icon={<IconSkull size={16} />} label="Skim for combo ×3 score" />
+          </div>
+
+          {showCareer && (
+            <div class="mt-2 pt-3 border-t-2 border-dashed border-[var(--line)]">
+              <div class="font-mono-ui text-[9px] text-[var(--text-mute)] uppercase tracking-widest mb-2">
+                Career
+              </div>
+              <div class="grid grid-cols-4 gap-1">
+                <Stat label="Best" value={bestScore.value.toLocaleString()} tint="var(--amber)" />
+                <Stat label="Runs" value={String(totalRuns.value)} />
+                <Stat label="Drowned" value={String(copsDrowned.value)} tint="var(--cyan)" />
+                <Stat
+                  label="Cars"
+                  value={`${unlockedCount}/${CAR_SKINS.length}`}
+                  tint="var(--pink)"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {showCareer && (
-          <div class="grid grid-cols-4 gap-1 pt-2 mt-1 border-t border-gray-700/60">
-            <div class="flex flex-col items-center">
-              <span class="text-gray-500 text-[8px] uppercase tracking-wider">Best</span>
-              <span class="text-amber-300 text-[11px] font-extrabold tabular-nums">
-                {bestScore.value.toLocaleString()}
-              </span>
-            </div>
-            <div class="flex flex-col items-center">
-              <span class="text-gray-500 text-[8px] uppercase tracking-wider">Runs</span>
-              <span class="text-gray-200 text-[11px] font-extrabold tabular-nums">{totalRuns.value}</span>
-            </div>
-            <div class="flex flex-col items-center">
-              <span class="text-gray-500 text-[8px] uppercase tracking-wider">Drowned</span>
-              <span class="text-cyan-300 text-[11px] font-extrabold tabular-nums">{copsDrowned.value}</span>
-            </div>
-            <div class="flex flex-col items-center">
-              <span class="text-gray-500 text-[8px] uppercase tracking-wider">Cars</span>
-              <span class="text-pink-300 text-[11px] font-extrabold tabular-nums">
-                {unlockedCount}/{CAR_SKINS.length}
-              </span>
-            </div>
-          </div>
-        )}
-
-        <div class="mt-auto flex flex-col gap-2">
-          <button
-            onClick={openGarage}
-            class="w-full py-2 bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors"
-          >
+        {/* Right — CTAs. Single column of chunky arcade buttons. */}
+        <div class="md:w-56 flex md:flex-col gap-2 px-5 pb-6 md:p-0 md:border-l-2 md:border-[var(--line)] md:pl-6">
+          <button onClick={() => actions.startGame()} class="arcade-btn w-full">
+            Start
+          </button>
+          <button onClick={openGarage} class="arcade-btn arcade-btn-ghost w-full">
             Garage
           </button>
-          <button
-            onClick={openLeaderboard}
-            class="w-full py-2 bg-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider border border-cyan-500/30 cursor-pointer hover:bg-cyan-500/30 transition-colors"
-          >
+          <button onClick={openLeaderboard} class="arcade-btn arcade-btn-ghost w-full">
+            <IconTrophy size={14} />
             Leaderboard
           </button>
-          <button
-            onClick={openFeedback}
-            class="w-full py-2 bg-violet-500/20 text-violet-400 text-xs font-bold uppercase tracking-wider border border-violet-500/30 cursor-pointer hover:bg-violet-500/30 transition-colors"
-          >
+          <button onClick={openFeedback} class="arcade-btn arcade-btn-ghost w-full">
             Feedback
           </button>
           {canInstallPwa.value && (
-            <button
-              onClick={() => actions.installPwa()}
-              class="flex md:!hidden items-center justify-center gap-1.5 w-full py-2 bg-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider border border-amber-500/30 cursor-pointer hover:bg-amber-500/30 transition-colors"
-            >
-              📲 Install App
+            <button onClick={() => actions.installPwa()} class="arcade-btn arcade-btn-cyan w-full">
+              <IconDownload size={14} />
+              Install
             </button>
           )}
-          <button
-            onClick={() => actions.startGame()}
-            class="w-full py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
-          >
-            START
-          </button>
           <a
             href="https://github.com/anh-ld/blocky-pursuit"
             target="_blank"
             rel="noopener"
-            class="text-center text-gray-500 text-[10px] mt-1 hover:text-amber-400 transition-colors"
+            class="mt-auto font-mono-ui text-[10px] text-[var(--text-mute)] hover:text-[var(--amber)] transition-colors text-center py-2"
           >
-            ⭐ Enjoy it? Star on GitHub!
+            <IconStar size={10} class="inline-block align-[-1px] mr-1" />
+            Star on GitHub
           </a>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Row({
+  icon,
+  label,
+  kbd,
+}: {
+  icon: preact.ComponentChildren;
+  label: string;
+  kbd?: [string, string];
+}) {
+  return (
+    <div class="flex items-center gap-3 min-w-0">
+      <span class="text-[var(--text-dim)] shrink-0 w-4 h-4 flex items-center justify-center">{icon}</span>
+      <span class="font-mono-ui text-xs text-[var(--text)] truncate">{label}</span>
+      {kbd && (
+        <span class="ml-auto flex gap-1 shrink-0">
+          {kbd.map((k) => (
+            <kbd
+              class="font-pixel text-[8px] leading-none text-[var(--text)] bg-[var(--bg-3)] border border-[var(--line-2)] px-1.5 py-1 min-w-5 text-center"
+            >
+              {k}
+            </kbd>
+          ))}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, tint }: { label: string; value: string; tint?: string }) {
+  return (
+    <div class="flex flex-col items-start">
+      <span class="font-mono-ui text-[8px] text-[var(--text-mute)] uppercase tracking-widest leading-none mb-1">
+        {label}
+      </span>
+      <span
+        class={`font-mono-ui text-[11px] font-bold tabular-nums leading-none ${tint ? "" : "text-[var(--text)]"}`}
+        style={tint ? { color: tint } : undefined}
+      >
+        {value}
+      </span>
     </div>
   );
 }

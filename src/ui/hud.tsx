@@ -9,7 +9,6 @@ import {
   combo,
   comboTimerRatio,
   comboMultiplier,
-  comboInDanger,
   scoreMultRemaining,
   timeWarpRemaining,
   magnetRemaining,
@@ -17,10 +16,45 @@ import {
   tankRemaining,
 } from "../state";
 import { COMBO_MILESTONE } from "../constants";
+import {
+  IconBolt,
+  IconShield,
+  IconCoin,
+  IconClock,
+  IconMagnet,
+  IconGhost,
+  IconTank,
+  IconFlame,
+} from "./icons";
+
+/* Compact power-up chip — square icon + mono number. Tinted by buff type, no extra padding. */
+function PowerChip({
+  tint,
+  icon,
+  value,
+  danger,
+}: {
+  tint: string;
+  icon: preact.ComponentChildren;
+  value: string;
+  danger?: boolean;
+}) {
+  return (
+    <span
+      class="inline-flex items-center gap-0.5 px-1 h-5 font-mono-ui text-[10px] font-bold tabular-nums leading-none"
+      style={{ color: tint, background: danger ? "rgba(239,68,68,0.12)" : `${tint}1a` }}
+    >
+      <span class="shrink-0 w-3 h-3 flex items-center justify-center">{icon}</span>
+      {value}
+    </span>
+  );
+}
 
 export function Hud() {
   const v = hp.value;
-  const color = v > 60 ? "bg-green-400" : v > 30 ? "bg-yellow-400" : "bg-red-400";
+  const low = v <= 30;
+  const mid = v <= 60 && v > 30;
+  const hpColor = low ? "var(--red)" : mid ? "var(--amber)" : "var(--text)";
   const nitro = nitroRemaining.value;
   const shield = shieldUp.value;
   const c = combo.value;
@@ -31,60 +65,88 @@ export function Hud() {
   const magnet = magnetRemaining.value;
   const ghost = ghostRemaining.value;
   const tank = tankRemaining.value;
-  /* Tier changes at milestones (every COMBO_MILESTONE). As key → combo-node remount → pop animation retriggers. */
+  const h = heat.value;
+  /* Tier changes at milestones — `key` on combo number remounts → pop animation retriggers. */
   const comboTier = Math.floor(c / COMBO_MILESTONE);
   return (
-    <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
-      <div class="w-16 sm:w-25 h-3.5 bg-gray-700 relative overflow-hidden shrink-0">
-        <div class={`h-full ${color} transition-all duration-200`} style={{ width: `${Math.max(0, v)}%` }} />
+    <div class="flex items-center gap-1.5 min-w-0">
+      {/* HP — single thin bar, color carries health state */}
+      <div class="w-12 sm:w-16 h-1.5 bg-[var(--bg-3)] overflow-hidden shrink-0">
+        <div
+          class="h-full transition-all duration-200"
+          style={{ width: `${Math.max(0, v)}%`, background: hpColor }}
+        />
       </div>
-      <div class="flex items-center gap-1">
-        <span class="text-gray-400 text-xs font-semibold">SCORE</span>
-        <span class="text-amber-400 text-sm font-extrabold tracking-wider">{Math.floor(score.value)}</span>
+
+      {/* Score — pixel font, the hero number */}
+      <span
+        class="font-pixel text-[var(--amber)] text-[10px] sm:text-[11px] tabular-nums leading-none shrink-0"
+        style={{ textShadow: "1px 1px 0 #000" }}
+      >
+        {Math.floor(score.value).toLocaleString()}
+      </span>
+
+      {/* Level + progress */}
+      <span
+        class="font-mono-ui text-[var(--amber)] text-[10px] font-bold tracking-wider uppercase leading-none shrink-0"
+        style={{ textShadow: "1px 1px 0 #000" }}
+      >
+        LV{level.value}
+      </span>
+      <div class="w-6 sm:w-8 h-1 bg-[var(--bg-3)] overflow-hidden shrink-0">
+        <div class="h-full bg-[var(--amber)]" style={{ width: `${levelProgress.value * 100}%` }} />
       </div>
-      <div class="flex flex-col items-start gap-0.5">
-        <span class="text-orange-500 text-xs font-extrabold tracking-widest leading-none">LV {level.value}</span>
-        <div class="w-10 h-0.5 bg-orange-900/60 overflow-hidden">
-          <div class="h-full bg-orange-400" style={{ width: `${levelProgress.value * 100}%` }} />
-        </div>
-      </div>
-      {heat.value > 0 && <span class="text-red-400 text-xs font-extrabold tracking-widest">🔥{heat.value}</span>}
+
+      {/* Heat — flame icon + tier number */}
+      {h > 0 && (
+        <span
+          class="inline-flex items-center gap-0.5 h-5 px-1 font-mono-ui text-[10px] font-bold text-[var(--red)] leading-none shrink-0"
+          style={{ background: "rgba(239,68,68,0.12)" }}
+        >
+          <span class="w-3 h-3">
+            <IconFlame size={12} />
+          </span>
+          {h}
+        </span>
+      )}
+
+      {/* Combo — pop on tier change, color flips to red when in danger */}
       {c > 0 && (
-        <div class={`flex flex-col items-start gap-0.5 ${comboInDanger.value ? "animate-busted-pulse" : ""}`}>
-          <div class="flex items-baseline gap-1">
-            <span
-              key={`combo-tier-${comboTier}`}
-              class={`text-xs font-extrabold tracking-widest inline-block animate-combo-pop origin-left ${
-                comboInDanger.value ? "text-red-400" : "text-pink-400"
-              }`}
-            >
-              x{c}
-            </span>
-            <span
-              class={`text-[9px] font-bold tabular-nums ${
-                comboInDanger.value ? "text-red-300/80" : "text-pink-300/70"
-              }`}
-            >
-              {cMult.toFixed(1)}x
-            </span>
-          </div>
-          <div class={`w-10 h-0.5 overflow-hidden ${comboInDanger.value ? "bg-red-900/60" : "bg-pink-900/60"}`}>
+        <div class={`flex items-center gap-1 shrink-0 ${comboInDanger.value ? "animate-busted-pulse" : ""}`}>
+          <span
+            key={`combo-tier-${comboTier}`}
+            class={`inline-block animate-combo-pop origin-left font-pixel text-[10px] tabular-nums leading-none ${
+              comboInDanger.value ? "text-[var(--red)]" : "text-[var(--pink)]"
+            }`}
+            style={{ textShadow: "1px 1px 0 #000" }}
+          >
+            ×{c}
+          </span>
+          <div class="w-6 h-1 overflow-hidden bg-[var(--bg-3)]">
             <div
-              class={`h-full ${comboInDanger.value ? "bg-red-400" : "bg-pink-400"}`}
+              class={`h-full ${comboInDanger.value ? "bg-[var(--red)]" : "bg-[var(--pink)]"}`}
               style={{ width: `${cRatio * 100}%` }}
             />
           </div>
         </div>
       )}
-      {nitro > 0 && <span class="text-amber-300 text-xs font-extrabold tracking-widest">⚡{nitro.toFixed(1)}</span>}
-      {shield && <span class="text-cyan-300 text-xs font-extrabold tracking-widest">🛡</span>}
+
+      {/* Power-ups — flat chips, color carries the type */}
+      {nitro > 0 && <PowerChip tint="var(--amber)" icon={<IconBolt size={12} />} value={nitro.toFixed(1)} />}
+      {shield && <PowerChip tint="var(--cyan)" icon={<IconShield size={12} />} value="" />}
       {scoreMult > 0 && (
-        <span class="text-yellow-300 text-xs font-extrabold tracking-widest">💰{scoreMult.toFixed(1)}</span>
+        <PowerChip tint="var(--amber)" icon={<IconCoin size={12} />} value={scoreMult.toFixed(1)} />
       )}
-      {timeWarp > 0 && <span class="text-sky-300 text-xs font-extrabold tracking-widest">⏳{timeWarp.toFixed(1)}</span>}
-      {magnet > 0 && <span class="text-red-300 text-xs font-extrabold tracking-widest">🧲{magnet.toFixed(1)}</span>}
-      {ghost > 0 && <span class="text-violet-200 text-xs font-extrabold tracking-widest">👻{ghost.toFixed(1)}</span>}
-      {tank > 0 && <span class="text-rose-400 text-xs font-extrabold tracking-widest">💢{tank.toFixed(1)}</span>}
+      {timeWarp > 0 && (
+        <PowerChip tint="var(--cyan)" icon={<IconClock size={12} />} value={timeWarp.toFixed(1)} />
+      )}
+      {magnet > 0 && (
+        <PowerChip tint="var(--red)" icon={<IconMagnet size={12} />} value={magnet.toFixed(1)} danger />
+      )}
+      {ghost > 0 && (
+        <PowerChip tint="var(--text-dim)" icon={<IconGhost size={12} />} value={ghost.toFixed(1)} />
+      )}
+      {tank > 0 && <PowerChip tint="var(--red)" icon={<IconTank size={12} />} value={tank.toFixed(1)} danger />}
     </div>
   );
 }

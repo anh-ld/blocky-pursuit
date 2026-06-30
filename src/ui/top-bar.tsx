@@ -1,24 +1,14 @@
 import { gameState, survivalTime, actions, playerName } from "../state";
 import { Hud } from "./hud";
 import { useState } from "preact/hooks";
+import { computed } from "@preact/signals";
+import { IconPlay, IconPause } from "./icons";
 
-function nameToGradient(name: string): string {
-  let h1 = 0,
-    h2 = 0;
-  for (let i = 0; i < name.length; i++) {
-    const c = name.charCodeAt(i);
-    if (i % 2 === 0) h1 = (h1 + c * 37) % 360;
-    else h2 = (h2 + c * 53) % 360;
-  }
-  h2 = (h1 + 120 + (h2 % 100)) % 360;
-  return `linear-gradient(135deg, hsl(${h1},100%,65%), hsl(${h2},95%,55%))`;
-}
-
+/* Hard-edged square avatar — readable, no gradient, no rounded shape. Color = brand chip. */
 function Avatar() {
   const name = playerName.value;
   const [open, setOpen] = useState(false);
   const initial = name ? name[0].toUpperCase() : "?";
-  const gradient = nameToGradient(name || "?");
 
   return (
     <div class="relative flex items-center">
@@ -28,13 +18,13 @@ function Avatar() {
         onTouchStart={() => setOpen(true)}
         onTouchEnd={() => setOpen(false)}
         aria-label={`Player: ${name}`}
-        class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium cursor-pointer shrink-0 select-none"
-        style={{ background: gradient }}
+        class="w-7 h-7 flex items-center justify-center text-black font-mono-ui text-[11px] font-bold select-none cursor-pointer"
+        style={{ background: "var(--amber)" }}
       >
         {initial}
       </button>
       {open && (
-        <div class="absolute top-10 right-0 bg-gray-900 border border-gray-700 px-3 py-1.5 text-gray-200 text-xs font-semibold whitespace-nowrap z-50">
+        <div class="absolute top-9 right-0 pixel-panel px-3 py-1.5 text-[var(--text)] font-mono-ui text-xs whitespace-nowrap z-50">
           {name || "Anonymous"}
         </div>
       )}
@@ -48,6 +38,9 @@ function formatTime(seconds: number) {
   return `${secs}:${ms.toString().padStart(2, "0")}`;
 }
 
+/* computed text-binding, NOT .value in body — else 60fps TopBar re-render dupes the bar into #app on hit */
+const survivalDisplay = computed(() => formatTime(survivalTime.value));
+
 export function TopBar() {
   const state = gameState.value;
   const playing = state === "playing";
@@ -56,39 +49,34 @@ export function TopBar() {
   const start = state === "start";
 
   return (
-    <div class="flex flex-nowrap items-center justify-between gap-2 px-3 sm:px-5 h-13 min-h-13 bg-gray-900 shrink-0">
-      {/* Left: HUD + time. `min-w-0` + `overflow-hidden` clip rightmost chips. Right group stays visible. */}
+    <div class="flex flex-nowrap items-center justify-between gap-2 px-2.5 sm:px-3 h-9 min-h-9 bg-[var(--bg-1)] border-b-2 border-[var(--line)] shrink-0">
       <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-hidden">
-        {start && (
-          <h1 class="text-orange-500 text-lg font-extrabold uppercase tracking-widest m-0 leading-none">
-            blocky pursuit
+        {start ? (
+          <h1
+            class="font-pixel text-[var(--amber)] text-[10px] sm:text-xs leading-none whitespace-nowrap"
+            style={{ textShadow: "2px 2px 0 #000" }}
+          >
+            BLOCKY PURSUIT
           </h1>
-        )}
-        {(playing || paused || over) && <Hud />}
-        {(playing || paused || over) && (
-          <div class="text-gray-400 text-xs font-semibold tracking-widest hidden sm:block shrink-0">
-            {formatTime(survivalTime.value)}
-          </div>
+        ) : (
+          <>
+            <Hud />
+            {(playing || paused || over) && (
+              <div class="font-mono-ui text-[var(--text-dim)] text-[11px] font-medium tabular-nums hidden sm:block shrink-0">
+                {survivalDisplay}
+              </div>
+            )}
+          </>
         )}
       </div>
-      {/* Right group: stays fixed, never shrinks. */}
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="flex items-center gap-1.5 shrink-0">
         {(playing || paused) && (
           <button
             aria-label={paused ? "Resume" : "Pause"}
             onClick={() => actions.togglePause()}
-            class="w-8 h-8 text-amber-400 cursor-pointer flex items-center justify-center"
+            class="w-7 h-7 flex items-center justify-center text-[var(--text-dim)] hover:text-[var(--amber)] transition-colors cursor-pointer"
           >
-            {paused ? (
-              <svg width="16" height="16" viewBox="0 0 12 12" fill="currentColor">
-                <path d="M2 1 L10 6 L2 11 Z" />
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 12 12" fill="currentColor">
-                <rect x="2" y="1" width="3" height="10" />
-                <rect x="7" y="1" width="3" height="10" />
-              </svg>
-            )}
+            {paused ? <IconPlay size={12} /> : <IconPause size={12} />}
           </button>
         )}
         <Avatar />

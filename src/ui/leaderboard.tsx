@@ -1,14 +1,14 @@
 import { screen, leaderboardEntries, leaderboardLoading, playerName, gameState } from "../state";
 import { replayUrl } from "./replay-modal";
 import { fetchLeaderboard } from "../api";
+import { IconPlay, IconTrophy } from "./icons";
 
-const MEDAL = ["text-amber-400", "text-gray-200", "text-amber-600"];
+const RANK_TINT = ["var(--amber)", "var(--text)", "var(--text-dim)"];
 
 export function Leaderboard() {
   const back = () => {
     screen.value = gameState.value === "start" ? "howToPlay" : "none";
   };
-
   const playRecording = (url: string) => {
     replayUrl.value = url;
   };
@@ -21,57 +21,84 @@ export function Leaderboard() {
   const me = playerName.value;
 
   return (
-    <div class="absolute inset-0 z-30 flex items-center justify-center">
-      <div class="bg-black/60 md:bg-black p-5 w-full h-full md:w-160 md:max-w-[90vw] md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col">
-        <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">Leaderboard</div>
-        <div class="flex flex-col gap-1 text-xs font-semibold min-h-40">
+    <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+      <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[480px] md:max-w-[92vw] bg-[var(--bg-1)] pointer-events-auto flex flex-col">
+        <div class="px-5 pt-5 pb-3 border-b-2 border-[var(--line)] flex items-center gap-2">
+          <IconTrophy size={18} class="text-[var(--amber)] shrink-0" />
+          <h2
+            class="font-pixel text-[var(--amber)] text-xs leading-none"
+            style={{ textShadow: "2px 2px 0 #000" }}
+          >
+            LEADERBOARD
+          </h2>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-3 min-h-40">
           {leaderboardLoading.value ? (
-            <div class="text-gray-500 text-center text-[10px]">Loading...</div>
+            <div class="font-mono-ui text-[10px] text-[var(--text-mute)] text-center py-8">Loading…</div>
           ) : entries.length === 0 ? (
-            <div class="text-gray-500 text-center text-xs py-6">No scores yet. Be the first!</div>
+            <div class="font-mono-ui text-xs text-[var(--text-mute)] text-center py-8">
+              No scores yet. Be the first.
+            </div>
           ) : (
-            entries.slice(0, 10).map((e, i) => {
-              const display = e.name;
-              const isMe = e.name === me;
-              const medal = MEDAL[i] ?? "text-gray-500";
-              return (
-                <div class={`flex justify-between items-center ${isMe ? "text-amber-300" : "text-gray-400"}`}>
-                  <span>
-                    <span class={medal}>{i + 1}.</span>
-                    <span> </span>
-                    <span class={medal}>{display}</span>
-                  </span>
-                  <div class="flex items-center gap-2">
-                    <span class="tabular-nums">{e.score.toLocaleString()}</span>
+            <div class="flex flex-col">
+              {entries.slice(0, 10).map((e, i) => {
+                const isMe = e.name === me;
+                const tint = RANK_TINT[i] ?? "var(--text-mute)";
+                return (
+                  <div
+                    key={`${e.name}-${i}`}
+                    class={`flex items-center gap-2 px-2 py-2 ${i > 0 ? "border-t border-[var(--line)]" : ""} ${
+                      isMe ? "bg-[var(--bg-3)]" : ""
+                    }`}
+                  >
+                    <span
+                      class="font-pixel text-[10px] tabular-nums w-6 shrink-0"
+                      style={{ color: tint }}
+                    >
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span
+                      class={`font-mono-ui text-xs font-bold truncate flex-1 ${
+                        isMe ? "text-[var(--amber)]" : "text-[var(--text)]"
+                      }`}
+                    >
+                      {e.name}
+                    </span>
+                    <span
+                      class={`font-mono-ui text-xs font-bold tabular-nums ${
+                        isMe ? "text-[var(--amber)]" : "text-[var(--text)]"
+                      }`}
+                    >
+                      {e.score.toLocaleString()}
+                    </span>
                     {e.recordingUrl && (
                       <button
                         onClick={() => playRecording(e.recordingUrl!)}
-                        class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded"
+                        class="w-7 h-7 flex items-center justify-center text-[var(--cyan)] hover:text-[var(--text)] border-2 border-[var(--line)] hover:border-[var(--cyan)] cursor-pointer transition-colors"
                         title="Watch replay"
+                        aria-label="Watch replay"
                       >
-                        ▶
+                        <IconPlay size={10} />
                       </button>
                     )}
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           )}
         </div>
-        <div class="my-3 pt-2 border-t border-gray-700">
-          <div class="text-gray-400 text-[10px] text-center">
-            You: <span class="text-amber-300">{me}</span>
-          </div>
+
+        <div class="px-5 py-2 border-t-2 border-[var(--line)] font-mono-ui text-[10px] text-[var(--text-mute)] uppercase tracking-widest text-center">
+          You: <span class="text-[var(--amber)]">{me}</span>
         </div>
-        <div class="mt-auto flex flex-col gap-2">
-          <button
-            onClick={openRecordings}
-            class="btn bg-sky-500/20 text-sky-300 text-xs py-2 tracking-wider border border-sky-500/30 hover:bg-sky-500/30"
-          >
-            BROWSE RECORDINGS
+
+        <div class="border-t-2 border-[var(--line)] p-4 flex flex-col gap-2">
+          <button onClick={openRecordings} class="arcade-btn arcade-btn-cyan w-full">
+            Browse recordings
           </button>
-          <button onClick={back} class="btn bg-gray-700 text-gray-300 text-xs py-2 tracking-wider hover:bg-gray-600">
-            BACK
+          <button onClick={back} class="arcade-btn arcade-btn-ghost w-full">
+            Back
           </button>
         </div>
       </div>

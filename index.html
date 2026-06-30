@@ -4,18 +4,133 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Blocky Pursuit</title>
-    <meta name="theme-color" content="#111827" />
+    <meta name="theme-color" content="#000000" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <link rel="apple-touch-icon" href="/icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    />
     <style>
+      :root {
+        --bg: #000;
+        --bg-1: #0a0a0a;
+        --bg-2: #141414;
+        --bg-3: #1f1f1f;
+        --line: #262626;
+        --line-2: #3a3a3a;
+        --text: #f5f5f5;
+        --text-dim: #a3a3a3;
+        --text-mute: #525252;
+        --amber: #fbbf24;
+        --amber-d: #b45309;
+        --cyan: #22d3ee;
+        --cyan-d: #0e7490;
+        --pink: #f472b6;
+        --red: #ef4444;
+        --red-d: #991b1b;
+      }
+      .font-pixel {
+        font-family: "Press Start 2P", "Courier New", monospace;
+        line-height: 1.4;
+      }
+      .font-mono-ui {
+        font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+      }
       button {
         outline: none !important;
         -webkit-tap-highlight-color: transparent;
+        font-family: inherit;
       }
       button:focus,
       button:focus-visible {
         outline: none !important;
         box-shadow: none !important;
+      }
+      /* Arcade button: solid bg + hard bottom shadow that collapses on press. The "click into the page" feel. */
+      .arcade-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: var(--amber);
+        color: #000;
+        font-family: "JetBrains Mono", monospace;
+        font-weight: 700;
+        font-size: 0.8125rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border: 2px solid #000;
+        border-bottom-width: 4px;
+        cursor: pointer;
+        transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+        user-select: none;
+      }
+      .arcade-btn:hover {
+        background: #fcd34d;
+      }
+      .arcade-btn:active {
+        transform: translateY(2px);
+        border-bottom-width: 2px;
+      }
+      .arcade-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .arcade-btn-cyan {
+        background: var(--cyan);
+      }
+      .arcade-btn-cyan:hover {
+        background: #67e8f9;
+      }
+      .arcade-btn-ghost {
+        background: var(--bg-3);
+        color: var(--text-dim);
+        border-color: #000;
+      }
+      .arcade-btn-ghost:hover {
+        background: var(--bg-2);
+        color: var(--text);
+      }
+      .arcade-btn-danger {
+        background: var(--red);
+        color: #000;
+      }
+      .arcade-btn-danger:hover {
+        background: #f87171;
+      }
+      .arcade-btn-sm {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.6875rem;
+        border-bottom-width: 3px;
+      }
+      .arcade-btn-sm:active {
+        border-bottom-width: 1px;
+      }
+      /* Pixel panel — hard border, no rounding, double-line for depth. */
+      .pixel-panel {
+        background: var(--bg-1);
+        border: 2px solid var(--line-2);
+        box-shadow: 0 0 0 1px #000, 4px 4px 0 0 rgba(0, 0, 0, 0.6);
+      }
+      /* Scanline overlay — subtle CRT vibe, fixed to viewport, never blocks input. */
+      .crt-scanlines::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 9999;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(0, 0, 0, 0) 0px,
+          rgba(0, 0, 0, 0) 2px,
+          rgba(0, 0, 0, 0.08) 3px,
+          rgba(0, 0, 0, 0) 4px
+        );
       }
       @keyframes game-over-in {
         0% {

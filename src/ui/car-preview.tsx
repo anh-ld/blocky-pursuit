@@ -2,7 +2,7 @@ import { type ICarSkin } from "../entities/car-skins";
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 
-/* Relative luminance — used to pick readable text color over the body paint. */
+/* Relative luminance — picks black or white text for AA contrast over the body paint. */
 function isLight(color: number): boolean {
   const r = ((color >> 16) & 0xff) / 255;
   const g = ((color >> 8) & 0xff) / 255;
@@ -10,10 +10,7 @@ function isLight(color: number): boolean {
   return 0.299 * r + 0.587 * g + 0.114 * b > 0.55;
 }
 
-/** Color-tone "paint chip" preview for a car skin. Previous SVG silhouette read as a generic blob. */
-/** Shows livery: dominant body paint, accent + cabin stripes, brand name prominent. Players identify by brand + color. */
-/** Shared by Pre-Game & Garage — single thumbnail renderer. */
-export function CarPreview({ skin }: { skin: ICarSkin }) {
+export function CarPreview({ skin, className = "" }: { skin: ICarSkin; className?: string }) {
   const body = hex(skin.bodyColor);
   const cabin = hex(skin.cabinColor);
   const accent = hex(skin.accentColor);
@@ -22,19 +19,23 @@ export function CarPreview({ skin }: { skin: ICarSkin }) {
 
   return (
     <div
-      class="relative w-full h-16 flex flex-col items-center justify-center overflow-hidden border border-whitef"
+      class={`relative w-full h-full min-h-12 flex flex-col items-center justify-center overflow-hidden ${className}`}
       style={{ background: body }}
     >
-      {/* Diagonal accent stripe */}
-      <div class="absolute inset-y-0 left-0 w-3" style={{ background: accent }} />
-      {/* Cabin tone stripe on the right */}
-      <div class="absolute inset-y-0 right-0 w-3" style={{ background: cabin }} />
-      <div class="text-[10px] font-extrabold uppercase tracking-widest leading-none" style={{ color: textColor }}>
+      <div class="absolute inset-y-0 left-0 w-2" style={{ background: accent }} />
+      <div class="absolute inset-y-0 right-0 w-2" style={{ background: cabin }} />
+      <span
+        class="font-pixel text-[10px] leading-none truncate max-w-full px-3 text-center"
+        style={{ color: textColor, textShadow: "1px 1px 0 rgba(0,0,0,0.35)" }}
+      >
         {skin.brand}
-      </div>
-      <div class="text-[8px] font-bold uppercase tracking-wider mt-1 leading-none" style={{ color: subColor }}>
+      </span>
+      <span
+        class="font-mono-ui text-[8px] font-bold uppercase tracking-wider leading-none mt-1 truncate max-w-full px-3 text-center"
+        style={{ color: subColor }}
+      >
         {skin.name.replace(skin.brand, "").trim() || "—"}
-      </div>
+      </span>
     </div>
   );
 }

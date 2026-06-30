@@ -1,6 +1,18 @@
 import { screen, bestScore, totalRuns, copsDrowned, selectedSkin, actions, gameState } from "../state";
-import { CAR_SKINS, isUnlocked, specPercent } from "../entities/car-skins";
+import { CAR_SKINS, isUnlocked, specPercent, type ISpecKey } from "../entities/car-skins";
 import { CarPreview } from "./car-preview";
+import { IconLock } from "./icons";
+
+const SPECS: Array<[string, ISpecKey]> = [
+  ["SPD", "topSpeed"],
+  ["ACC", "acceleration"],
+  ["HDL", "handling"],
+  ["GRP", "grip"],
+  ["STB", "stability"],
+  ["BRK", "braking"],
+  ["WGT", "weight"],
+  ["END", "endurance"],
+];
 
 export function Garage() {
   const back = () => {
@@ -14,9 +26,20 @@ export function Garage() {
   };
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-      <div class="bg-black/60 md:bg-black p-4 w-full h-full md:w-160 md:max-w-[90vw] md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col">
-        <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">Garage</div>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 md:max-h-120 overflow-y-auto py-2 -mx-4 px-4">
+      <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[720px] md:max-w-[92vw] bg-[var(--bg-1)] pointer-events-auto flex flex-col">
+        <div class="px-5 pt-5 pb-3 flex items-baseline justify-between border-b-2 border-[var(--line)]">
+          <h2
+            class="font-pixel text-[var(--amber)] text-xs leading-none"
+            style={{ textShadow: "2px 2px 0 #000" }}
+          >
+            GARAGE
+          </h2>
+          <span class="font-mono-ui text-[10px] text-[var(--text-mute)] uppercase tracking-widest">
+            {CAR_SKINS.filter((s) => isUnlocked(s, progress)).length}/{CAR_SKINS.length} unlocked
+          </span>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4 grid grid-cols-2 md:grid-cols-3 gap-2">
           {CAR_SKINS.map((s) => {
             const unlocked = isUnlocked(s, progress);
             const isSelected = selectedSkin.value === s.id;
@@ -24,58 +47,57 @@ export function Garage() {
               <button
                 disabled={!unlocked}
                 onClick={() => unlocked && actions.selectSkin(s.id)}
-                class={`p-2 border text-[10px] font-bold uppercase tracking-wider cursor-pointer flex flex-col items-center gap-1 ${
+                class={`p-2 text-left cursor-pointer flex flex-col gap-1.5 transition-colors ${
                   isSelected
-                    ? "border-amber-400 bg-amber-500/20"
+                    ? "bg-[var(--bg-3)] border-2 border-[var(--amber)]"
                     : unlocked
-                      ? "border-gray-600 bg-gray-800/40 hover:bg-gray-700/60"
-                      : "border-gray-800 bg-gray-900/40 opacity-50 cursor-not-allowed"
+                      ? "bg-[var(--bg-2)] border-2 border-[var(--line)] hover:border-[var(--line-2)]"
+                      : "bg-[var(--bg-1)] border-2 border-[var(--line)] opacity-50 cursor-not-allowed"
                 }`}
               >
-                <div class="w-full">
+                <div class="w-full h-16">
                   <CarPreview skin={s} />
                 </div>
-                <span class={`text-center leading-tight ${isSelected ? "text-amber-300" : "text-gray-300"}`}>
-                  {s.name}
-                </span>
-                {!unlocked ? (
-                  <span class="text-gray-500 text-[9px] normal-case">🔒 {s.unlockHint}</span>
-                ) : (
-                  <div class="w-full flex flex-col gap-0.5 mt-1">
-                    {(
-                      [
-                        ["SPD", specPercent("topSpeed", s.specs)],
-                        ["ACC", specPercent("acceleration", s.specs)],
-                        ["HDL", specPercent("handling", s.specs)],
-                        ["GRP", specPercent("grip", s.specs)],
-                        ["STB", specPercent("stability", s.specs)],
-                        ["BRK", specPercent("braking", s.specs)],
-                        ["WGT", specPercent("weight", s.specs)],
-                        ["END", specPercent("endurance", s.specs)],
-                      ] as const
-                    ).map(([label, pct]) => (
-                      <div class="flex items-center gap-1">
-                        <span class="text-gray-500 text-[8px] w-6">{label}</span>
-                        <div class="flex-1 h-1 bg-gray-800">
-                          <div
-                            class={isSelected ? "h-full bg-amber-400" : "h-full bg-gray-400"}
-                            style={{ width: `${pct}%` }}
-                          />
+                <div class="flex flex-col gap-0.5">
+                  <span
+                    class={`font-mono-ui text-[10px] font-bold uppercase tracking-wider leading-tight ${
+                      isSelected ? "text-[var(--amber)]" : "text-[var(--text)]"
+                    }`}
+                  >
+                    {s.name}
+                  </span>
+                  {!unlocked ? (
+                    <span class="font-mono-ui text-[8px] text-[var(--text-mute)] normal-case flex items-center gap-1">
+                      <IconLock size={9} />
+                      {s.unlockHint}
+                    </span>
+                  ) : (
+                    <div class="flex flex-col gap-[2px] mt-0.5">
+                      {SPECS.map(([label, key]) => (
+                        <div key={label} class="flex items-center gap-1">
+                          <span class="font-mono-ui text-[8px] text-[var(--text-mute)] w-5">{label}</span>
+                          <div class="flex-1 h-[3px] bg-[var(--bg-3)]">
+                            <div
+                              class="h-full"
+                              style={{
+                                width: `${specPercent(key, s.specs)}%`,
+                                background: isSelected ? "var(--amber)" : "var(--text-dim)",
+                              }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </button>
             );
           })}
         </div>
-        <div class="mt-auto">
-          <button
-            onClick={back}
-            class="w-full py-2 bg-gray-700 text-gray-300 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
-          >
-            BACK
+
+        <div class="border-t-2 border-[var(--line)] p-4">
+          <button onClick={back} class="arcade-btn arcade-btn-ghost w-full">
+            Back
           </button>
         </div>
       </div>

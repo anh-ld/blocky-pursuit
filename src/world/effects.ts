@@ -108,11 +108,12 @@ export function initEffects(scene: THREE.Scene) {
       particles.push({ mesh, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0, active: false });
     }
     for (let i = 0; i < RING_POOL_SIZE; i++) {
-      const mesh = new THREE.Mesh(RING_GEO, EMP_RING_MAT);
+      const mat = RING_BASE_MAT.clone();
+      const mesh = new THREE.Mesh(RING_GEO, mat);
       mesh.rotation.x = -Math.PI / 2;
       mesh.visible = false;
       scene.add(mesh);
-      ringPool.push({ mesh, age: 0, life: 0, maxRadius: 0, active: false });
+      ringPool.push({ mesh, mat, age: 0, life: 0, maxRadius: 0, active: false });
     }
   }
 }
@@ -203,13 +204,15 @@ export function spawnConfetti(x: number, y: number, z: number) {
 /* Expanding rings (EMP, etc.) Pre-allocated pool: EMP is rare so 4 simultaneous rings is plenty. */
 type IRingSlot = {
   mesh: THREE.Mesh;
+  mat: THREE.MeshBasicMaterial;
   age: number;
   life: number;
   maxRadius: number;
   active: boolean;
 };
 const RING_GEO = new THREE.RingGeometry(0.95, 1.0, 48);
-const EMP_RING_MAT = new THREE.MeshBasicMaterial({
+/* Template for the shared color/flags; per-slot materials clone this so concurrent rings fade independently. */
+const RING_BASE_MAT = new THREE.MeshBasicMaterial({
   color: 0x66ddff,
   transparent: true,
   side: THREE.DoubleSide,
@@ -223,6 +226,7 @@ export function spawnRing(x: number, y: number, z: number, maxRadius: number, li
   slot.mesh.position.set(x, y + 0.1, z);
   slot.mesh.scale.set(0.1, 0.1, 0.1);
   slot.mesh.visible = true;
+  slot.mat.opacity = 1;
   slot.age = 0;
   slot.life = life;
   slot.maxRadius = maxRadius;
@@ -241,8 +245,7 @@ function updateRings(dt: number) {
     }
     const scale = r.maxRadius * t;
     r.mesh.scale.set(scale, scale, scale);
-    /* Note: this mutates the shared material — fine because all rings share opacity scaling and only briefly overlap. */
-    (r.mesh.material as THREE.MeshBasicMaterial).opacity = 1 - t;
+    r.mat.opacity = 1 - t;
   }
 }
 

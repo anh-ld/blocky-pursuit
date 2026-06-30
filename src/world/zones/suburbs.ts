@@ -4,6 +4,25 @@ import type { IMaterials, IGeometries } from "../materials";
 import type { IChunkData } from "../city-generator";
 import { addTree, addFlowers, addWindows } from "../decorators";
 
+/* Roof geometry cache. Buckets (w, d, roofH) to 0.5u → at most 9*9*2 = 162 entries; materials live in IMaterials and dispose via CityGenerator.dispose(). Previous code allocated per house and never freed. */
+const _roofGeoCache = new Map<string, THREE.ExtrudeGeometry>();
+
+function getRoofGeometry(width: number, depth: number, roofH: number): THREE.ExtrudeGeometry {
+  const key = `${Math.round(width * 2) / 2}_${Math.round(depth * 2) / 2}_${Math.round(roofH * 2) / 2}`;
+  let geo = _roofGeoCache.get(key);
+  if (!geo) {
+    const roofW = width / 2 + 0.3;
+    const shape = new THREE.Shape();
+    shape.moveTo(-roofW, 0);
+    shape.lineTo(0, roofH);
+    shape.lineTo(roofW, 0);
+    shape.closePath();
+    geo = new THREE.ExtrudeGeometry(shape, { depth: depth + 0.6, bevelEnabled: false });
+    _roofGeoCache.set(key, geo);
+  }
+  return geo;
+}
+
 export function placeSuburbs(
   chunk: IChunkData,
   materials: IMaterials,
@@ -39,26 +58,10 @@ export function placeSuburbs(
 
     addWindows(chunk, geometries, materials, x, z, width, height, depth);
 
-    /* Pitched roof */
     const roofOverhang = 0.3;
-    const roofW = width / 2 + roofOverhang;
     const roofH = 0.8 + r2 * 0.6;
-    const roofShape = new THREE.Shape();
-    roofShape.moveTo(-roofW, 0);
-    roofShape.lineTo(0, roofH);
-    roofShape.lineTo(roofW, 0);
-    roofShape.closePath();
-    const roofGeo = new THREE.ExtrudeGeometry(roofShape, {
-      depth: depth + roofOverhang * 2,
-      bevelEnabled: false,
-    });
-    const roofColors = [0x8d6e63, 0x795548, 0xa1887f, 0xc62828, 0xd84315, 0x37474f, 0x4e342e, 0x1b5e20];
-    const roofColorIdx = Math.floor(r4 * roofColors.length);
-    const roofMat = new THREE.MeshStandardMaterial({
-      color: roofColors[roofColorIdx],
-      roughness: 0.8,
-      flatShading: true,
-    });
+    const roofGeo = getRoofGeometry(width, depth, roofH);
+    const roofMat = materials.roofColors[Math.floor(r4 * materials.roofColors.length)];
     const roofMesh = new THREE.Mesh(roofGeo, roofMat);
     roofMesh.position.set(x, height, z - depth / 2 - roofOverhang);
     roofMesh.castShadow = true;

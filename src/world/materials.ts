@@ -34,6 +34,9 @@ export function createMaterials() {
     suburbColors: [0xef9a9a, 0xf48fb1, 0xce93d8, 0x9fa8da, 0x80cbc4, 0xa5d6a7, 0xffe082, 0xffcc80, 0xbcaaa4].map(
       (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.05, ...flat }),
     ),
+    roofColors: [0x8d6e63, 0x795548, 0xa1887f, 0xc62828, 0xd84315, 0x37474f, 0x4e342e, 0x1b5e20].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, ...flat }),
+    ),
     window: new THREE.MeshStandardMaterial({
       color: 0xbbdefb,
       emissive: 0x90caf9,

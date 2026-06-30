@@ -836,6 +836,17 @@ document.addEventListener(
   { signal: listenerSignal },
 );
 
+/* Release GPU buffers + window listeners on tab close; browser reclaims un-disposed materials via context destroy, but explicit disposes keep DevTools clean. */
+window.addEventListener(
+  "pagehide",
+  () => {
+    attempt(() => cityGenerator.dispose());
+    attempt(() => renderer.dispose());
+    attempt(() => car.dispose());
+  },
+  { signal: listenerSignal },
+);
+
 /* Start the loop */
 requestAnimationFrame(animate);
 

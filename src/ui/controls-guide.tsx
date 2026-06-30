@@ -16,9 +16,7 @@ export function ControlsGuide() {
         <span class="text-gray-300">{name}</span>
       </div>
       <div class="h-9 px-3 bg-black/60 text-xs font-normal tracking-wide flex items-center">
-        <span style={{ color: `#${skin.bodyColor.toString(16).padStart(6, "0")}` }}>
-          {skin.name}
-        </span>
+        <span style={{ color: `#${skin.bodyColor.toString(16).padStart(6, "0")}` }}>{skin.name}</span>
       </div>
       <div class="h-9 flex items-stretch bg-black/60 pointer-events-auto">
         {WEATHERS.map((w) => {

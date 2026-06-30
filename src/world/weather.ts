@@ -6,7 +6,7 @@ export type IWeatherPreset = {
   id: IWeatherId;
   label: string;
   icon: string;
-  sky: [string, string, string]; // top, mid, bottom
+  sky: [string, string, string] /* top, mid, bottom */;
   fogColor: number;
   fogNear: number;
   fogFar: number;
@@ -101,13 +101,10 @@ function makeSkyTexture(top: string, mid: string, bottom: string): THREE.CanvasT
   return tex;
 }
 
-// --- Rain particle system ---------------------------------------------------
-// Vertical streaks rendered as LineSegments above the player. Each streak is
-// two vertices (top + bottom) packed into a single BufferGeometry. Streaks
-// fall, then recycle to a fresh random position above the camera follow area.
+/* Rain particles — vertical streaks as LineSegments above the player. Each streak is 2 vertices in one BufferGeometry. */
 
 const RAIN_COUNT = 600;
-const RAIN_AREA = 90; // half-extent of the box around the player
+const RAIN_AREA = 90; /* half-extent of the box around the player */
 const RAIN_HEIGHT = 60;
 const RAIN_FALL_SPEED = 70;
 const RAIN_STREAK_LEN = 1.4;
@@ -149,8 +146,7 @@ export function createRain(scene: THREE.Scene): IRain {
 
 export function updateRain(rain: IRain, dt: number, centerX: number, centerZ: number) {
   if (!rain.enabled) return;
-  // Streak positions are stored in local space relative to the group, which
-  // we anchor on the player so the rain field always surrounds them.
+  /* Streak positions in local space relative to the group, anchored on the player so the field always surrounds them. */
   rain.group.position.x = centerX;
   rain.group.position.z = centerZ;
   const pos = rain.positions;
@@ -179,9 +175,7 @@ export function setRainEnabled(rain: IRain, enabled: boolean) {
   rain.group.visible = enabled;
 }
 
-// --- Snow particle system ---------------------------------------------------
-// Drifting flakes rendered as Points. Slower fall than rain, with a sideways
-// sin-wave drift so the field feels alive instead of marching straight down.
+/* Snow particles — drifting flakes as Points. Slower than rain, with sideways sin-wave drift so the field feels alive. */
 
 const SNOW_COUNT = 700;
 const SNOW_AREA = 90;
@@ -222,10 +216,8 @@ export function createSnow(scene: THREE.Scene): ISnow {
   }
   const geom = new THREE.BufferGeometry();
   geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  // sizeAttenuation:false → pixel-sized points, which matters under our
-  // orthographic camera where world-scaled points become unreadably tiny.
-  // fog:false → snowy weather uses near-white fog, so fog-tinted flakes would
-  // disappear into the background.
+  /* sizeAttenuation:false → pixel-sized; world-scaled points become unreadably tiny under our ortho camera. */
+  /* fog:false → near-white fog would tint flakes into the background. */
   const mat = new THREE.PointsMaterial({
     color: 0xffffff,
     size: 6,
@@ -253,7 +245,7 @@ export function updateSnow(snow: ISnow, dt: number, centerX: number, centerZ: nu
   for (let i = 0; i < SNOW_COUNT; i++) {
     const o = i * 3;
     pos[o + 1] -= fall;
-    // Sideways drift wobble
+    /* Sideways drift wobble */
     pos[o + 0] += Math.sin(snow.time * 0.8 + snow.phases[i]) * SNOW_DRIFT_AMP * dt;
     if (pos[o + 1] < 0) {
       pos[o + 0] = (Math.random() - 0.5) * 2 * SNOW_AREA;
@@ -269,33 +261,28 @@ export function setSnowEnabled(snow: ISnow, enabled: boolean) {
   snow.group.visible = enabled;
 }
 
-// --- Weather → driving modifiers --------------------------------------------
-// Multiplicative knobs that car-physics applies each tick. Defaults are 1.0
-// (no change). Lower grip = car retains more lateral velocity (slippery).
+/* Weather → driving modifiers. Multiplicative knobs car-physics applies each tick. Defaults = 1.0 (no change). */
 
 export type IWeatherModifiers = {
   topSpeedMul: number;
   accelMul: number;
-  // Added to gripFactor (which is 0.72..0.95). Positive = looser/slipperier.
+  /* Added to gripFactor (which is 0.72..0.95). Positive = looser/slipperier. */
   gripAdd: number;
 };
 
 const WEATHER_MODIFIERS: Record<IWeatherId, IWeatherModifiers> = {
-  sunny:  { topSpeedMul: 1.05, accelMul: 1.05, gripAdd: 0.00 },
-  fog:    { topSpeedMul: 0.95, accelMul: 1.00, gripAdd: 0.00 },
-  rain:   { topSpeedMul: 0.92, accelMul: 0.90, gripAdd: 0.04 },
-  sunset: { topSpeedMul: 1.00, accelMul: 1.00, gripAdd: 0.00 },
-  snowy:  { topSpeedMul: 0.80, accelMul: 0.75, gripAdd: 0.07 },
+  sunny: { topSpeedMul: 1.05, accelMul: 1.05, gripAdd: 0.0 },
+  fog: { topSpeedMul: 0.95, accelMul: 1.0, gripAdd: 0.0 },
+  rain: { topSpeedMul: 0.92, accelMul: 0.9, gripAdd: 0.04 },
+  sunset: { topSpeedMul: 1.0, accelMul: 1.0, gripAdd: 0.0 },
+  snowy: { topSpeedMul: 0.8, accelMul: 0.75, gripAdd: 0.07 },
 };
 
 export function getWeatherModifiers(id: IWeatherId): IWeatherModifiers {
   return WEATHER_MODIFIERS[id] ?? WEATHER_MODIFIERS.sunny;
 }
 
-/**
- * Human-readable summary of a weather's driving modifiers, for the
- * pre-game preview line. Renders ~30 chars max so it fits the panel.
- */
+/** Human-readable summary of a weather's modifiers, for the pre-game preview. ~30 chars max. */
 export function getWeatherSummary(id: IWeatherId): string {
   const m = getWeatherModifiers(id);
   const parts: string[] = [];
@@ -319,7 +306,7 @@ export function applyWeather(
   id: IWeatherId,
 ) {
   const w = WEATHERS.find((x) => x.id === id) ?? WEATHERS[0];
-  // Dispose old sky texture to avoid GPU leaks on switch
+  /* Dispose old sky texture to avoid GPU leaks on switch */
   const prev = scene.background;
   if (prev && (prev as THREE.CanvasTexture).isTexture) {
     (prev as THREE.CanvasTexture).dispose();

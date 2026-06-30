@@ -1,8 +1,6 @@
 import * as THREE from "three";
 
-// World-space text floaters: rendered as billboarded sprites with a
-// per-popup canvas texture. Cap is small (12) so allocating a fresh
-// texture per popup is fine — they tear down quickly.
+/* World-space text floaters: billboarded sprites, per-popup canvas texture. Cap is 12 — fresh texture per popup is fine. */
 
 type IPopup = {
   sprite: THREE.Sprite;
@@ -31,7 +29,7 @@ function makeTexture(text: string, color: string): { texture: THREE.CanvasTextur
   const textWidth = Math.ceil(ctx.measureText(text).width);
   canvas.width = Math.max(64, textWidth + POPUP_PAD_X * 2);
   canvas.height = POPUP_HEIGHT;
-  // Setting canvas dimensions resets the context, so reapply font/styles.
+  /* Setting canvas dimensions resets the context, so reapply font/styles. */
   ctx.font = POPUP_FONT;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -58,7 +56,7 @@ export function spawnPopup(
   scaleX: number = 8,
 ) {
   if (!popupScene) return;
-  // Drop the oldest popup if at cap so a flurry of pickups doesn't queue up
+  /* Drop the oldest popup if at cap so a flurry of pickups doesn't queue up */
   if (popups.length >= MAX_POPUPS) {
     const oldest = popups.shift()!;
     popupScene.remove(oldest.sprite);
@@ -69,20 +67,16 @@ export function spawnPopup(
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(material);
   sprite.position.set(x, y + 2, z);
-  // Height is driven by scaleX so callers keep their existing sizing intent;
-  // width follows the measured text aspect so long messages aren't squished.
+  /* Height driven by scaleX so callers keep their sizing intent; width follows text aspect so long messages aren't squished. */
   const height = scaleX * 0.25;
   sprite.scale.set(height * aspect, height, 1);
   popupScene.add(sprite);
-  // Long-lived tip popups drift more slowly so they stay readable.
+  /* Long-lived tip popups drift more slowly so they stay readable. */
   const vy = life > 1.5 ? 2.5 : 6;
   popups.push({ sprite, texture, vy, age: 0, life });
 }
 
-/**
- * Tear down every active popup. Called from startGame() so a rage-restart
- * mid-combo doesn't carry stale "x5" / pickup labels into the next run.
- */
+/** Tear down every active popup. Called from startGame() so a mid-combo rage-restart doesn't carry stale labels. */
 export function clearPopups() {
   if (!popupScene) return;
   for (const p of popups) {

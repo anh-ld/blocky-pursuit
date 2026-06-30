@@ -6,6 +6,7 @@ src/uno.css
 .claude
 .qwen
 .codex
-CLAUDE.md
-AGENTS.md
+.agents
 output
+skills-lock.json
+.oxfmtrc.json

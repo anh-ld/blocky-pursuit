@@ -1,6 +1,17 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
-import { CHUNK_SIZE, TILE_SIZE, TILES_PER_CHUNK, Zone, pseudoRandom, getZone, isRoad, isWater, isShore, isDeepWater } from "./terrain";
+import {
+  CHUNK_SIZE,
+  TILE_SIZE,
+  TILES_PER_CHUNK,
+  Zone,
+  pseudoRandom,
+  getZone,
+  isRoad,
+  isWater,
+  isShore,
+  isDeepWater,
+} from "./terrain";
 import { createMaterials, createGeometries, tickWaterMaterial, type IMaterials, type IGeometries } from "./materials";
 import { placeDowntown } from "./zones/downtown";
 import { placeSuburbs } from "./zones/suburbs";
@@ -8,10 +19,8 @@ import { placeNature, placeWaterDecor, placeShoreDecor } from "./zones/nature";
 
 export { isRoad } from "./terrain";
 
-// --- Easter egg: "🇻🇳 ANH LE" stencil baked into the asphalt of rare
-// road tiles. Uses a single shared CanvasTexture + PlaneGeometry so every
-// occurrence in the world is the same draw call setup. The author signs
-// his work like a real road department.
+/* Easter egg: "🇻🇳 ANH LE" stencil baked into rare road tiles. Shared CanvasTexture + PlaneGeometry. */
+/* Author signs his work like a real road department. */
 function makeAnhLeTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = 320;
@@ -19,20 +28,20 @@ function makeAnhLeTexture(): THREE.CanvasTexture {
   const cctx = c.getContext("2d")!;
   cctx.clearRect(0, 0, c.width, c.height);
 
-  // Vietnam flag — red rectangle (3:2 ratio) with a yellow 5-point star
+  /* Vietnam flag — red rectangle (3:2 ratio) with a yellow 5-point star */
   const flagX = 12;
   const flagY = 10;
   const flagW = 66;
   const flagH = 44;
-  cctx.fillStyle = "#da251d"; // Vietnam red
+  cctx.fillStyle = "#da251d"; /* Vietnam red */
   cctx.fillRect(flagX, flagY, flagW, flagH);
 
-  // Yellow 5-point star centered in the flag
+  /* Yellow 5-point star centered in the flag */
   const sx = flagX + flagW / 2;
   const sy = flagY + flagH / 2;
   const outerR = 15;
   const innerR = 6;
-  cctx.fillStyle = "#ffcd00"; // Vietnam yellow
+  cctx.fillStyle = "#ffcd00"; /* Vietnam yellow */
   cctx.beginPath();
   for (let i = 0; i < 10; i++) {
     const r = i % 2 === 0 ? outerR : innerR;
@@ -45,9 +54,7 @@ function makeAnhLeTexture(): THREE.CanvasTexture {
   cctx.closePath();
   cctx.fill();
 
-  // "ANH LE" text fills the right portion of the canvas. Letters are
-  // drawn one at a time so we can apply manual letter-spacing — Canvas2D
-  // has no `letterSpacing` field on every browser yet.
+  /* "ANH LE" in right portion. One letter at a time for manual letter-spacing (no Canvas2D letterSpacing on every browser). */
   cctx.font = "bold 44px sans-serif";
   cctx.fillStyle = "#ffffff";
   cctx.textAlign = "left";
@@ -67,8 +74,7 @@ function makeAnhLeTexture(): THREE.CanvasTexture {
   return tex;
 }
 const ANH_LE_TEX = makeAnhLeTexture();
-// Plane aspect roughly matches the canvas (320:64 ≈ 5:1) so the flag and
-// text don't get squashed.
+/* Plane aspect roughly matches the canvas (320:64 ≈ 5:1) so the flag and text don't get squashed. */
 const ANH_LE_GEO = new THREE.PlaneGeometry(8, 1.6);
 const ANH_LE_MAT = new THREE.MeshBasicMaterial({
   map: ANH_LE_TEX,
@@ -156,19 +162,19 @@ export class CityGenerator {
         const isDeep = isWaterTile && isDeepWater(globalTileX, globalTileZ);
         const isShoreTile = !isRoadTile && !isWaterTile && isShore(globalTileX, globalTileZ);
 
-        // Ground tile — pick material based on zone + role
+        /* Ground tile — pick material based on zone + role */
         let groundMat = this.materials.grass;
         let tileY = 0.01;
         if (isRoadTile) {
           groundMat = this.materials.road;
         } else if (isWaterTile) {
-          // Sunken so water reads as below the land surface — visible depth.
+          /* Sunken so water reads as below the land surface — visible depth. */
           groundMat = isDeep ? this.materials.waterDeep : this.materials.water;
           tileY = -0.18;
         } else if (isShoreTile) {
           groundMat = this.materials.sand;
         } else if (zone === Zone.NATURE) {
-          // Ground variation: grass shades + occasional sand/dirt patches.
+          /* Ground variation: grass shades + occasional sand/dirt patches. */
           const v = pseudoRandom(globalTileX, globalTileZ, 50);
           if (v < 0.08) groundMat = this.materials.dirt;
           else if (v < 0.16) groundMat = this.materials.sand;
@@ -183,25 +189,25 @@ export class CityGenerator {
         tileMesh.receiveShadow = true;
         chunk.group.add(tileMesh);
 
-        // Water
+        /* Water */
         if (isWaterTile) {
           placeWaterDecor(chunk, this.materials, this.geometries, globalTileX, globalTileZ, worldX, worldZ);
           continue;
         }
 
-        // Shore: sand tile + reeds/cattails along the water edge
+        /* Shore: sand tile + reeds/cattails along the water edge */
         if (isShoreTile) {
           placeShoreDecor(chunk, this.materials, this.geometries, globalTileX, globalTileZ, worldX, worldZ);
           continue;
         }
 
-        // Road markings
+        /* Road markings */
         if (isRoadTile) {
           this.addRoadMarkings(chunk, globalTileX, globalTileZ, worldX, worldZ);
           continue;
         }
 
-        // Zone objects
+        /* Zone objects */
         const r1 = pseudoRandom(globalTileX, globalTileZ, 1);
         const r2 = pseudoRandom(globalTileX, globalTileZ, 2);
         const r3 = pseudoRandom(globalTileX, globalTileZ, 3);
@@ -252,15 +258,12 @@ export class CityGenerator {
       chunk.group.add(dashMesh);
     }
 
-    // Easter egg: ~1.5% of straight road tiles get the "ANH LE" stencil.
-    // Deterministic via pseudoRandom so the same tile always has it on
-    // chunk reload, and so it can't ever land on the same tile as a dash
-    // (the seed is different).
+    /* Easter egg: ~1.5% of straight road tiles get "ANH LE" stencil. Deterministic — same tile always has it on reload. */
+    /* Different seed (999) so it never lands on a tile that also has a dash. */
     if (pseudoRandom(tileX, tileZ, 999) < 0.015) {
       const eggMesh = new THREE.Mesh(ANH_LE_GEO, ANH_LE_MAT);
       eggMesh.rotation.x = -Math.PI / 2;
-      // Align the long axis of the text with the road direction so the
-      // stencil reads as you drive over it.
+      /* Align the long axis of the text with the road direction so the stencil reads as you drive over it. */
       if (isNS) eggMesh.rotation.z = Math.PI / 2;
       eggMesh.position.set(worldX, 0.04, worldZ);
       chunk.group.add(eggMesh);
@@ -285,9 +288,8 @@ export class CityGenerator {
 
   unloadChunk(key: string, chunk: IChunkData) {
     this.scene.remove(chunk.group);
-    // All geometries and materials are shared instances owned by
-    // this.geometries / this.materials — do not dispose them here.
-    // Clearing children releases the Mesh JS objects for GC.
+    /* All geometries/materials are shared instances owned by this.geometries / this.materials — do NOT dispose them here. */
+    /* Clearing children releases Mesh JS objects for GC. */
     chunk.group.clear();
     for (const body of chunk.bodies) {
       this.world.removeBody(body);

@@ -1,8 +1,6 @@
 import * as THREE from "three";
 
-// --- Time slow (combo milestone juice) ---
-// Brief gameplay slowdown when triggered. Game-loop scales physics + entity
-// dt by getTimeSlowFactor() while particles/popups stay at real time.
+/* Time slow (combo juice) — brief slowdown. Loop scales physics + entity dt via getTimeSlowFactor(); UI stays real-time. */
 let timeSlowTimer = 0;
 const TIME_SLOW_DURATION = 0.4;
 const TIME_SLOW_MIN_FACTOR = 0.35;
@@ -14,7 +12,7 @@ export function triggerTimeSlow() {
 /** 0..1 — multiply real dt by this for gameplay-affecting updates. */
 export function getTimeSlowFactor(): number {
   if (timeSlowTimer <= 0) return 1;
-  // Ease back toward 1 over the duration so the resume is smooth
+  /* Ease back toward 1 over the duration so the resume is smooth */
   const t = 1 - timeSlowTimer / TIME_SLOW_DURATION;
   return TIME_SLOW_MIN_FACTOR + (1 - TIME_SLOW_MIN_FACTOR) * t;
 }
@@ -23,14 +21,8 @@ export function updateTimeSlow(dt: number) {
   if (timeSlowTimer > 0) timeSlowTimer = Math.max(0, timeSlowTimer - dt);
 }
 
-/**
- * Reset the module-level effect timers (shake, time-slow) AND clear the
- * screen-flash overlay opacity. Called on `startGame()` so a fresh run
- * never inherits residual shake/slow-mo from the previous run's death.
- *
- * Note: this does NOT reset the particle pool — that's `clearParticles()`,
- * called separately. Splitting them keeps the responsibilities obvious.
- */
+/** Reset effect timers (shake, time-slow) + flash. startGame() calls this so a fresh run never inherits shake/slow-mo. */
+/* Particle pool NOT reset here — see clearParticles(). */
 export function clearEffects() {
   shakeIntensity = 0;
   shakeTime = 0;
@@ -38,9 +30,7 @@ export function clearEffects() {
   if (flashEl) flashEl.style.opacity = "0";
 }
 
-// --- Screen flash (DOM overlay) ---
-// Initialized lazily with a target element. Triggers a brief white flash via
-// CSS opacity transition — independent of the WebGL canvas.
+/* Screen flash (DOM overlay) — initialized lazily. Brief white flash via CSS opacity, independent of WebGL canvas. */
 let flashEl: HTMLDivElement | null = null;
 
 export function initScreenFlash(parent: HTMLElement) {
@@ -59,7 +49,7 @@ export function triggerScreenFlash(strength: number = 0.5) {
   }, 90);
 }
 
-// --- Camera shake ---
+/* Camera shake */
 let shakeIntensity = 0;
 let shakeTime = 0;
 
@@ -79,12 +69,8 @@ export function applyShake(camera: THREE.Camera, dt: number) {
   if (shakeTime <= 0) shakeIntensity = 0;
 }
 
-// --- Particles (mesh-pooled) ---
-// Pre-allocate a fixed pool of THREE.Mesh particles. Emit() finds an
-// inactive mesh, reassigns its material/position/velocity and flips
-// visibility. Death just hides — no scene add/remove churn, no GC pressure.
-// At peak intensity (EMP + multi-confetti) we need ~150 simultaneous
-// particles; 256 gives headroom.
+/* Particles (mesh-pooled) — pre-allocate fixed pool of THREE.Mesh. Emit() reassigns material/pos/vel, flips visibility. */
+/* Death just hides — no churn, no GC. Peak ~150; 256 headroom. */
 const POOL_SIZE = 256;
 
 type IParticle = {
@@ -113,8 +99,7 @@ const CONFETTI_MATS = [
 
 export function initEffects(scene: THREE.Scene) {
   particleScene = scene;
-  // Build pools once. Meshes start hidden and parented to the scene so
-  // future emits never touch the scene graph.
+  /* Build pools once. Meshes start hidden and parented to the scene so future emits never touch the scene graph. */
   if (particles.length === 0) {
     for (let i = 0; i < POOL_SIZE; i++) {
       const mesh = new THREE.Mesh(PARTICLE_GEO, SPARK_MAT);
@@ -132,11 +117,7 @@ export function initEffects(scene: THREE.Scene) {
   }
 }
 
-/**
- * Find an inactive particle slot and configure it. Returns false if the
- * pool is fully saturated — caller should treat that as an acceptable drop
- * (peak particle storms don't need every single sprite to land).
- */
+/** Find an inactive particle slot and configure it. Returns false if pool is saturated — caller treats that as a drop. */
 function acquire(
   x: number,
   y: number,
@@ -191,15 +172,11 @@ export function spawnSplash(x: number, y: number, z: number) {
   emit(x, y, z, SPLASH_MAT, 16, 6, 0.7);
 }
 
-/**
- * Streaky white particles trailing behind the car at peak speed. Cheap
- * "I'm flying" cue — uses the existing pool, no extra geometry/material.
- * Caller passes the car's heading so streaks can launch backward along it.
- */
+/** Streaky white particles trailing behind car at peak speed. Cheap "I'm flying" cue — existing pool. */
+/* Caller passes heading; streaks launch backward along it. */
 export function spawnSpeedLine(x: number, y: number, z: number, headingX: number, headingZ: number) {
   if (!particleScene) return;
-  // Start the streak slightly behind the car, kick it backward fast so it
-  // shoots past the camera. Tiny vertical jitter keeps them from stacking.
+  /* Start slightly behind the car, kick backward fast so it shoots past the camera. Tiny vertical jitter prevents stacking. */
   const back = -8;
   const ok = acquire(
     x + headingX * 0.5,
@@ -218,22 +195,12 @@ export function spawnConfetti(x: number, y: number, z: number) {
   if (!particleScene) return;
   for (let i = 0; i < 20; i++) {
     const mat = CONFETTI_MATS[i % CONFETTI_MATS.length];
-    const ok = acquire(
-      x,
-      y,
-      z,
-      mat,
-      (Math.random() - 0.5) * 6,
-      Math.random() * 6 + 2,
-      (Math.random() - 0.5) * 6,
-      0.8,
-    );
+    const ok = acquire(x, y, z, mat, (Math.random() - 0.5) * 6, Math.random() * 6 + 2, (Math.random() - 0.5) * 6, 0.8);
     if (!ok) return;
   }
 }
 
-// --- Expanding rings (EMP, etc.) ---
-// Pre-allocated pool: EMP is rare so 4 simultaneous rings is plenty.
+/* Expanding rings (EMP, etc.) Pre-allocated pool: EMP is rare so 4 simultaneous rings is plenty. */
 type IRingSlot = {
   mesh: THREE.Mesh;
   age: number;
@@ -252,7 +219,7 @@ const ringPool: IRingSlot[] = [];
 
 export function spawnRing(x: number, y: number, z: number, maxRadius: number, life: number = 0.45) {
   const slot = ringPool.find((r) => !r.active);
-  if (!slot) return; // pool empty (not yet init) or saturated — acceptable drop
+  if (!slot) return; /* pool empty (not yet init) or saturated — acceptable drop */
   slot.mesh.position.set(x, y + 0.1, z);
   slot.mesh.scale.set(0.1, 0.1, 0.1);
   slot.mesh.visible = true;
@@ -274,17 +241,13 @@ function updateRings(dt: number) {
     }
     const scale = r.maxRadius * t;
     r.mesh.scale.set(scale, scale, scale);
-    // Note: this mutates the shared material — fine because all rings
-    // share opacity scaling and only briefly overlap.
+    /* Note: this mutates the shared material — fine because all rings share opacity scaling and only briefly overlap. */
     (r.mesh.material as THREE.MeshBasicMaterial).opacity = 1 - t;
   }
 }
 
-/**
- * Hide every active particle and release its slot. Called from startGame()
- * so debris from the previous run's death moment doesn't bleed into the
- * fresh run. Rings (one-shot allocations) are also cleared.
- */
+/** Hide every active particle, release its slot. Called from startGame() so prior run's death debris doesn't bleed in. */
+/* Rings cleared too. */
 export function clearParticles() {
   for (const p of particles) {
     if (!p.active) continue;
@@ -305,12 +268,12 @@ export function updateEffects(dt: number) {
     if (!p.active) continue;
     p.life -= dt;
     if (p.life <= 0) {
-      // Release back to the pool: hide, mark inactive. Mesh stays parented.
+      /* Release back to the pool: hide, mark inactive. Mesh stays parented. */
       p.mesh.visible = false;
       p.active = false;
       continue;
     }
-    p.vy -= 18 * dt; // gravity
+    p.vy -= 18 * dt; /* gravity */
     p.mesh.position.x += p.vx * dt;
     p.mesh.position.y += p.vy * dt;
     p.mesh.position.z += p.vz * dt;

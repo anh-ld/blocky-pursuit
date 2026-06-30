@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { getSkin, type ICarSkin } from "./car-skins";
 
-// Voxel unit shared by both player and cop meshes.
+/* Voxel unit shared by both player and cop meshes. */
 export const CAR_UNIT = 0.5;
 
 export type ICarMeshHandles = {
@@ -10,11 +10,7 @@ export type ICarMeshHandles = {
   cabinMat: THREE.MeshStandardMaterial;
 };
 
-/**
- * Build the player car visual hierarchy. Geometry is parameterized by the
- * skin's `shape` field so each car has distinct proportions, optional
- * spoiler, racing stripe, or VinFast Vietnam flag on the roof.
- */
+/** Build player car visual hierarchy. Geometry per skin shape → distinct proportions + optional spoiler/stripe/flag. */
 export function buildCarMesh(skinId: string): ICarMeshHandles {
   const unit = CAR_UNIT;
   const group = new THREE.Group();
@@ -23,14 +19,14 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
   const s = skin.shape;
   const matProps = { roughness: 0.8, flatShading: true };
 
-  // Chassis
+  /* Chassis */
   const bodyGeo = new THREE.BoxGeometry(unit * s.bodyW, unit * s.bodyH, unit * s.bodyL);
   const bodyMat = new THREE.MeshStandardMaterial({ color: skin.bodyColor, ...matProps });
   const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
   bodyMesh.position.y = unit * (0.5 + s.bodyH / 2);
   group.add(bodyMesh);
 
-  // Cabin
+  /* Cabin */
   const cabinGeo = new THREE.BoxGeometry(unit * s.cabinW, unit * s.cabinH, unit * s.cabinL);
   const cabinMat = new THREE.MeshStandardMaterial({
     color: skin.cabinColor,
@@ -45,7 +41,7 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
 
   const roofY = bodyTopY + unit * s.cabinH + 0.01;
 
-  // Vietnam flag (VinFast only)
+  /* Vietnam flag (VinFast only) */
   if (s.hasFlag) {
     const flagSize = Math.min(s.cabinW, s.cabinL) * unit * 0.85;
     const flagGeo = new THREE.PlaneGeometry(flagSize, flagSize);
@@ -59,7 +55,7 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     flag.position.set(0, roofY, unit * s.cabinZ);
     group.add(flag);
 
-    // Yellow star on top of flag
+    /* Yellow star on top of flag */
     const starShape = new THREE.Shape();
     const starPoints = 5;
     const outerR = flagSize * 0.34;
@@ -85,7 +81,7 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     group.add(star);
   }
 
-  // Racing stripe along the body length (Mustang)
+  /* Racing stripe along the body length (Mustang) */
   if (s.hasStripe) {
     const stripeGeo = new THREE.PlaneGeometry(unit * 0.8, unit * s.bodyL * 0.95);
     const stripeMat = new THREE.MeshStandardMaterial({
@@ -99,9 +95,9 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     group.add(stripe);
   }
 
-  // Rear spoiler
+  /* Rear spoiler */
   if (s.hasSpoiler) {
-    // Two short uprights + one wide blade
+    /* Two short uprights + one wide blade */
     const uprightGeo = new THREE.BoxGeometry(unit * 0.25, unit * s.spoilerH, unit * 0.25);
     const spoilerMat = new THREE.MeshStandardMaterial({ color: skin.accentColor, ...matProps });
     const uprightL = new THREE.Mesh(uprightGeo, spoilerMat);
@@ -118,14 +114,14 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     group.add(blade);
   }
 
-  // Front grille
+  /* Front grille */
   const grilleGeo = new THREE.BoxGeometry(unit * (s.bodyW * 0.8), unit * 0.6, unit * 0.2);
   const grilleMat = new THREE.MeshStandardMaterial({ color: 0x222222, flatShading: true });
   const grille = new THREE.Mesh(grilleGeo, grilleMat);
   grille.position.set(0, unit * (0.5 + s.bodyH * 0.4), -unit * (s.bodyL / 2 + 0.1));
   group.add(grille);
 
-  // Headlights (front = -Z)
+  /* Headlights (front = -Z) */
   const headlightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
   const headlightMat = new THREE.MeshStandardMaterial({
     color: 0xffee88,
@@ -143,7 +139,7 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
   hlRight.position.set(hlX, hlY, hlZ);
   group.add(hlRight);
 
-  // Taillights (rear = +Z, red)
+  /* Taillights (rear = +Z, red) */
   const taillightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
   const taillightMat = new THREE.MeshStandardMaterial({
     color: 0xff2222,
@@ -159,7 +155,7 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
   tlRight.position.set(hlX, hlY, tlZ);
   group.add(tlRight);
 
-  // Wheels (4 corners, scaled to body size)
+  /* Wheels (4 corners, scaled to body size) */
   const wheelGeo = new THREE.BoxGeometry(unit, unit, unit);
   const wheelMat = new THREE.MeshStandardMaterial({ color: skin.wheelColor, ...matProps });
   const wx = unit * (s.bodyW / 2 + 0.05);

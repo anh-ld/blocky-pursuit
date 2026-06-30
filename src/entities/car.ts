@@ -23,19 +23,16 @@ export class Car {
   lateralSpeed: number;
   bodyBaseEmissive: THREE.Color;
   damageMul: number;
-  gripFactor: number;       // lateral velocity retained per tick (lower = grippier)
-  stabilityFactor: number;  // 0..1 — fraction of turn rate retained at top speed
-  // Per-skin baselines preserved so weather modifiers can recompute on the fly
-  // without permanently mutating the underlying spec values.
+  gripFactor: number; /* lateral velocity retained per tick (lower = grippier) */
+  stabilityFactor: number; /* 0..1 — fraction of turn rate retained at top speed */
+  /* Per-skin baselines — weather recomputes effective values on the fly without mutating underlying specs. */
   baseGripFactor: number;
   baseForwardForce: number;
   weatherTopSpeedMul: number;
   weatherAccelMul: number;
   weatherGripAdd: number;
   nitroMul: number;
-  // Bound listener refs kept so dispose() can detach them. Inline arrows
-  // would close over `this` but be unremoveable, leaking key handlers if
-  // the game ever instantiates more than one Car (e.g. mid-run swap).
+  /* Saved handler refs so dispose() can detach them. Inline arrows would close over `this` and leak across mid-run swaps. */
   private _onKeyDown!: (e: KeyboardEvent) => void;
   private _onKeyUp!: (e: KeyboardEvent) => void;
   private _onWindowTouchEnd: ((e: TouchEvent) => void) | null = null;
@@ -44,14 +41,14 @@ export class Car {
     this.scene = scene;
     this.world = world;
 
-    // --- Visuals (Three.js) ---
+    /* Visuals (Three.js) */
     const meshHandles = buildCarMesh(skinId);
     this.mesh = meshHandles.group;
     this.bodyMat = meshHandles.bodyMat;
     this.cabinMat = meshHandles.cabinMat;
     scene.add(this.mesh);
 
-    // --- Physics (Cannon-es) ---
+    /* Physics (Cannon-es) */
     const unit = CAR_UNIT;
     const shape = new CANNON.Box(new CANNON.Vec3(unit * 2, unit * 1.5, unit * 4));
     this.body = new CANNON.Body({
@@ -63,19 +60,17 @@ export class Car {
       sleepTimeLimit: 1,
       allowSleep: false,
     });
-    // Add shape with offset so center of mass is lower
+    /* Add shape with offset so center of mass is lower */
     this.body.addShape(shape, new CANNON.Vec3(0, unit, 0));
-    // Disable rotation on X and Z axes — only Y rotation, prevents flipping
+    /* Disable rotation on X and Z axes — only Y rotation, prevents flipping */
     this.body.angularFactor.set(0, 1, 0);
     this.body.wakeUp();
     world.addBody(this.body);
 
-    // --- Controls ---
+    /* Controls */
     this.keys = { left: false, right: false };
 
-    // --- Tuning (per-skin specs) ---
-    // Initialized here so TypeScript's definite-assignment is satisfied;
-    // real values are written in applySpecs() below.
+    /* Tuning — initialized to satisfy definite-assignment; real values written in applySpecs() below. */
     this.forwardForce = 150000;
     this.baseMaxSpeed = 40;
     this.maxSpeed = 40;
@@ -95,11 +90,11 @@ export class Car {
     this.recoveryDuration = 1.0;
     this.applySpecs(getSkin(skinId));
 
-    // Drift / bounce-flash state
+    /* Drift / bounce-flash state */
     this.lateralSpeed = 0;
     this.bodyBaseEmissive = this.bodyMat.emissive.clone();
 
-    // Install the preStep auto-drive + steering callback
+    /* Install the preStep auto-drive + steering callback */
     installCarPhysics(this);
 
     this.initControls();
@@ -118,18 +113,21 @@ export class Car {
     const btnRight = document.getElementById("touch-right");
     if (!btnLeft || !btnRight) return;
 
-    // Track which touch IDs are active on each button so multi-touch and
-    // finger-slide-off behave correctly.
+    /* Track which touch IDs are active on each button so multi-touch and finger-slide-off behave correctly. */
     const activeTouches = { left: new Set<number>(), right: new Set<number>() };
 
     const bind = (btn: HTMLElement, key: "left" | "right") => {
-      btn.addEventListener("touchstart", (e: TouchEvent) => {
-        e.preventDefault();
-        for (let i = 0; i < e.changedTouches.length; i++) {
-          activeTouches[key].add(e.changedTouches[i].identifier);
-        }
-        this.keys[key] = true;
-      }, { passive: false });
+      btn.addEventListener(
+        "touchstart",
+        (e: TouchEvent) => {
+          e.preventDefault();
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            activeTouches[key].add(e.changedTouches[i].identifier);
+          }
+          this.keys[key] = true;
+        },
+        { passive: false },
+      );
 
       const release = (e: TouchEvent) => {
         e.preventDefault();
@@ -148,7 +146,7 @@ export class Car {
     bind(btnLeft, "left");
     bind(btnRight, "right");
 
-    // Safety: release all keys if all touches end globally (finger slides off button)
+    /* Safety: release all keys if all touches end globally (finger slides off button) */
     this._onWindowTouchEnd = (e: TouchEvent) => {
       if (e.touches.length === 0) {
         activeTouches.left.clear();
@@ -160,11 +158,7 @@ export class Car {
     window.addEventListener("touchend", this._onWindowTouchEnd);
   }
 
-  /**
-   * Detach window listeners. Not called by the current single-instance flow,
-   * but required for any future "swap car between runs" feature — without it
-   * each new Car would silently double-bind keys + touch handlers.
-   */
+  /* Detach window listeners. Required so a future "swap car" can't double-bind keys. */
   dispose() {
     window.removeEventListener("keydown", this._onKeyDown);
     window.removeEventListener("keyup", this._onKeyUp);
@@ -192,7 +186,7 @@ export class Car {
   /** Apply a new skin. Rebuilds the mesh because each car has its own shape. */
   applySkin(skinId: string) {
     const skin = getSkin(skinId);
-    // Rebuild visuals
+    /* Rebuild visuals */
     this.scene.remove(this.mesh);
     this.mesh.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
@@ -210,11 +204,8 @@ export class Car {
     this.bodyMat = handles.bodyMat;
     this.cabinMat = handles.cabinMat;
     this.bodyBaseEmissive = this.bodyMat.emissive.clone();
-    // Sync the fresh group to the physics body NOW. Otherwise the new mesh
-    // sits at (0,0,0) until the next car.update() — and on the gameover
-    // screen update() never runs, so the camera (which follows mesh.position)
-    // would snap back to the origin and the player would see an empty map
-    // because cityGenerator already unloaded those chunks during the run.
+    /* Sync fresh group to physics body NOW — else mesh sits at (0,0,0) until next update(). */
+    /* On gameover update() never runs, so camera (which follows mesh) snaps to origin → empty map. */
     this.mesh.position.set(this.body.position.x, this.body.position.y, this.body.position.z);
     this.mesh.quaternion.set(
       this.body.quaternion.x,
@@ -223,7 +214,7 @@ export class Car {
       this.body.quaternion.w,
     );
     this.scene.add(this.mesh);
-    // Per-skin specs
+    /* Per-skin specs */
     this.applySpecs(skin);
   }
 
@@ -233,25 +224,21 @@ export class Car {
     this.baseMaxSpeed = sp.topSpeed;
     this.baseForwardForce = sp.acceleration;
     this.turnSpeed = sp.handling;
-    // endurance 0..100 → damageMul 1.0 .. 0.5
+    /* endurance 0..100 → damageMul 1.0 .. 0.5 */
     this.damageMul = 1 - sp.endurance / 200;
-    // grip 0..100 → lateral velocity retained per tick: 0.95 (drifty) .. 0.72 (sticky)
+    /* grip 0..100 → lateral velocity retained per tick: 0.95 (drifty) .. 0.72 (sticky) */
     this.baseGripFactor = 0.95 - (sp.grip / 100) * 0.23;
-    // stability 0..100 → 0.6 .. 1.0; full = no turn loss at speed
+    /* stability 0..100 → 0.6 .. 1.0; full = no turn loss at speed */
     this.stabilityFactor = 0.6 + (sp.stability / 100) * 0.4;
-    // braking 0..100 → bounceBackDuration 1.6s (slow recover) .. 0.7s (quick recover)
+    /* braking 0..100 → bounceBackDuration 1.6s (slow recover) .. 0.7s (quick recover) */
     this.bounceBackDuration = 1.6 - (sp.braking / 100) * 0.9;
-    // weight 0..100 → cannon body mass kg-ish
+    /* weight 0..100 → cannon body mass kg-ish */
     this.body.mass = massForWeight(sp.weight);
     this.body.updateMassProperties();
     this.recomputeWeatherEffective();
   }
 
-  /**
-   * Apply weather modifiers on top of the per-skin baselines. Called whenever
-   * either the skin or the active weather changes; the result lands in
-   * `maxSpeed`, `forwardForce`, and `gripFactor`, which the physics step reads.
-   */
+  /** Apply weather modifiers on top of per-skin baselines. Result lands in maxSpeed/forwardForce/gripFactor. */
   setWeatherModifiers(topSpeedMul: number, accelMul: number, gripAdd: number) {
     this.weatherTopSpeedMul = topSpeedMul;
     this.weatherAccelMul = accelMul;
@@ -262,8 +249,7 @@ export class Car {
   private recomputeWeatherEffective() {
     this.maxSpeed = this.baseMaxSpeed * this.weatherTopSpeedMul * this.nitroMul;
     this.forwardForce = this.baseForwardForce * this.weatherAccelMul;
-    // Clamp grip into the safe lateral-friction band so extreme presets can't
-    // make the car uncontrollably sticky or completely frictionless.
+    /* Clamp grip to safe band so extreme presets can't make car uncontrollably sticky or frictionless. */
     this.gripFactor = Math.min(0.99, Math.max(0.6, this.baseGripFactor + this.weatherGripAdd));
   }
 
@@ -280,7 +266,7 @@ export class Car {
   }
 
   update(dt: number) {
-    // Tick down bounce-back timer; start recovery when it expires
+    /* Tick down bounce-back timer; start recovery when it expires */
     if (this.bounceBackTimer > 0) {
       this.bounceBackTimer -= dt;
       if (this.bounceBackTimer <= 0) {
@@ -288,13 +274,12 @@ export class Car {
       }
     }
 
-    // Tick down recovery timer
+    /* Tick down recovery timer */
     if (this.recoveryTimer > 0) {
       this.recoveryTimer -= dt;
     }
 
-    // Bounce-back rim flash: red emissive while reversing from collision so
-    // the player understands why control was taken away.
+    /* Bounce-back rim flash: red emissive while reversing from collision so the player understands why control was taken away. */
     if (this.bounceBackTimer > 0) {
       const intensity = Math.min(this.bounceBackTimer / this.bounceBackDuration, 1) * 0.6;
       this.bodyMat.emissive.setRGB(intensity, 0, 0);
@@ -302,7 +287,7 @@ export class Car {
       this.bodyMat.emissive.copy(this.bodyBaseEmissive);
     }
 
-    // Sync visuals
+    /* Sync visuals */
     this.mesh.position.set(this.body.position.x, this.body.position.y, this.body.position.z);
     this.mesh.quaternion.set(
       this.body.quaternion.x,

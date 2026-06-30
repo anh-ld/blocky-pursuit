@@ -80,10 +80,7 @@ async function handleUpload(req: Request): Promise<Response> {
 
   // Body buffering and the gate read are independent — overlap them
   // to hide one RTT behind the upload.
-  const [recording, gateRead] = await Promise.all([
-    req.blob(),
-    store.getWithMetadata("top-scores", { type: "json" }),
-  ]);
+  const [recording, gateRead] = await Promise.all([req.blob(), store.getWithMetadata("top-scores", { type: "json" })]);
 
   if (recording.size === 0) {
     return new Response("Empty recording body", { status: 400 });
@@ -114,7 +111,9 @@ async function handleUpload(req: Request): Promise<Response> {
   const mimeType = ALLOWED_MIMES.has(containerType) ? containerType : "video/webm";
 
   // Server-generated key — never trust client IDs for storage paths.
-  const safeName = String(playerName).slice(0, 20).replace(/[^a-zA-Z0-9 _-]/g, "");
+  const safeName = String(playerName)
+    .slice(0, 20)
+    .replace(/[^a-zA-Z0-9 _-]/g, "");
   const flooredScore = Math.floor(numericScore);
   const blobKey = `recordings/${Date.now()}-${crypto.randomUUID()}.webm`;
   const recordingUrl = `/.netlify/functions/play-recording?key=${encodeURIComponent(blobKey)}`;
@@ -146,11 +145,7 @@ async function handleUpload(req: Request): Promise<Response> {
     }
 
     entries[idx] = { ...entries[idx]!, recordingUrl };
-    const { modified } = await store.setJSON(
-      "top-scores",
-      entries,
-      etag ? { onlyIfMatch: etag } : { onlyIfNew: true },
-    );
+    const { modified } = await store.setJSON("top-scores", entries, etag ? { onlyIfMatch: etag } : { onlyIfNew: true });
     if (modified) {
       return Response.json({ ok: true, key: blobKey, url: recordingUrl });
     }

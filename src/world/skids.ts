@@ -1,8 +1,6 @@
 import * as THREE from "three";
 
-// Tire skid marks: small dark quads laid flat on the ground at the
-// car's rear-wheel positions when the car is drifting (high lateral
-// velocity) or boosting on nitro. Capped to keep draw count bounded.
+/* Tire skid marks: small dark quads laid flat at the car's rear wheels on drift/nitro. Capped draw count. */
 
 type ISkid = {
   mesh: THREE.Mesh;
@@ -32,8 +30,7 @@ export function spawnSkid(x: number, z: number, headingY: number) {
     const oldest = skids.shift()!;
     skidScene.remove(oldest.mesh);
   }
-  // Material is shared, so per-skid opacity fade is handled by life timer
-  // (we leave the shared material at full opacity and just remove on expiry).
+  /* Material is shared — fade handled by life timer. Leave material at full opacity; remove on expiry. */
   const mesh = new THREE.Mesh(SKID_GEO, SKID_MAT);
   mesh.position.set(x, 0.04, z);
   mesh.rotation.x = -Math.PI / 2;

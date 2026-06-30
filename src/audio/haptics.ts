@@ -1,26 +1,19 @@
-// Tiny wrapper around the Vibration API. No-ops on unsupported devices and
-// when the user has muted audio (mute = "I want quiet" — vibration would
-// violate that intent).
-//
-// Patterns can be a single duration in ms or an alternating
-// vibrate/pause array per the Vibration API spec.
+/* Vibration API wrapper. No-op on unsupported devices & when muted (mute = "I want quiet"). */
 
 import { attempt } from "es-toolkit";
 import { isMuted } from "./sound";
 
 type IVibratePattern = number | number[];
 
-const supported =
-  typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+const supported = typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
 
 function safeVibrate(pattern: IVibratePattern) {
   if (!supported || isMuted()) return;
-  // Some browsers throw when called outside a user gesture — swallow it.
+  /* Some browsers throw when called outside a user gesture — swallow. */
   attempt(() => navigator.vibrate(pattern));
 }
 
-// Semantic helpers — call sites read like intent ("collision happened")
-// not like raw API calls ("vibrate 30ms"). Easier to retune later.
+/* Semantic helpers — call sites read like intent ("collision") not raw ("vibrate 30ms"). */
 export const haptics = {
   pickup: () => safeVibrate(12),
   hit: () => safeVibrate(40),

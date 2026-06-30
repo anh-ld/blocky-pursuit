@@ -23,8 +23,7 @@ export default async function handler(req: Request, _context: Context) {
     // The actual container is stored in metadata; default to webm so
     // legacy uploads keep working.
     const stored = result.metadata?.mimeType;
-    const mimeType =
-      stored === "video/mp4" || stored === "video/webm" ? stored : "video/webm";
+    const mimeType = stored === "video/mp4" || stored === "video/webm" ? stored : "video/webm";
 
     return new Response(result.data as ArrayBuffer, {
       headers: {

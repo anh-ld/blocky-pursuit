@@ -38,16 +38,12 @@ export async function submitScore(
         recordingUrl,
         sessionId,
       }),
-    })
+    }),
   );
   return !!res?.ok;
 }
 
-/**
- * Upload a finished recording for a top-50 score. Single-shot POST
- * called once at gameOver, gated client-side on the cached top-50
- * threshold so non-qualifying runs never even try.
- */
+/** Upload a finished recording for a top-50 score. Single-shot POST at gameOver, gated on cached top-50. */
 export async function uploadRecording(
   recording: Blob,
   sessionId: string,
@@ -56,14 +52,7 @@ export async function uploadRecording(
 ): Promise<string | null> {
   if (DEV) return null;
 
-  // Send the recording as the raw request body and put metadata in
-  // the query string. Multipart is avoided for two reasons: the old
-  // sync runtime had a parser quirk that 500'd on binary multipart
-  // bodies, and raw body is lighter on the wire (no boundaries).
-  //
-  // Routed to an EDGE function (not sync) because sync functions cap
-  // request bodies at ~4.5 MB binary (AWS Lambda Invoke limit). Edge
-  // accepts the full client cap.
+  /* Raw body + metadata in query string. EDGE (not sync) — sync caps bodies at ~4.5 MB, multipart 500'd. */
   const params = new URLSearchParams({
     sessionId,
     playerName,
@@ -88,14 +77,44 @@ export async function uploadRecording(
     return null;
   }
 
-  const [, data] = await attemptAsync(
-    () => res.json() as Promise<{ url?: string }>,
-  );
+  const [, data] = await attemptAsync(() => res.json() as Promise<{ url?: string }>);
   return data?.url ?? null;
 }
 
-const ADJECTIVES = ["Swift","Sneaky","Turbo","Crazy","Wild","Rapid","Slick","Bold","Lucky","Blazing","Nitro","Shadow","Ghost","Rogue","Neon"];
-const NOUNS = ["Racer","Driver","Rider","Drifter","Runner","Chaser","Outlaw","Bandit","Cruiser","Phantom","Maverick","Bullet","Viper","Falcon","Wolf"];
+const ADJECTIVES = [
+  "Swift",
+  "Sneaky",
+  "Turbo",
+  "Crazy",
+  "Wild",
+  "Rapid",
+  "Slick",
+  "Bold",
+  "Lucky",
+  "Blazing",
+  "Nitro",
+  "Shadow",
+  "Ghost",
+  "Rogue",
+  "Neon",
+];
+const NOUNS = [
+  "Racer",
+  "Driver",
+  "Rider",
+  "Drifter",
+  "Runner",
+  "Chaser",
+  "Outlaw",
+  "Bandit",
+  "Cruiser",
+  "Phantom",
+  "Maverick",
+  "Bullet",
+  "Viper",
+  "Falcon",
+  "Wolf",
+];
 
 function generateAnonName(): string {
   const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
@@ -113,8 +132,7 @@ export function getPlayerName(): string {
   return name;
 }
 
-// Names shorter than this are collision-prone on a shared leaderboard,
-// so we append a random 4-digit tag to disambiguate them.
+/* Names < this are collision-prone on shared leaderboard — append random 4-digit tag. */
 const MIN_UNIQUE_NAME_LEN = 6;
 
 /**
@@ -127,12 +145,17 @@ const MIN_UNIQUE_NAME_LEN = 6;
  * - Too short (< 6 chars) → append a 4-digit tag so "Al" becomes "Al4821"
  */
 export function setPlayerName(raw: string): string {
-  const cleaned = raw.slice(0, 20).replace(/[^a-zA-Z0-9 _-]/g, "").trim();
+  const cleaned = raw
+    .slice(0, 20)
+    .replace(/[^a-zA-Z0-9 _-]/g, "")
+    .trim();
   let final: string;
   if (!cleaned) {
     final = generateAnonName();
   } else if (cleaned.length < MIN_UNIQUE_NAME_LEN) {
-    const tag = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+    const tag = Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, "0");
     final = `${cleaned}${tag}`.slice(0, 20);
   } else {
     final = cleaned;

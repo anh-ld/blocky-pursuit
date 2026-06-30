@@ -5,8 +5,7 @@ import { isRoad, TILE_SIZE } from "../world/terrain";
 import { LEVEL_DEFS, getLevelProgress, getHeat } from "./leveling";
 import { MAX_HP, SCORE_BASE_TILE, COMBO_MULT_PER_COUNT, COMBO_MULT_MAX, BUSTED_TIME_THRESHOLD } from "../constants";
 
-// Bootstrap context shared by every system constructor. Held for the
-// lifetime of the app — these references never change after init.
+/* Bootstrap context shared by every system constructor. Held for the app lifetime — references never change after init. */
 export type IGameContext = {
   scene: THREE.Scene;
   world: CANNON.World;
@@ -35,16 +34,15 @@ import { SCORE_MULT_VALUE } from "../constants";
 
 export const COMBO_DECAY = 3.0;
 
-// Mutable per-run state. One instance lives on the orchestrator and is
-// reset on each startGame(). Systems read/write its fields directly.
+/* Per-run state. One instance on the orchestrator; reset on each startGame(). Systems read/write fields directly. */
 export class RunState {
-  // Status
+  /* Status */
   hp = MAX_HP;
   score = 0;
   level = 1;
   survivalTime = 0;
 
-  // Buffs
+  /* Buffs */
   nitroTimer = 0;
   shieldActive = false;
   scoreMultTimer = 0;
@@ -53,45 +51,39 @@ export class RunState {
   ghostTimer = 0;
   tankTimer = 0;
 
-  // Score/road tracking
+  /* Score/road tracking */
   lastScoreTileX = -9999;
   lastScoreTileZ = -9999;
 
-  // Heal streaks
+  /* Heal streaks */
   speedStreakTimer = 0;
 
-  // Hit pause / busted
+  /* Hit pause / busted */
   hitPauseTimer = 0;
   bustedTimer = 0;
 
-  // Combo
+  /* Combo */
   comboCount = 0;
   comboTimer = 0;
 
-  // Drown Chain
+  /* Drown Chain */
   drownChainCount = 0;
   drownChainTimer = 0;
 
-  // Index into SCORE_MILESTONES — points at the next un-crossed milestone.
-  // main.ts walks this forward whenever score crosses a threshold.
+  /* Index into SCORE_MILESTONES — next un-crossed. main.ts walks forward on threshold cross. */
   nextMilestoneIdx = 0;
-  // Escape reward state — accumulates while no cop is within ESCAPE_DIST,
-  // fires once it crosses ESCAPE_TIME, and re-arms when a cop returns.
-  // `escapeArmed` starts FALSE so the very first 4 seconds of a fresh run
-  // (before the first cop has even spawned) don't count as an "escape".
-  // Becomes true the first time a cop enters ESCAPE_DIST.
+  /* Escape reward: accumulates while no cop in ESCAPE_DIST, fires past ESCAPE_TIME. `escapeArmed` FALSE: pre-spawn ≠ escape. */
   escapeTimer = 0;
   escapeArmed = false;
 
-  // Run summary
+  /* Run summary */
   drownedThisRun = 0;
   biggestCombo = 0;
   topSpeed = 0;
   distance = 0;
   lastCarX = 0;
   lastCarZ = 0;
-  // Score breakdown — accumulated alongside `score` so game-over can show
-  // tile vs combo vs cop contributions.
+  /* Score breakdown — accumulated alongside `score` so game-over can show tile vs combo vs cop contributions. */
   tileScore = 0;
   comboScore = 0;
   copScore = 0;
@@ -144,7 +136,7 @@ export class RunState {
   /** Track successive drownings in a short window. */
   recordDrown(): number {
     this.drownChainCount++;
-    this.drownChainTimer = 4.0; // 4 seconds to keep the chain alive
+    this.drownChainTimer = 4.0; /* 4 seconds to keep the chain alive */
     return this.drownChainCount;
   }
 
@@ -215,8 +207,7 @@ export class RunState {
     const ratio = Math.max(0, this.comboTimer / COMBO_DECAY);
     comboTimerRatio.value = ratio;
     comboMultiplier.value = Math.min(1 + this.comboCount * COMBO_MULT_PER_COUNT, COMBO_MULT_MAX);
-    // "In danger" once the timer falls below 25% on a chain of 5+. Threshold
-    // mirrors the audio tick window in main.ts so the visual + sound match.
+    /* "In danger" once timer <25% on a chain of 5+. Mirrors the audio tick window in main.ts so visual + sound match. */
     comboInDanger.value = this.comboCount >= 5 && ratio > 0 && ratio < 0.25;
     bustedProgress.value = Math.min(1, this.bustedTimer / BUSTED_TIME_THRESHOLD);
     scoreMultRemaining.value = this.scoreMultTimer;

@@ -1,14 +1,11 @@
-// Tracks one-time onboarding flags persisted to localStorage. Currently
-// drives the first-combo tutorial popup and a "what is this?" hint the
-// first time the player ever collects each pickup kind.
+/* Onboarding flags in localStorage. Drives first-combo popup & a "what is this?" hint for each pickup's first collection. */
 
 import { StorageKey, storageGetJson, storageSetJson } from "../storage";
 import type { IPickupKind } from "../entities/pickup";
 
 type ITutorialState = {
   seenComboTip: boolean;
-  // Per-pickup discovery hints. Stored individually so removing a kind in
-  // the future is a clean delete instead of a migration of an array index.
+  /* Per-pickup discovery hints. Stored individually so removing a kind later is a clean delete (no array-index migration). */
   seenNitroTip: boolean;
   seenShieldTip: boolean;
   seenEmpTip: boolean;
@@ -33,8 +30,7 @@ const DEFAULTS: ITutorialState = {
   seenTankTip: false,
 };
 
-// Map IPickupKind → the matching state key. Centralizes the naming
-// convention so adding a new pickup is "two new keys, no extra branches".
+/* Map IPickupKind → matching state key. Centralizes naming so adding a pickup = "two new keys, no extra branches". */
 const PICKUP_TIP_KEY: Record<IPickupKind, keyof ITutorialState> = {
   nitro: "seenNitroTip",
   shield: "seenShieldTip",

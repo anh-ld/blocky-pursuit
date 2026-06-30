@@ -1,11 +1,7 @@
-// Vibe Jam 2026 portal webring — minimum implementation to satisfy the spec.
-//
-// - Always shows an EXIT portal that redirects to jam.pieter.com with the
-//   player's name/color/speed and a ref pointing back here.
-// - If the page was opened with `?portal=true`, the caller should skip its
-//   menus (see `cameFromPortal`) so the handoff is seamless.
-// - If `?portal=true&ref=...` is present, also shows a RETURN portal that
-//   sends the player back to `ref` with all their original query params.
+/* Vibe Jam 2026 portal webring — minimum spec implementation. */
+/* Always shows EXIT → jam.pieter.com with name/color/speed + ref back here. */
+/* `?portal=true` → caller skips menus (see `cameFromPortal`) for seamless handoff. */
+/* `?portal=true&ref=...` → also shows RETURN portal that sends player back to ref with original params. */
 
 import * as THREE from "three";
 
@@ -22,9 +18,8 @@ type IPortal = {
 export type IPortalsApi = {
   update: (carPos: THREE.Vector3) => string | null;
   cameFromPortal: boolean;
-  // Position of the RETURN portal if one exists, so the caller can spawn
-  // the player "coming out of" it on portal arrival. Null when there's no
-  // return portal (no ?ref or not arriving via portal).
+  /* Position of RETURN portal if one exists — caller spawns player "coming out of" it on arrival. */
+  /* Null when no return portal (no ?ref or not arriving via portal). */
   returnSpawnPos: THREE.Vector3 | null;
 };
 
@@ -35,12 +30,7 @@ export type IPortalContext = {
   getPlayerSpeedMs: () => number;
 };
 
-function addPortalMesh(
-  scene: THREE.Scene,
-  position: THREE.Vector3,
-  ringColor: number,
-  labelText: string,
-) {
+function addPortalMesh(scene: THREE.Scene, position: THREE.Vector3, ringColor: number, labelText: string) {
   const group = new THREE.Group();
   group.position.copy(position);
 
@@ -51,7 +41,7 @@ function addPortalMesh(
   ring.rotation.y = Math.PI / 2;
   group.add(ring);
 
-  // Label sprite (canvas-textured) above the ring.
+  /* Label sprite (canvas-textured) above the ring. */
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 128;
@@ -81,7 +71,7 @@ export function initPortals(ctx: IPortalContext): IPortalsApi {
 
   const portals: IPortal[] = [];
 
-  // --- Exit portal: always present ---
+  /* Exit portal: always present */
   const exitPos = new THREE.Vector3(80, 2.5, 0);
   addPortalMesh(ctx.scene, exitPos, 0x22ee88, "VIBE JAM 2026");
   portals.push({
@@ -89,8 +79,7 @@ export function initPortals(ctx: IPortalContext): IPortalsApi {
     triggered: false,
     destination: () => {
       const url = new URL(VIBE_JAM_URL);
-      // Re-emit incoming params (so chains preserve continuity), then
-      // overwrite with our live values.
+      /* Re-emit incoming params (so chains preserve continuity), then overwrite with our live values. */
       incoming.forEach((v, k) => {
         if (k !== "portal") url.searchParams.set(k, v);
       });
@@ -102,7 +91,7 @@ export function initPortals(ctx: IPortalContext): IPortalsApi {
     },
   });
 
-  // --- Return portal: only when arriving from another vibe jam game ---
+  /* Return portal: only when arriving from another vibe jam game */
   let returnSpawnPos: THREE.Vector3 | null = null;
   if (cameFromPortal && ref) {
     const refUrl = /^https?:\/\//.test(ref) ? ref : `https://${ref}`;
@@ -110,13 +99,12 @@ export function initPortals(ctx: IPortalContext): IPortalsApi {
     addPortalMesh(ctx.scene, returnPos, 0xff66aa, "RETURN");
     portals.push({
       position: returnPos,
-      // Start triggered: the player spawns inside this portal's radius, and
-      // we don't want to fire the return redirect on frame zero (infinite
-      // portal loop). The flag clears the moment they drive out of range.
+      /* Start triggered — player spawns inside the radius; don't fire the return redirect on frame 0 (infinite loop). */
+      /* Flag clears the moment they drive out of range. */
       triggered: true,
       destination: () => {
         const url = new URL(refUrl);
-        // Spec: send all original query parameters back.
+        /* Spec: send all original query parameters back. */
         incoming.forEach((v, k) => {
           if (k !== "portal") url.searchParams.set(k, v);
         });

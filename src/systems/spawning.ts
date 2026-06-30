@@ -14,8 +14,7 @@ export type ISpawnCopArgs = {
   level: number;
   playerPosition: THREE.Vector3;
   playerVelocity: CANNON.Vec3;
-  // SWAT mini-boss override. Bypasses the maxCops check (it lives outside
-  // the per-level cap) and constructs the cop with its mini-boss flag set.
+  /* SWAT mini-boss override. Bypasses maxCops check (lives outside the per-level cap) & sets the mini-boss flag. */
   isSwat?: boolean;
   isBounty?: boolean;
 };
@@ -24,11 +23,10 @@ export function spawnCop(args: ISpawnCopArgs) {
   const { scene, world, cops, maxCops, level, playerPosition, playerVelocity, isSwat, isBounty } = args;
   if (!isSwat && cops.length >= maxCops) return;
 
-  // Spawn out of camera view
+  /* Spawn out of camera view */
   const distance = COP_SPAWN_DIST_MIN + Math.random() * COP_SPAWN_DIST_RANGE;
 
-  // 60% of the time, spawn AHEAD of the player's travel direction
-  // This prevents the "infinite straight road" exploit
+  /* 60% of the time, spawn AHEAD of the player's travel direction — prevents the "infinite straight road" exploit */
   let angle: number;
   const speed = playerVelocity.length();
   if (speed > 5 && Math.random() < 0.6) {
@@ -44,7 +42,7 @@ export function spawnCop(args: ISpawnCopArgs) {
   let tileX = Math.round(x / TILE_SIZE);
   let tileZ = Math.round(z / TILE_SIZE);
 
-  // Snap to nearest road (preserves original behavior including in-place tile mutation)
+  /* Snap to nearest road (preserves original behavior including in-place tile mutation) */
   let foundRoad = false;
   for (let r = 0; r < 5; r++) {
     for (let dx = -r; dx <= r; dx++) {
@@ -61,9 +59,7 @@ export function spawnCop(args: ISpawnCopArgs) {
     if (foundRoad) break;
   }
 
-  // Bail if no road tile is reachable from the random spot — otherwise the
-  // cop spawns at the original tile, which can be water (instant +30 free
-  // score on next frame) or stuck inside a building.
+  /* Bail if no road tile reachable — else cop spawns at the original tile, which may be water (free score) or in a building. */
   if (!foundRoad) return;
 
   const pos = new THREE.Vector3(tileX * TILE_SIZE, 1, tileZ * TILE_SIZE);
@@ -110,7 +106,7 @@ export function spawnCivilian(args: ISpawnCivilianArgs) {
 
   if (!foundRoad) return;
 
-  // Spawn at tile center
+  /* Spawn at tile center */
   const pos = new THREE.Vector3(tileX * TILE_SIZE + TILE_SIZE / 2, 1, tileZ * TILE_SIZE + TILE_SIZE / 2);
   civilians.push(new Civilian(scene, world, pos));
 }

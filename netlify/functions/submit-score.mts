@@ -37,7 +37,13 @@ export default async function handler(req: Request, _context: Context) {
   }
 
   const [parseErr, body] = await attemptAsync(
-    () => req.json() as Promise<{ name: string; score: number; recordingUrl?: string; sessionId?: string }>,
+    () =>
+      req.json() as Promise<{
+        name: string;
+        score: number;
+        recordingUrl?: string;
+        sessionId?: string;
+      }>,
   );
   if (parseErr || !body) return new Response("Bad request", { status: 400 });
 
@@ -50,7 +56,9 @@ export default async function handler(req: Request, _context: Context) {
   }
 
   const newEntry: IScoreEntry = {
-    name: String(name).slice(0, 20).replace(/[^a-zA-Z0-9 _-]/g, ""),
+    name: String(name)
+      .slice(0, 20)
+      .replace(/[^a-zA-Z0-9 _-]/g, ""),
     score: Math.floor(score),
     ts: Date.now(),
   };
@@ -74,9 +82,7 @@ export default async function handler(req: Request, _context: Context) {
 
     // Idempotent behavior for retries and two-step replay attachment:
     // if a session already exists, update it instead of creating duplicates.
-    const existingIndex = sessionId
-      ? entries.findIndex((e) => e.sessionId === sessionId)
-      : -1;
+    const existingIndex = sessionId ? entries.findIndex((e) => e.sessionId === sessionId) : -1;
 
     if (existingIndex >= 0) {
       const existing = entries[existingIndex]!;
@@ -95,11 +101,7 @@ export default async function handler(req: Request, _context: Context) {
     entries.splice(50);
 
     // First-ever write has no etag — use onlyIfNew to avoid clobbering a racing creator.
-    const { modified } = await store.setJSON(
-      "top-scores",
-      entries,
-      etag ? { onlyIfMatch: etag } : { onlyIfNew: true },
-    );
+    const { modified } = await store.setJSON("top-scores", entries, etag ? { onlyIfMatch: etag } : { onlyIfNew: true });
 
     if (modified) return Response.json({ ok: true });
     // Lost the race — re-read and retry.

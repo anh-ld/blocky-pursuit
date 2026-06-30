@@ -1,6 +1,6 @@
 export const CHUNK_SIZE = 60;
 export const TILE_SIZE = 10;
-export const TILES_PER_CHUNK = CHUNK_SIZE / TILE_SIZE; // 6x6
+export const TILES_PER_CHUNK = CHUNK_SIZE / TILE_SIZE; /* 6x6 */
 
 export const enum Zone {
   DOWNTOWN,
@@ -48,12 +48,8 @@ export function isWater(globalTileX: number, globalTileZ: number): boolean {
   return false;
 }
 
-/**
- * Deep-water variant — interior pixels of a body of water, away from the
- * shore. Used to draw a darker, more saturated tile so rivers/lakes read as
- * having depth instead of being a flat blue rectangle. Does not affect
- * gameplay (drown logic still uses isWater).
- */
+/** Deep-water variant — interior of a water body, away from shore. Darker tile so rivers/lakes read as deep. */
+/* Cosmetic only — drown logic still uses isWater. */
 export function isDeepWater(globalTileX: number, globalTileZ: number): boolean {
   if (!isWater(globalTileX, globalTileZ)) return false;
   return (
@@ -64,10 +60,7 @@ export function isDeepWater(globalTileX: number, globalTileZ: number): boolean {
   );
 }
 
-/**
- * Shore = land tile in nature that touches a water tile. Drawn as sand and
- * decorated with reeds/cattails to soften the water-to-grass seam.
- */
+/** Shore = land tile in nature that touches water. Sand + reeds/cattails to soften the water-to-grass seam. */
 export function isShore(globalTileX: number, globalTileZ: number): boolean {
   if (isWater(globalTileX, globalTileZ)) return false;
   if (getZone(globalTileX, globalTileZ) !== Zone.NATURE) return false;
@@ -79,19 +72,17 @@ export function isShore(globalTileX: number, globalTileZ: number): boolean {
   );
 }
 
-// Periodic roadblocks: break infinite straight roads every ~40 tiles
-// Returns true if this tile is a blocked gap in an otherwise straight road
+/* Periodic roadblocks: break infinite straight roads every ~40 tiles. Returns true if tile is a blocked gap. */
 function isRoadBlocked(globalTileX: number, globalTileZ: number): boolean {
-  // Check if this X-position is a blockage point for horizontal roads (roads that run along X)
-  // Use a segment of ~20 tiles; each segment has one blockage position
+  /* Blockage check for X-running roads. ~40-tile segment, one blockage position each. */
   const segX = Math.floor(globalTileX / 40);
   const blockPosInSegX = Math.floor(pseudoRandom(segX, 0, 400) * 40);
-  const isBlockedX = (((globalTileX % 40) + 40) % 40) === blockPosInSegX;
+  const isBlockedX = ((globalTileX % 40) + 40) % 40 === blockPosInSegX;
 
-  // Same for vertical roads (roads that run along Z)
+  /* Same for vertical roads (roads that run along Z) */
   const segZ = Math.floor(globalTileZ / 40);
   const blockPosInSegZ = Math.floor(pseudoRandom(0, segZ, 401) * 40);
-  const isBlockedZ = (((globalTileZ % 40) + 40) % 40) === blockPosInSegZ;
+  const isBlockedZ = ((globalTileZ % 40) + 40) % 40 === blockPosInSegZ;
 
   return isBlockedX || isBlockedZ;
 }
@@ -120,11 +111,10 @@ export function isRoad(globalTileX: number, globalTileZ: number): boolean {
 
   if (!road) return false;
 
-  // Don't block intersections (tiles where both an X-road and Z-road cross)
-  // Only block straight stretches
+  /* Don't block intersections (tiles where both an X-road and Z-road cross) Only block straight stretches */
   const isXRoad = globalTileX === 0 || rRoadX > (zone === Zone.DOWNTOWN ? 0.55 : zone === Zone.SUBURBS ? 0.75 : 0.9);
   const isZRoad = globalTileZ === 0 || rRoadZ > (zone === Zone.DOWNTOWN ? 0.55 : zone === Zone.SUBURBS ? 0.75 : 0.9);
-  if (isXRoad && isZRoad) return true; // intersection — never block
+  if (isXRoad && isZRoad) return true; /* intersection — never block */
 
   return !isRoadBlocked(globalTileX, globalTileZ);
 }

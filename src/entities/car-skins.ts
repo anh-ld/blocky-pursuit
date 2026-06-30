@@ -1,34 +1,32 @@
-// Collectible cars. Each entry defines colors, body proportions, accents,
-// and a small stat tweak. Unlock conditions are evaluated against persisted
-// player progress.
+/* Collectible cars: colors, proportions, accents, stat tweaks. Unlocks checked against saved progress. */
 
 import { StorageKey, storageGetJson, storageSetJson } from "../storage";
 
 export type ICarShape = {
-  // All values are multipliers of CAR_UNIT (see car-mesh.ts).
+  /* All values are multipliers of CAR_UNIT (see car-mesh.ts). */
   bodyW: number;
   bodyH: number;
   bodyL: number;
   cabinW: number;
   cabinH: number;
   cabinL: number;
-  cabinZ: number; // forward(-) / rear(+) offset of cabin
+  cabinZ: number /* forward(-) / rear(+) offset of cabin */;
   hasSpoiler: boolean;
   spoilerW: number;
   spoilerH: number;
-  hasFlag: boolean; // Vietnam flag on roof (VinFast only)
-  hasStripe: boolean; // racing stripe along the body length
+  hasFlag: boolean /* Vietnam flag on roof (VinFast only) */;
+  hasStripe: boolean /* racing stripe along the body length */;
 };
 
 export type ICarSpecs = {
-  topSpeed: number;     // game units (~40..51)
-  acceleration: number; // raw forward force (~150000..188000)
-  handling: number;     // base turn rate (~2.4..3.1)
-  grip: number;         // 0..100 — high = corners on rails, low = tail-happy / drifts
-  stability: number;    // 0..100 — steering authority retained at high speed
-  braking: number;      // 0..100 — how quickly the car bounces back from a crash
-  weight: number;       // 0..100 — body mass; high = harder to push, hits harder
-  endurance: number;    // 0..100 — collision damage reduction
+  topSpeed: number /* game units (~40..51) */;
+  acceleration: number /* raw forward force (~150000..188000) */;
+  handling: number /* base turn rate (~2.4..3.1) */;
+  grip: number /* 0..100 — high = corners on rails, low = tail-happy / drifts */;
+  stability: number /* 0..100 — steering authority retained at high speed */;
+  braking: number /* 0..100 — how quickly the car bounces back from a crash */;
+  weight: number /* 0..100 — body mass; high = harder to push, hits harder */;
+  endurance: number /* 0..100 — collision damage reduction */;
 };
 
 export type ICarSkin = {
@@ -48,21 +46,20 @@ export type ICarSkin = {
   unlockHint: string;
 };
 
-// Convert spec.weight (0..100) to a cannon body mass (kg-ish).
+/* Convert spec.weight (0..100) to a cannon body mass (kg-ish). */
 export function massForWeight(weight: number): number {
   return 80 + weight * 0.6;
 }
 
-// "Perceived" acceleration = raw force / mass. The display bar uses this so a
-// heavy car with strong force still reads as moderate, matching how it feels.
+/* "Perceived" acceleration = force/mass. Bar uses this so a heavy+strong car still reads as moderate. */
 export function perceivedAccel(specs: ICarSpecs): number {
   return specs.acceleration / massForWeight(specs.weight);
 }
 
-// Lineup-wide ranges used to render 0..100% stat bars in the garage.
+/* Lineup-wide ranges used to render 0..100% stat bars in the garage. */
 const SPEC_RANGES = {
   topSpeed: [40, 51] as const,
-  acceleration: [1430, 1740] as const, // perceived (force/mass)
+  acceleration: [1430, 1740] as const /* perceived (force/mass) */,
   handling: [2.3, 3.2] as const,
   grip: [40, 92] as const,
   stability: [50, 92] as const,
@@ -94,8 +91,7 @@ const BOXY_DEFAULT: ICarShape = {
   hasStripe: false,
 };
 
-// Small compact runabout — short body, tall-ish cabin, no spoiler/flag.
-// Used as the base shape for the free starter pool (Beetle, Mini, Fiat 500).
+/* Small compact runabout — short body, tall-ish cabin, no spoiler/flag. Base shape for free starter pool. */
 const SMALL_COMPACT: ICarShape = {
   bodyW: 3.6,
   bodyH: 1.0,
@@ -159,7 +155,7 @@ export const CAR_SKINS: ICarSkin[] = [
     wheelColor: 0x1a1a1a,
     shape: {
       ...SMALL_COMPACT,
-      // Beetle: rounder, slightly wider than other compacts.
+      /* Beetle: rounder, slightly wider than other compacts. */
       bodyW: 3.8,
       bodyH: 1.05,
       bodyL: 5.4,
@@ -191,7 +187,7 @@ export const CAR_SKINS: ICarSkin[] = [
     wheelColor: 0x1a1a1a,
     shape: {
       ...SMALL_COMPACT,
-      // Mini: tightest wheelbase in the lineup → twitchy handling.
+      /* Mini: tightest wheelbase in the lineup → twitchy handling. */
       bodyW: 3.6,
       bodyH: 0.95,
       bodyL: 5.2,
@@ -224,7 +220,7 @@ export const CAR_SKINS: ICarSkin[] = [
     wheelColor: 0x1a1a1a,
     shape: {
       ...SMALL_COMPACT,
-      // Tiniest car in the lineup — short, narrow, tall cabin.
+      /* Tiniest car in the lineup — short, narrow, tall cabin. */
       bodyW: 3.4,
       bodyH: 1.0,
       bodyL: 5.0,
@@ -393,7 +389,7 @@ export const CAR_SKINS: ICarSkin[] = [
       cabinW: 2.8,
       cabinH: 1.15,
       cabinL: 3.0,
-      cabinZ: -0.4, // mid-engine: cabin sits forward of center
+      cabinZ: -0.4 /* mid-engine: cabin sits forward of center */,
       spoilerW: 3.8,
       spoilerH: 0.35,
     },
@@ -470,7 +466,7 @@ const DEFAULT_PROGRESS: IProgress = {
 export function loadProgress(): IProgress {
   const parsed = storageGetJson<Partial<IProgress>>(StorageKey.Progress);
   if (!parsed) return { ...DEFAULT_PROGRESS };
-  // Migrate any obsolete skin id (e.g. old "redstar" cars) back to default.
+  /* Migrate any obsolete skin id (e.g. old "redstar" cars) back to default. */
   const savedId = parsed.selectedSkin || DEFAULT_SKIN_ID;
   const skinExists = CAR_SKINS.some((s) => s.id === savedId);
   return {
@@ -487,9 +483,13 @@ export function saveProgress(p: IProgress) {
 
 export function isUnlocked(skin: ICarSkin, p: IProgress): boolean {
   switch (skin.unlock.type) {
-    case "default": return true;
-    case "best": return p.best >= skin.unlock.value;
-    case "totalRuns": return p.totalRuns >= skin.unlock.value;
-    case "copsDrowned": return p.copsDrowned >= skin.unlock.value;
+    case "default":
+      return true;
+    case "best":
+      return p.best >= skin.unlock.value;
+    case "totalRuns":
+      return p.totalRuns >= skin.unlock.value;
+    case "copsDrowned":
+      return p.copsDrowned >= skin.unlock.value;
   }
 }

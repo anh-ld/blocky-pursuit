@@ -15,7 +15,7 @@ export function placeSuburbs(
   x: number,
   z: number,
 ) {
-  // 15% house
+  /* 15% house */
   if (r1 > 0.85) {
     const height = 2 + r2 * 3;
     const width = 3 + r3 * 4;
@@ -39,7 +39,7 @@ export function placeSuburbs(
 
     addWindows(chunk, geometries, materials, x, z, width, height, depth);
 
-    // Pitched roof
+    /* Pitched roof */
     const roofOverhang = 0.3;
     const roofW = width / 2 + roofOverhang;
     const roofH = 0.8 + r2 * 0.6;
@@ -64,24 +64,20 @@ export function placeSuburbs(
     roofMesh.castShadow = true;
     chunk.group.add(roofMesh);
 
-    // Door
+    /* Door */
     const door = new THREE.Mesh(geometries.building, materials.trunk);
     door.scale.set(0.8, 1.4, 0.15);
     door.position.set(x, 0.7, z - depth / 2 - 0.08);
     chunk.group.add(door);
 
-    // Driveway
+    /* Driveway */
     const dw = new THREE.Mesh(geometries.building, materials.driveway);
     dw.scale.set(1.5, 0.04, 3);
     dw.position.set(x, 0.02, z - depth / 2 - 1.5);
     chunk.group.add(dw);
-  }
-  // 22% tree
-  else if (r1 > 0.63) {
+  } /* 22% tree */ else if (r1 > 0.63) {
     addTree(chunk, materials, geometries, x, z, r2, r3, false);
-  }
-  // 8% flowers
-  else if (r1 > 0.55) {
+  } /* 8% flowers */ else if (r1 > 0.55) {
     addFlowers(chunk, materials, geometries, x, z, r2, r3);
   }
 }

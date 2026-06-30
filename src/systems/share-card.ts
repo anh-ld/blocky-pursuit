@@ -1,10 +1,4 @@
-// Game-over share card. Renders a 1200x630 PNG (Twitter / OG image ratio)
-// summarizing a finished run, then exposes Download / Copy / Share helpers
-// the game-over panel can wire to plain buttons.
-//
-// Pure 2D Canvas — no game scene access — so it's fully testable in
-// isolation and works headlessly. The card is drawn once on demand and
-// returned as a Blob; callers decide what to do with it.
+/* Game-over share card. 1200x630 PNG (Twitter/OG ratio) summarizing a run, exposes Download/Copy helpers. Pure 2D Canvas. */
 
 import { getSkin } from "../entities/car-skins";
 
@@ -28,9 +22,7 @@ export type IShareCardData = {
 const W = 1200;
 const H = 630;
 
-// Palette — pulled from the in-game amber/cyan scheme so the card reads as
-// an extension of the HUD, not a generic export. Avoids the dark blue
-// (#023047) the user has banned for this project.
+/* Palette — pulled from in-game amber/cyan scheme so the card reads as an extension of the HUD. Avoids banned dark blue. */
 const COLORS = {
   bgTop: "#0b0d12",
   bgBottom: "#1a1f2e",
@@ -61,8 +53,7 @@ function fmtNumber(n: number): string {
 }
 
 function drawProceduralBackground(ctx: CanvasRenderingContext2D) {
-  // Fallback when no screenshot was captured. Subtle gradient + voxel grid
-  // so the card never ships looking like a flat color block.
+  /* Fallback when no screenshot captured. Subtle gradient + voxel grid — never ships as a flat color block. */
   const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, COLORS.bgTop);
   grad.addColorStop(1, COLORS.bgBottom);
@@ -92,12 +83,9 @@ function drawProceduralBackground(ctx: CanvasRenderingContext2D) {
  * The screenshot is "cover" cropped (preserve aspect, fill the entire
  * card) so the wreck stays centered regardless of the source aspect ratio.
  */
-async function drawScreenshotBackground(
-  ctx: CanvasRenderingContext2D,
-  dataUrl: string,
-): Promise<void> {
+async function drawScreenshotBackground(ctx: CanvasRenderingContext2D, dataUrl: string): Promise<void> {
   const img = await loadImage(dataUrl);
-  // Cover-fit: scale up to whichever axis fills the card, center the rest.
+  /* Cover-fit: scale up to whichever axis fills the card, center the rest. */
   const scale = Math.max(W / img.width, H / img.height);
   const dw = img.width * scale;
   const dh = img.height * scale;
@@ -105,22 +93,21 @@ async function drawScreenshotBackground(
   const dy = (H - dh) / 2;
   ctx.drawImage(img, dx, dy, dw, dh);
 
-  // Vignette: dark gradient from edges toward the center keeps the text
-  // legible even on bright snowy/sunset weather screenshots.
+  /* Vignette: dark gradient from edges → center keeps text legible on bright snowy/sunset screenshots. */
   const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.85);
   vg.addColorStop(0, "rgba(0,0,0,0.0)");
   vg.addColorStop(1, "rgba(0,0,0,0.6)");
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, W, H);
 
-  // Header darken band — top 130px is where the title + cause-of-death sit.
+  /* Header darken band — top 130px is where the title + cause-of-death sit. */
   const topGrad = ctx.createLinearGradient(0, 0, 0, 160);
   topGrad.addColorStop(0, "rgba(0,0,0,0.78)");
   topGrad.addColorStop(1, "rgba(0,0,0,0.0)");
   ctx.fillStyle = topGrad;
   ctx.fillRect(0, 0, W, 160);
 
-  // Footer darken band — bottom 200px holds the score, stats and CTA.
+  /* Footer darken band — bottom 200px holds the score, stats and CTA. */
   const botGrad = ctx.createLinearGradient(0, H - 280, 0, H);
   botGrad.addColorStop(0, "rgba(0,0,0,0.0)");
   botGrad.addColorStop(0.4, "rgba(0,0,0,0.55)");
@@ -139,7 +126,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 function drawTitle(ctx: CanvasRenderingContext2D) {
-  // Brand stripe down the left edge
+  /* Brand stripe down the left edge */
   ctx.fillStyle = COLORS.amber;
   ctx.fillRect(0, 0, 8, H);
 
@@ -155,8 +142,7 @@ function drawTitle(ctx: CanvasRenderingContext2D) {
 }
 
 function drawReason(ctx: CanvasRenderingContext2D, reason: string) {
-  // Cause of death — top-right red badge with a hairline frame so it
-  // reads against any screenshot background.
+  /* Cause of death — top-right red badge with a hairline frame so it reads against any screenshot background. */
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
   const label = reason.toUpperCase();
@@ -184,8 +170,7 @@ function drawScore(ctx: CanvasRenderingContext2D, data: IShareCardData) {
   ctx.textAlign = "center";
   ctx.fillText("FINAL SCORE", cx, 366);
 
-  // The score number — biggest single element on the card so it carries
-  // the thumbnail. Outline + fill keeps it readable on any background.
+  /* The score number — biggest single element so it carries the thumbnail. Outline + fill = readable on any background. */
   const scoreText = fmtNumber(data.score);
   ctx.font = "900 110px system-ui, -apple-system, sans-serif";
   ctx.lineWidth = 8;
@@ -208,9 +193,7 @@ function drawScore(ctx: CanvasRenderingContext2D, data: IShareCardData) {
 }
 
 function drawStats(ctx: CanvasRenderingContext2D, data: IShareCardData) {
-  // Single-line stats strip just under the score. Each stat is rendered
-  // inline so the row stays compact and centered — fits within the dark
-  // bottom band over the screenshot.
+  /* Single-line stats strip under the score. Stats inline → row stays compact, fits in dark bottom band. */
   const stats: { label: string; value: string; color: string }[] = [
     { label: "TIME", value: fmtTime(data.survivalSec), color: COLORS.white },
     { label: "DROWNED", value: String(data.drowned), color: COLORS.cyan },
@@ -219,7 +202,7 @@ function drawStats(ctx: CanvasRenderingContext2D, data: IShareCardData) {
   ];
 
   ctx.textBaseline = "top";
-  // Measure first so the row can be centered as a unit.
+  /* Measure first so the row can be centered as a unit. */
   const valueFont = "900 22px system-ui, -apple-system, sans-serif";
   const labelFont = "700 11px system-ui, -apple-system, sans-serif";
   const gap = 50;
@@ -252,7 +235,7 @@ function drawStats(ctx: CanvasRenderingContext2D, data: IShareCardData) {
 }
 
 function drawFooter(ctx: CanvasRenderingContext2D, data: IShareCardData) {
-  // Player avatar swatch (colored square — keeps the card asset-free)
+  /* Player avatar swatch (colored square — keeps the card asset-free) */
   const skin = getSkin(data.skinId);
   const swatch = "#" + skin.bodyColor.toString(16).padStart(6, "0");
   ctx.fillStyle = swatch;
@@ -272,7 +255,7 @@ function drawFooter(ctx: CanvasRenderingContext2D, data: IShareCardData) {
   ctx.font = "700 11px system-ui, -apple-system, sans-serif";
   ctx.fillText(`${skin.name}  ·  LV ${data.level}`, 76, 606);
 
-  // Right-side CTA + URL.
+  /* Right-side CTA + URL. */
   ctx.textAlign = "right";
   ctx.fillStyle = COLORS.amber;
   ctx.font = "900 14px system-ui, -apple-system, sans-serif";
@@ -300,7 +283,7 @@ export async function renderShareCardToCanvas(data: IShareCardData): Promise<HTM
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("share-card: 2d context unavailable");
 
-  // Background — screenshot if we have one, fallback gradient otherwise.
+  /* Background — screenshot if we have one, fallback gradient otherwise. */
   if (data.screenshot) {
     try {
       await drawScreenshotBackground(ctx, data.screenshot);
@@ -320,10 +303,7 @@ export async function renderShareCardToCanvas(data: IShareCardData): Promise<HTM
   return canvas;
 }
 
-/**
- * Build the share card and resolve to a PNG Blob. Allocates a fresh canvas
- * each call so it's GC'd as soon as the Blob is consumed.
- */
+/** Build share card → PNG Blob. Fresh canvas each call → GC'd as soon as Blob is consumed. */
 export async function buildShareCard(data: IShareCardData): Promise<Blob> {
   const canvas = await renderShareCardToCanvas(data);
   return new Promise<Blob>((resolve, reject) => {
@@ -350,15 +330,11 @@ export async function downloadShareCard(data: IShareCardData): Promise<void> {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // Defer revoke so Safari has time to start the download.
+  /* Defer revoke so Safari has time to start the download. */
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-/**
- * Copy the share card image to the clipboard. Falls back gracefully if the
- * Clipboard API doesn't support image MIME types — caller can chain a
- * download as a backup.
- */
+/** Copy share card to clipboard. Graceful fallback if Clipboard API lacks image MIME — caller can chain download. */
 export async function copyShareCardToClipboard(data: IShareCardData): Promise<boolean> {
   if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
     return false;

@@ -256,7 +256,7 @@ async function synthesize(text, role) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${API_KEY}`,
+      Authorization: `Bearer ${API_KEY}`,
     },
     body: JSON.stringify({
       model: MODEL,
@@ -296,7 +296,7 @@ async function main() {
       const line = pool.lines[i];
       const filename = `${event}_${i}.opus`;
       const filepath = join(OUT_DIR, filename);
-      if (!FORCE && await fileExists(filepath)) {
+      if (!FORCE && (await fileExists(filepath))) {
         skipped++;
         continue;
       }

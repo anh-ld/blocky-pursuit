@@ -28,18 +28,12 @@ export function createMaterials() {
       metalness: 0.5,
       ...flat,
     }),
-    downtownColors: [
-      0x78909c, 0x90a4ae, 0xb0bec5,
-      0x80cbc4, 0x4db6ac,
-      0xfff176, 0xffb74d,
-    ].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.3, metalness: 0.2, ...flat })),
-    suburbColors: [
-      0xef9a9a, 0xf48fb1,
-      0xce93d8, 0x9fa8da,
-      0x80cbc4, 0xa5d6a7,
-      0xffe082, 0xffcc80,
-      0xbcaaa4,
-    ].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.05, ...flat })),
+    downtownColors: [0x78909c, 0x90a4ae, 0xb0bec5, 0x80cbc4, 0x4db6ac, 0xfff176, 0xffb74d].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.3, metalness: 0.2, ...flat }),
+    ),
+    suburbColors: [0xef9a9a, 0xf48fb1, 0xce93d8, 0x9fa8da, 0x80cbc4, 0xa5d6a7, 0xffe082, 0xffcc80, 0xbcaaa4].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.05, ...flat }),
+    ),
     window: new THREE.MeshStandardMaterial({
       color: 0xbbdefb,
       emissive: 0x90caf9,
@@ -69,17 +63,12 @@ export function createMaterials() {
   };
 }
 
-/**
- * Animate the shared water material so every water tile shimmers in unison.
- * Cheap — one material mutation per frame, regardless of how many water tiles
- * are visible. Wave is a slow sin sweep on emissive intensity + a subtle hue
- * push so the surface reads as a living body of water rather than a flat plane.
- */
+/** Animate shared water material so every tile shimmers in unison. One mutation/frame, regardless of visible tile count. */
 export function tickWaterMaterial(materials: IMaterials, t: number) {
-  const wave = Math.sin(t * 1.6) * 0.5 + 0.5; // 0..1
+  const wave = Math.sin(t * 1.6) * 0.5 + 0.5; /* 0..1 */
   materials.water.emissiveIntensity = 0.18 + wave * 0.22;
   materials.waterDeep.emissiveIntensity = 0.12 + wave * 0.18;
-  // Subtle metalness shimmer so highlights drift across the surface.
+  /* Subtle metalness shimmer so highlights drift across the surface. */
   materials.water.metalness = 0.4 + wave * 0.2;
 }
 

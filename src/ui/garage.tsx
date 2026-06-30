@@ -1,12 +1,4 @@
-import {
-  screen,
-  bestScore,
-  totalRuns,
-  copsDrowned,
-  selectedSkin,
-  actions,
-  gameState,
-} from "../state";
+import { screen, bestScore, totalRuns, copsDrowned, selectedSkin, actions, gameState } from "../state";
 import { CAR_SKINS, isUnlocked, specPercent } from "../entities/car-skins";
 import { CarPreview } from "./car-preview";
 
@@ -23,9 +15,7 @@ export function Garage() {
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
       <div class="bg-black/60 md:bg-black p-4 w-full h-full md:w-160 md:max-w-[90vw] md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col">
-        <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">
-          Garage
-        </div>
+        <div class="text-amber-400 text-xs font-extrabold uppercase tracking-widest mb-3 text-center">Garage</div>
         <div class="grid grid-cols-2 md:grid-cols-3 gap-2 md:max-h-120 overflow-y-auto py-2 -mx-4 px-4">
           {CAR_SKINS.map((s) => {
             const unlocked = isUnlocked(s, progress);
@@ -38,28 +28,32 @@ export function Garage() {
                   isSelected
                     ? "border-amber-400 bg-amber-500/20"
                     : unlocked
-                    ? "border-gray-600 bg-gray-800/40 hover:bg-gray-700/60"
-                    : "border-gray-800 bg-gray-900/40 opacity-50 cursor-not-allowed"
+                      ? "border-gray-600 bg-gray-800/40 hover:bg-gray-700/60"
+                      : "border-gray-800 bg-gray-900/40 opacity-50 cursor-not-allowed"
                 }`}
               >
                 <div class="w-full">
                   <CarPreview skin={s} />
                 </div>
-                <span class={`text-center leading-tight ${isSelected ? "text-amber-300" : "text-gray-300"}`}>{s.name}</span>
+                <span class={`text-center leading-tight ${isSelected ? "text-amber-300" : "text-gray-300"}`}>
+                  {s.name}
+                </span>
                 {!unlocked ? (
                   <span class="text-gray-500 text-[9px] normal-case">🔒 {s.unlockHint}</span>
                 ) : (
                   <div class="w-full flex flex-col gap-0.5 mt-1">
-                    {([
-                      ["SPD", specPercent("topSpeed", s.specs)],
-                      ["ACC", specPercent("acceleration", s.specs)],
-                      ["HDL", specPercent("handling", s.specs)],
-                      ["GRP", specPercent("grip", s.specs)],
-                      ["STB", specPercent("stability", s.specs)],
-                      ["BRK", specPercent("braking", s.specs)],
-                      ["WGT", specPercent("weight", s.specs)],
-                      ["END", specPercent("endurance", s.specs)],
-                    ] as const).map(([label, pct]) => (
+                    {(
+                      [
+                        ["SPD", specPercent("topSpeed", s.specs)],
+                        ["ACC", specPercent("acceleration", s.specs)],
+                        ["HDL", specPercent("handling", s.specs)],
+                        ["GRP", specPercent("grip", s.specs)],
+                        ["STB", specPercent("stability", s.specs)],
+                        ["BRK", specPercent("braking", s.specs)],
+                        ["WGT", specPercent("weight", s.specs)],
+                        ["END", specPercent("endurance", s.specs)],
+                      ] as const
+                    ).map(([label, pct]) => (
                       <div class="flex items-center gap-1">
                         <span class="text-gray-500 text-[8px] w-6">{label}</span>
                         <div class="flex-1 h-1 bg-gray-800">

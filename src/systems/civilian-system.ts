@@ -8,15 +8,13 @@ import { spawnPopup } from "../world/popups";
 import type { RunState, IGameContext } from "./run-state";
 
 const _fleeForce = new CANNON.Vec3();
-// Per-frame scratch for the stun-impact branch — keeps the civilian collision
-// hot path allocation-free, mirroring `_relVel` in cop-system.
+/* Per-frame scratch for stun-impact branch — keeps civilian collision alloc-free (mirrors `_relVel` in cop-system). */
 const _civCollideRelVel = new CANNON.Vec3();
 
 const MAX_CIVILIANS = 8;
 const CIVILIAN_SPAWN_INTERVAL = 2;
 const STUN_IMPACT_THRESHOLD = 6;
-// Flee tuning: when the player blasts past at speed, civilians get a
-// shove away so the city feels reactive instead of inert.
+/* Flee tuning: when the player blasts past at speed, civilians get a shove away so the city feels reactive (not inert). */
 const FLEE_RADIUS = 8;
 const FLEE_MIN_PLAYER_SPEED = 20;
 const FLEE_FORCE = 1200;
@@ -59,22 +57,16 @@ export class CivilianSystem {
 
       const distToPlayer = civ.body.position.distanceTo(car.body.position);
 
-      // Despawn far civilians
+      /* Despawn far civilians */
       if (distToPlayer > 80) {
         civ.destroy();
         this.civilians.splice(i, 1);
         continue;
       }
 
-      // Flee: when the player roars past at speed, push civilians away so
-      // the city visibly reacts. Cheap distance check + a single applyForce
-      // — civilians clear the road around the player without needing AI.
+      /* Flee: when player roars past at speed, push civilians away so city reacts. Cheap dist check + single applyForce — no AI. */
       const playerSpeed = car.body.velocity.length();
-      if (
-        distToPlayer < FLEE_RADIUS &&
-        playerSpeed > FLEE_MIN_PLAYER_SPEED &&
-        civ.stunTimer <= 0
-      ) {
+      if (distToPlayer < FLEE_RADIUS && playerSpeed > FLEE_MIN_PLAYER_SPEED && civ.stunTimer <= 0) {
         const dx = civ.body.position.x - car.body.position.x;
         const dz = civ.body.position.z - car.body.position.z;
         const inv = 1 / Math.max(0.001, distToPlayer);
@@ -82,18 +74,11 @@ export class CivilianSystem {
         civ.body.applyForce(_fleeForce, civ.body.position);
         if (!civ.hasPanicked) {
           civ.hasPanicked = true;
-          spawnPopup(
-            civ.body.position.x,
-            civ.body.position.y + 2,
-            civ.body.position.z,
-            "!!",
-            "#ffeb3b",
-          );
+          spawnPopup(civ.body.position.x, civ.body.position.y + 2, civ.body.position.z, "!!", "#ffeb3b");
         }
       }
 
-      // Stun on collision with player — require actual impact velocity,
-      // not just proximity, so brushing past at low speed doesn't stun.
+      /* Stun on collision — require actual impact velocity (not just proximity) so brushing past at low speed doesn't stun. */
       if (distToPlayer < 5 && civ.stunTimer <= 0) {
         car.body.velocity.vsub(civ.body.velocity, _civCollideRelVel);
         if (_civCollideRelVel.length() > STUN_IMPACT_THRESHOLD) {
@@ -103,7 +88,7 @@ export class CivilianSystem {
         }
       }
 
-      // Civilians die in water — silent removal
+      /* Civilians die in water — silent removal */
       const tx = Math.floor(civ.body.position.x / TILE_SIZE);
       const tz = Math.floor(civ.body.position.z / TILE_SIZE);
       if (!isRoad(tx, tz) && isWater(tx, tz)) {

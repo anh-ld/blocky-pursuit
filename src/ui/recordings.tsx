@@ -10,9 +10,7 @@ export function Recordings() {
     replayUrl.value = url;
   };
 
-  const entries = leaderboardEntries.value
-    .filter((e) => !!e.recordingUrl)
-    .slice(0, 50);
+  const entries = leaderboardEntries.value.filter((e) => !!e.recordingUrl).slice(0, 50);
   const me = playerName.value;
 
   return (
@@ -21,17 +19,13 @@ export function Recordings() {
         <div class="text-cyan-400 text-xs font-extrabold uppercase tracking-widest mb-1 text-center">
           Top Recordings
         </div>
-        <div class="text-gray-500 text-[10px] text-center mb-3">
-          Browse recorded top runs
-        </div>
+        <div class="text-gray-500 text-[10px] text-center mb-3">Browse recorded top runs</div>
 
         <div class="flex flex-col gap-1 text-xs font-semibold min-h-40">
           {leaderboardLoading.value ? (
             <div class="text-gray-500 text-center text-[10px]">Loading...</div>
           ) : entries.length === 0 ? (
-            <div class="text-gray-500 text-center text-xs py-6">
-              No recordings yet.
-            </div>
+            <div class="text-gray-500 text-center text-xs py-6">No recordings yet.</div>
           ) : (
             entries.map((e, i) => {
               const display = e.name;
@@ -58,10 +52,7 @@ export function Recordings() {
         </div>
 
         <div class="mt-auto pt-3">
-          <button
-            onClick={back}
-            class="btn bg-gray-700 text-gray-300 text-xs py-2 tracking-wider hover:bg-gray-600"
-          >
+          <button onClick={back} class="btn bg-gray-700 text-gray-300 text-xs py-2 tracking-wider hover:bg-gray-600">
             BACK
           </button>
         </div>

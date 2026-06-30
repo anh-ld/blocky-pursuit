@@ -14,8 +14,7 @@ export function HowToPlay() {
     screen.value = "garage";
   };
 
-  // Compute career stats from persisted progress so the start screen shows
-  // visible long-term progression instead of starting cold every visit.
+  /* Compute career stats from persisted progress — start screen shows long-term progression, not cold start. */
   const progress = {
     best: bestScore.value,
     totalRuns: totalRuns.value,
@@ -28,9 +27,7 @@ export function HowToPlay() {
   return (
     <div class="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
       <div class="bg-black/60 md:bg-black md:w-160 md:max-w-[90vw] text-gray-300 px-4 py-5 md:py-3 flex flex-col gap-3 text-xs font-normal tracking-wide w-full h-full md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto">
-        <span class="text-amber-400 font-extrabold uppercase tracking-widest mb-4">
-          How to Play
-        </span>
+        <span class="text-amber-400 font-extrabold uppercase tracking-widest mb-4">How to Play</span>
         <div class="flex items-center gap-2">
           <div class="gap-1 shrink-0 hidden md:flex">
             <span class="kbd-sm">A</span>
@@ -71,15 +68,11 @@ export function HowToPlay() {
             </div>
             <div class="flex flex-col items-center">
               <span class="text-gray-500 text-[8px] uppercase tracking-wider">Runs</span>
-              <span class="text-gray-200 text-[11px] font-extrabold tabular-nums">
-                {totalRuns.value}
-              </span>
+              <span class="text-gray-200 text-[11px] font-extrabold tabular-nums">{totalRuns.value}</span>
             </div>
             <div class="flex flex-col items-center">
               <span class="text-gray-500 text-[8px] uppercase tracking-wider">Drowned</span>
-              <span class="text-cyan-300 text-[11px] font-extrabold tabular-nums">
-                {copsDrowned.value}
-              </span>
+              <span class="text-cyan-300 text-[11px] font-extrabold tabular-nums">{copsDrowned.value}</span>
             </div>
             <div class="flex flex-col items-center">
               <span class="text-gray-500 text-[8px] uppercase tracking-wider">Cars</span>

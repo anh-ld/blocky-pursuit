@@ -35,15 +35,9 @@ function formatTime(seconds: number) {
   return `${secs}.${ms.toString().padStart(2, "0")}s`;
 }
 
-/**
- * Animate a numeric value from 0 → target over `duration` ms with an
- * ease-out cubic curve. Used for the game-over score reveal so the panel
- * lands like a payoff instead of a static dump of numbers.
- */
+/** Animate 0 → target over `duration` ms, ease-out cubic. Game-over score reveal — payoff, not static dump. */
 function useCountUp(target: number, duration: number): number {
-  // Initial state is 0 (not target) so the very first render of the panel
-  // shows the count starting from zero — otherwise there's a 1-frame flash
-  // of the final score before the effect resets it.
+  /* Initial state 0 (not target) so first render shows count from zero — avoids 1-frame flash of final score. */
   const [value, setValue] = useState(0);
   useEffect(() => {
     let raf = 0;
@@ -100,31 +94,26 @@ export function GameOver() {
   const tile = Math.floor(runTileScore.value);
   const cmb = Math.floor(runComboScore.value);
   const cop = Math.floor(runCopScore.value);
-  // Animated score reveal — counts from 0 to the final score over ~800ms.
-  // The hook reads `score.value` once at mount; signal changes after the
-  // panel appears would re-trigger the effect, but the run is over so the
-  // value stays stable.
+  /* Animated score reveal — 0 → final over ~800ms. Hook reads `score.value` at mount; value stable after run ends. */
   const animatedScore = useCountUp(score.value, 800);
-  // Card-action transient state. `cardStatus` flips to "copied" or "saved"
-  // for ~1.6s after a successful card action so the button shows a brief
-  // confirmation instead of silently completing.
+  /* `cardStatus` → "copied"/"saved" for ~1.6s after success — button shows confirmation, not silent complete. */
   const [cardBusy, setCardBusy] = useState(false);
   const [cardStatus, setCardStatus] = useState<"" | "copied" | "saved" | "error">("");
-  // Preview data URL of the rendered share card. Built once on mount so
-  // the player sees exactly what will be copied/downloaded before they
-  // click. Uses the same screenshot capture as the export path.
+  /* Preview data URL of share card, built once on mount. Player sees the exact output before clicking. */
   const [previewUrl, setPreviewUrl] = useState<string>("");
   useEffect(() => {
     let cancelled = false;
-    buildShareCardDataUrl(buildShareData()).then((url) => {
-      if (!cancelled) setPreviewUrl(url);
-    }).catch((err) => {
-      console.warn("[game-over] preview build failed", err);
-    });
-    return () => { cancelled = true; };
-    // Mount-only build — the underlying signals are stable for the panel's
-    // lifetime so a fresh effect on every render would just thrash.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    buildShareCardDataUrl(buildShareData())
+      .then((url) => {
+        if (!cancelled) setPreviewUrl(url);
+      })
+      .catch((err) => {
+        console.warn("[game-over] preview build failed", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+    /* Mount-only build — signals stable for panel lifetime. eslint-disable-next-line react-hooks/exhaustive-deps */
   }, []);
   const handleRetry = () => {
     haptics.pickup();
@@ -151,9 +140,7 @@ export function GameOver() {
     const [err, ok] = await attemptAsync(() => copyShareCardToClipboard(buildShareData()));
     setCardBusy(false);
     if (err || !ok) {
-      // Fallback: trigger a download so the player still walks away with
-      // the card. Browsers without ClipboardItem (older Firefox/Safari)
-      // hit this path silently.
+      /* Fallback: download so player walks away with the card. Old browsers without ClipboardItem hit this. */
       await attemptAsync(() => downloadShareCard(buildShareData()));
       flashStatus("saved");
     } else {
@@ -164,9 +151,7 @@ export function GameOver() {
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
       <div class="bg-black/60 md:bg-black px-4 py-5 w-full h-full md:w-160 md:h-auto md:max-h-[90vh] overflow-y-auto pointer-events-auto flex flex-col items-center gap-3 animate-game-over-in">
-        <div class="text-red-400 text-xs font-extrabold uppercase tracking-[0.3em]">
-          {reasonText[reason] || reason}
-        </div>
+        <div class="text-red-400 text-xs font-extrabold uppercase tracking-[0.3em]">{reasonText[reason] || reason}</div>
         {isNewBest.value && (
           <div class="text-amber-300 text-[11px] font-extrabold uppercase tracking-widest animate-pulse">
             ★ NEW BEST ★
@@ -175,12 +160,8 @@ export function GameOver() {
         <div class="text-amber-400 text-5xl font-extrabold tabular-nums leading-none">
           {Math.floor(animatedScore).toLocaleString()}
         </div>
-        {/* Share card preview — exactly what gets copied/downloaded. The
-            wreck-moment screenshot is rendered as the hero so the player
-            sees the cinematic frame from their own death. Aspect ratio
-            matches the underlying canvas (1200x630 ≈ 1.9:1). The Copy /
-            Download buttons sit immediately under the preview so the
-            "see this image → save it" relationship is visually obvious. */}
+        {/* Share card preview — exactly what gets copied/downloaded. Wreck-moment screenshot as hero. */}
+        {/* Aspect 1200x630 ≈ 1.9:1. Copy/Download sit under preview so "see image → save it" is obvious. */}
         {previewUrl && (
           <div class="w-full mt-1 flex flex-col gap-2">
             <div class="border border-gray-700/60">
@@ -212,15 +193,11 @@ export function GameOver() {
         <div class="flex items-center gap-4 text-[10px] uppercase tracking-widest text-gray-400">
           <div class="flex flex-col items-center">
             <span class="text-gray-500">Best</span>
-            <span class="text-amber-300 font-extrabold tabular-nums">
-              {bestScore.value.toLocaleString()}
-            </span>
+            <span class="text-amber-300 font-extrabold tabular-nums">{bestScore.value.toLocaleString()}</span>
           </div>
           <div class="flex flex-col items-center">
             <span class="text-gray-500">Time</span>
-            <span class="text-gray-200 font-extrabold tabular-nums">
-              {formatTime(survivalTime.value)}
-            </span>
+            <span class="text-gray-200 font-extrabold tabular-nums">{formatTime(survivalTime.value)}</span>
           </div>
           <div class="flex flex-col items-center">
             <span class="text-gray-500">Level</span>

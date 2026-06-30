@@ -15,16 +15,12 @@ export function placeNature(
   x: number,
   z: number,
 ) {
-  // 25% tree
+  /* 25% tree */
   if (r1 > 0.75) {
     addTree(chunk, materials, geometries, x, z, r2, r3, false);
-  }
-  // 10% bush cluster
-  else if (r1 > 0.65) {
+  } /* 10% bush cluster */ else if (r1 > 0.65) {
     addBush(chunk, materials, geometries, x, z, r2, r3);
-  }
-  // 8% rock
-  else if (r1 > 0.57) {
+  } /* 8% rock */ else if (r1 > 0.57) {
     const size = 1 + r2 * 2;
     const mesh = new THREE.Mesh(geometries.building, materials.rock);
     mesh.scale.set(size * 1.2, size * 0.7, size);
@@ -38,25 +34,16 @@ export function placeNature(
     body.position.set(x, (size * 0.7) / 2, z);
     chunk.world.addBody(body);
     chunk.bodies.push(body);
-  }
-  // 5% fallen log
-  else if (r1 > 0.52) {
+  } /* 5% fallen log */ else if (r1 > 0.52) {
     addLog(chunk, materials, geometries, x, z, r2, r3);
-  }
-  // 5% mushroom cluster
-  else if (r1 > 0.47) {
+  } /* 5% mushroom cluster */ else if (r1 > 0.47) {
     addMushrooms(chunk, materials, geometries, x, z, r2, r3);
-  }
-  // 7% flowers
-  else if (r1 > 0.40) {
+  } /* 7% flowers */ else if (r1 > 0.4) {
     addFlowers(chunk, materials, geometries, x, z, r2, r3);
   }
 }
 
-/**
- * Three-blob bush cluster — quick low-poly read of "shrub" without needing
- * a sphere material per instance. No physics body: cars roll right over.
- */
+/** Three-blob bush cluster — low-poly "shrub" read without a sphere material per instance. No body — cars roll over. */
 function addBush(
   chunk: IChunkData,
   materials: IMaterials,
@@ -82,11 +69,7 @@ function addBush(
   }
 }
 
-/**
- * Fallen log — cylinder rotated to horizontal. Has a physics body so cars
- * crashing through nature still feel solid contact, but the body is sized to
- * the visible mesh so it doesn't feel like an invisible wall.
- */
+/** Fallen log — cylinder laid horizontal. Body matches visible mesh so crashes feel solid, no invisible walls. */
 function addLog(
   chunk: IChunkData,
   materials: IMaterials,
@@ -99,18 +82,15 @@ function addLog(
   const length = 2.5 + r2 * 2;
   const radius = 0.35 + r3 * 0.25;
   const log = new THREE.Mesh(geometries.cylinder, materials.log);
-  // Geometry is a unit cylinder along Y; scale length on Y, radius on X/Z,
-  // then rotate Z=90° to lay it on its side along the world X axis.
+  /* Unit cylinder along Y: scale length on Y, radius on X/Z, then rotate Z=90° to lay it along world X. */
   log.scale.set(radius * 2, length, radius * 2);
   log.rotation.z = Math.PI / 2;
-  log.rotation.y = r2 * Math.PI; // random heading on the ground
+  log.rotation.y = r2 * Math.PI; /* random heading on the ground */
   log.position.set(x, radius, z);
   log.castShadow = true;
   chunk.group.add(log);
 
-  // Physics: AABB approximation oriented to the log's heading. Use a slightly
-  // smaller half-extent so the visible log "embraces" the collider rather
-  // than the collider sticking out.
+  /* AABB approximation oriented to log's heading. Slightly smaller half-extent so visible log "embraces" the collider. */
   const halfX = (Math.abs(Math.cos(log.rotation.y)) * length + Math.abs(Math.sin(log.rotation.y)) * radius * 2) / 2;
   const halfZ = (Math.abs(Math.sin(log.rotation.y)) * length + Math.abs(Math.cos(log.rotation.y)) * radius * 2) / 2;
   const shape = new CANNON.Box(new CANNON.Vec3(halfX * 0.85, radius, halfZ * 0.85));
@@ -167,7 +147,7 @@ export function placeShoreDecor(
   worldZ: number,
 ) {
   const r = pseudoRandom(globalTileX, globalTileZ, 900);
-  if (r < 0.4) return; // bare sand on some shore tiles for breathing room
+  if (r < 0.4) return; /* bare sand on some shore tiles for breathing room */
   const count = 3 + Math.floor(r * 4);
   for (let i = 0; i < count; i++) {
     const rx = pseudoRandom(globalTileX, globalTileZ, 910 + i);
@@ -179,7 +159,7 @@ export function placeShoreDecor(
     reed.scale.set(0.08, h, 0.08);
     reed.position.set(lx, h / 2, lz);
     chunk.group.add(reed);
-    // Occasional cattail head — dark brown sphere on a stalk.
+    /* Occasional cattail head — dark brown sphere on a stalk. */
     if (rz > 0.7) {
       const head = new THREE.Mesh(geometries.cylinder, materials.cattail);
       head.scale.set(0.13, 0.25, 0.13);
@@ -198,9 +178,7 @@ export function placeWaterDecor(
   worldX: number,
   worldZ: number,
 ) {
-  // No physics wall — cars can drive into water (handled by game logic)
-
-  // Lily pads
+  /* No physics wall — cars can drive into water (handled by game logic) Lily pads */
   const lilyR = pseudoRandom(globalTileX, globalTileZ, 600);
   if (lilyR > 0.5) {
     const count = 1 + Math.floor(lilyR * 3);
@@ -210,11 +188,11 @@ export function placeWaterDecor(
       const size = 0.4 + pseudoRandom(globalTileX, globalTileZ, 630 + lp) * 0.5;
       const pad = new THREE.Mesh(geometries.building, materials.lilypad);
       pad.scale.set(size, 0.05, size);
-      // Sit on the new sunken water surface (-0.18) instead of ground level.
+      /* Sit on the new sunken water surface (-0.18) instead of ground level. */
       pad.position.set(lx, -0.13, lz);
       chunk.group.add(pad);
 
-      // Occasional flower on lily pad
+      /* Occasional flower on lily pad */
       if (pseudoRandom(globalTileX, globalTileZ, 640 + lp) > 0.6) {
         const flowerIdx = Math.floor(pseudoRandom(globalTileX, globalTileZ, 650 + lp) * materials.flower.length);
         const f = new THREE.Mesh(geometries.building, materials.flower[flowerIdx]);

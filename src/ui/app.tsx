@@ -20,7 +20,8 @@ export function App() {
   const state = gameState.value;
   const sc = screen.value;
   const showHowToPlay = state === "start" && sc === "howToPlay";
-  const showGameOver = state === "gameover" && sc !== "leaderboard" && sc !== "recordings" && sc !== "feedback" && sc !== "preGame";
+  const showGameOver =
+    state === "gameover" && sc !== "leaderboard" && sc !== "recordings" && sc !== "feedback" && sc !== "preGame";
   const showPaused = state === "paused";
   const darken = state !== "playing";
 
@@ -41,9 +42,7 @@ export function App() {
         {showPaused && (
           <div class="absolute inset-0 z-20 flex items-center justify-center pointer-events-auto">
             <div class="bg-black/80 px-5 py-5 flex flex-col gap-3 items-center min-w-56">
-              <span class="text-amber-400 font-extrabold uppercase tracking-widest text-sm">
-                Paused
-              </span>
+              <span class="text-amber-400 font-extrabold uppercase tracking-widest text-sm">Paused</span>
               <button
                 onClick={() => actions.togglePause()}
                 class="w-full py-2 bg-amber-400 text-gray-900 text-xs font-extrabold uppercase tracking-widest cursor-pointer hover:bg-amber-300 active:translate-y-0.5"
@@ -58,7 +57,7 @@ export function App() {
               </button>
               <button
                 onClick={() => {
-                  // Quit to the start screen — mirrors game-over "Back".
+                  /* Quit to the start screen — mirrors game-over "Back". */
                   gameState.value = "start";
                   screen.value = "howToPlay";
                 }}
@@ -66,9 +65,7 @@ export function App() {
               >
                 Quit to Menu
               </button>
-              <span class="text-gray-500 text-[10px] tracking-wide hidden md:inline">
-                Press SPACE to resume
-              </span>
+              <span class="text-gray-500 text-[10px] tracking-wide hidden md:inline">Press SPACE to resume</span>
             </div>
           </div>
         )}

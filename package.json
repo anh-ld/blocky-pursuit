@@ -1,16 +1,16 @@
 {
   "name": "blocky-pursuit",
+  "description": "Evade cops in a blocky city — don't get busted. PWA supported. Smashy Road inspired.",
   "author": {
     "name": "Anh Le",
     "email": "ledzanh@gmail.com"
   },
-  "description": "Evade cops in a blocky city — don't get busted. PWA supported. Smashy Road inspired.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "format": "oxfmt --write ."
+    "format": "bun scripts/oxfmt-config.mjs && oxfmt --write ."
   },
   "dependencies": {
     "@netlify/blobs": "10.7.4",
@@ -33,5 +33,9 @@
     "unocss": "66.6.7",
     "vite": "8.0.3",
     "vite-plugin-pwa": "1.2.0"
+  },
+  "oxfmt": {
+    "commentFormat": "singleLine",
+    "printWidth": 120
   }
 }

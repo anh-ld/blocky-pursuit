@@ -15,7 +15,7 @@ export function placeDowntown(
   x: number,
   z: number,
 ) {
-  // 30% tall building
+  /* 30% tall building */
   if (r1 > 0.7) {
     const height = 6 + r2 * 14;
     const width = 4 + r3 * 4;
@@ -39,9 +39,7 @@ export function placeDowntown(
 
     addWindows(chunk, geometries, materials, x, z, width, height, depth);
     addRooftopDetail(chunk, geometries, materials, x, z, height, width, depth, r4);
-  }
-  // 10% small tree/planter
-  else if (r1 > 0.6) {
+  } /* 10% small tree/planter */ else if (r1 > 0.6) {
     addTree(chunk, materials, geometries, x, z, r2, r3, true);
   }
 }

@@ -9,7 +9,7 @@ type IScoreEntry = {
 
 export default async function handler(_req: Request, _context: Context) {
   const store = getStore("leaderboard");
-  const raw = await store.get("top-scores", { type: "json" }) as IScoreEntry[] | null;
+  const raw = (await store.get("top-scores", { type: "json" })) as IScoreEntry[] | null;
   const entries: IScoreEntry[] = raw ?? [];
 
   // Return up to 50 — the UI displays the top 10 but the client uses

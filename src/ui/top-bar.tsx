@@ -3,7 +3,8 @@ import { Hud } from "./hud";
 import { useState } from "preact/hooks";
 
 function nameToGradient(name: string): string {
-  let h1 = 0, h2 = 0;
+  let h1 = 0,
+    h2 = 0;
   for (let i = 0; i < name.length; i++) {
     const c = name.charCodeAt(i);
     if (i % 2 === 0) h1 = (h1 + c * 37) % 360;
@@ -56,9 +57,7 @@ export function TopBar() {
 
   return (
     <div class="flex flex-nowrap items-center justify-between gap-2 px-3 sm:px-5 h-13 min-h-13 bg-gray-900 shrink-0">
-      {/* Left group: HUD + time. `min-w-0` lets it shrink below content size
-          and `overflow-hidden` clips the rightmost HUD chips when there's
-          no room — the right group (pause + avatar) stays fully visible. */}
+      {/* Left: HUD + time. `min-w-0` + `overflow-hidden` clip rightmost chips. Right group stays visible. */}
       <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-hidden">
         {start && (
           <h1 class="text-orange-500 text-lg font-extrabold uppercase tracking-widest m-0 leading-none">

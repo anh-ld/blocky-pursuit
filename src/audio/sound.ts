@@ -1,6 +1,4 @@
-// Web Audio sound system. Engine uses pre-recorded MP3 samples crossfaded
-// by speed (technique borrowed from pmndrs/racing-game, MIT licensed).
-// Other sounds are generated procedurally from oscillators + noise.
+/* Web Audio. Engine = pre-recorded MP3s crossfaded by speed (pmndrs/racing-game, MIT). SFX = oscillators + noise. */
 
 import { attempt, attemptAsync } from "es-toolkit";
 import { StorageKey, storageGet, storageSet } from "../storage";
@@ -40,14 +38,14 @@ export function initAudio() {
     gain.connect(audioCtx.destination);
     return { audioCtx, gain };
   });
-  if (err || !created) return; // Audio not supported — silently ignore
+  if (err || !created) return; /* Audio not supported — silently ignore */
   ctx = created.audioCtx;
   masterGain = created.gain;
 
   muted = storageGet(StorageKey.Muted) === "1";
   if (muted) masterGain.gain.value = 0;
 
-  // Kick off engine sample preload (fire-and-forget)
+  /* Kick off engine sample preload (fire-and-forget) */
   loadEngineBuffers();
 }
 
@@ -55,10 +53,7 @@ export function isMuted(): boolean {
   return muted;
 }
 
-/** Expose the shared AudioContext + master bus so other audio modules
- *  (e.g. the radio voice player) can route their nodes into the same
- *  graph instead of spinning up a second context. Returns null until
- *  `initAudio()` has run successfully. */
+/** Shared AudioContext + master bus for other audio modules. Returns null until initAudio() runs. */
 export function getAudioContext(): AudioContext | null {
   return ctx;
 }
@@ -73,16 +68,12 @@ export function toggleMute(): boolean {
   return muted;
 }
 
-// --- Helpers ---
+/* Helpers */
 function now(): number {
   return ctx ? ctx.currentTime : 0;
 }
 
-/**
- * Stop (if a source) and disconnect a list of audio nodes. Web Audio
- * throws if a source is double-stopped or a node is already disconnected;
- * those errors are intentionally swallowed.
- */
+/** Stop (if a source) & disconnect audio nodes. Web Audio throws on double-stop / double-disconnect — swallowed. */
 function safeDispose(...nodes: (AudioNode | null | undefined)[]) {
   for (const node of nodes) {
     if (!node) continue;
@@ -111,7 +102,7 @@ function noiseBuffer(duration: number): AudioBuffer | null {
   return buf;
 }
 
-// --- Engine ---
+/* Engine */
 
 async function fetchBuffer(url: string): Promise<AudioBuffer | null> {
   if (!ctx) return null;
@@ -127,17 +118,12 @@ async function fetchBuffer(url: string): Promise<AudioBuffer | null> {
   return buf;
 }
 
-// Returns a promise that resolves AFTER the buffers are loaded (or null if
-// already loaded). Multiple callers share the same in-flight promise so they
-// all wait for the same fetch.
+/** Resolves after buffers load. Multiple callers share the in-flight promise → one fetch. */
 function loadEngineBuffers(): Promise<void> {
   if (engineBuffers) return Promise.resolve();
   if (engineLoadPromise) return engineLoadPromise;
   engineLoadPromise = (async () => {
-    const [idle, rev] = await Promise.all([
-      fetchBuffer("/sounds/engine.mp3"),
-      fetchBuffer("/sounds/accelerate.mp3"),
-    ]);
+    const [idle, rev] = await Promise.all([fetchBuffer("/sounds/engine.mp3"), fetchBuffer("/sounds/accelerate.mp3")]);
     if (idle && rev) {
       engineBuffers = { idle, rev };
       console.log("[audio] engine MP3s loaded successfully");
@@ -160,18 +146,12 @@ function buildEngineNodes() {
   idleSrc.loop = true;
   revSrc.loop = true;
 
-  // idleGain/revGain handle crossfade ONLY (0..1 range, no amplification —
-  // keeps the signal clean). Engine bus does the pre-gain to compensate for
-  // masterGain (0.4). 2.0 × 0.4 = 0.8 effective amplitude — close to raw
-  // file, with headroom for SFX on top.
-  idleGain.gain.value = 1.0; // start at idle (will be updated by setEngineSpeed)
+  /* idleGain/revGain: crossfade only (0..1, clean signal). Bus pre-gains to compensate for masterGain (0.4). */
+  idleGain.gain.value = 1.0; /* start at idle (will be updated by setEngineSpeed) */
   revGain.gain.value = 0;
   bus.gain.value = 1.3;
 
-  // Starting playback rates match the setEngineSpeed baselines so the
-  // first frame doesn't pop. NOTE: rev sample (accelerate.mp3) is a
-  // high-RPM recording and is intentionally played SLOWER than native
-  // (per pmndrs/racing-game) — playing it faster sounds chipmunky.
+  /* Start rates match setEngineSpeed baselines — no pop. rev = high-RPM, played slower (pmndrs). */
   idleSrc.playbackRate.value = 1.0;
   revSrc.playbackRate.value = 0.55;
 
@@ -186,9 +166,7 @@ function buildEngineNodes() {
   engineNodes = { idleSrc, revSrc, idleGain, revGain, bus };
 }
 
-// "Engine wants to be on" intent. Set true by startEngine, false by stopEngine.
-// Used so the async-load path knows whether to actually build the nodes once
-// the buffers arrive (the user may have already died before the load finishes).
+/* Engine-on intent. Lets async-load skip build if user died before buffers arrived. */
 let engineWanted = false;
 
 export function startEngine() {
@@ -208,24 +186,13 @@ export function setEngineSpeed(speedRatio: number) {
   if (!ctx || !engineNodes) return;
   const t = now();
 
-  // Volumes — modeled on pmndrs/racing-game:
-  //   idle = 1 - speed/max          (max 1.0 at standstill, 0 at top speed)
-  //   rev  = 0.6 * speed/max        (max 0.6 at top speed — kept LOWER than
-  //                                  idle's max because our accelerate.mp3
-  //                                  is naturally louder than engine.mp3,
-  //                                  unlike racing-game where the opposite
-  //                                  is true and they multiply by 2)
+  /* Volumes (pmndrs model): idle = 1-speed/max, rev = 0.6*speed/max. rev capped lower — accelerate.mp3 is naturally louder. */
   const idleVol = 1 - speedRatio;
   const revVol = speedRatio * 0.6;
   engineNodes.idleGain.gain.setTargetAtTime(idleVol, t, 0.08);
   engineNodes.revGain.gain.setTargetAtTime(revVol, t, 0.08);
 
-  // Playback rates — modeled on pmndrs/racing-game (engine = rpm+1, rev = rpm+0.5):
-  //   idle: 1.0x → 1.30x  (idle.mp3 is a low-RPM recording, sped up slightly)
-  //   rev:  0.55x → 0.85x (accelerate.mp3 is a HIGH-RPM recording,
-  //                        intentionally SLOWED so it doesn't sound chipmunky)
-  // The rev sample being slowed below 1.0 is the key racing-game insight
-  // I missed earlier — without this it sounded like an angry mosquito.
+  /* Rates (pmndrs): idle 1.0x→1.30x (low-RPM, sped up). rev 0.55x→0.85x (high-RPM, slowed). */
   const idleRate = 1.0 + speedRatio * 0.3;
   const revRate = 0.55 + speedRatio * 0.3;
   engineNodes.idleSrc.playbackRate.setTargetAtTime(idleRate, t, 0.08);
@@ -240,9 +207,7 @@ export function stopEngine() {
   engineNodes = null;
 }
 
-// --- Siren (hi-lo two-tone, classic European emergency vehicle) ---
-// Discrete tone jumps every 0.55s — there is no continuous modulation
-// in the 4-20 Hz "insect wing" range, so this can never read as a bug.
+/* Siren: hi-lo two-tone (EU), discrete jumps every 0.55s. No 4-20Hz "insect wing" — never reads as a bug. */
 const SIREN_HI = 750;
 const SIREN_LO = 480;
 const SIREN_TOGGLE_MS = 550;
@@ -285,8 +250,7 @@ export function stopSiren() {
   sirenNodes = null;
 }
 
-// --- One-shot SFX ---
-// SFX peaks are intentionally loud (close to clip) so they cut through BGM.
+/* One-shot SFX SFX peaks are intentionally loud (close to clip) so they cut through BGM. */
 export function playCrash() {
   if (!ctx || !masterGain) return;
   const buf = noiseBuffer(0.35);
@@ -303,7 +267,7 @@ export function playCrash() {
   envelope(gain, 0.003, 1.4, 0.3);
   src.start();
 
-  // Add a punchy sub-thump for body
+  /* Add a punchy sub-thump for body */
   const t = now();
   const thump = ctx.createOscillator();
   const tg = ctx.createGain();
@@ -339,7 +303,7 @@ export function playSplash() {
 type IArpeggioOpts = {
   notes: number[];
   type: OscillatorType;
-  spacing: number; // seconds between note onsets
+  spacing: number /* seconds between note onsets */;
   attack: number;
   peak: number;
   decay: number;
@@ -366,8 +330,7 @@ function playArpeggio(opts: IArpeggioOpts) {
 }
 
 export function playPickup() {
-  // Two-note "ding!" — generic pickup, kept as a fallback for callers that
-  // don't pass a specific kind.
+  /* Two-note "ding!" — generic pickup, kept as a fallback for callers that don't pass a specific kind. */
   playArpeggio({ notes: [880, 1320], type: "triangle", spacing: 0.06, attack: 0.01, peak: 0.6, decay: 0.18 });
 }
 
@@ -403,7 +366,7 @@ export function playNitroWhoosh() {
   filter.type = "bandpass";
   filter.Q.value = 1.2;
   const t = now();
-  // Sweep the band upward so it reads as "speed up"
+  /* Sweep the band upward so it reads as "speed up" */
   filter.frequency.setValueAtTime(400, t);
   filter.frequency.exponentialRampToValueAtTime(2400, t + 0.32);
   src.connect(filter);
@@ -435,14 +398,10 @@ export function playComboLost() {
   playArpeggio({ notes: [880, 660, 440], type: "triangle", spacing: 0.07, attack: 0.01, peak: 0.45, decay: 0.22 });
 }
 
-/**
- * Combo milestone "ladder" — pitch climbs every 5 combos so the player
- * hears their multiplier rising. Tier = combo / 5. Capped at 8 to keep
- * the high end musical instead of piercing.
- */
+/** Combo "ladder" — pitch climbs every 5 combos. Tier = combo/5. Capped at 8 → musical, not piercing. */
 export function playComboTier(tier: number) {
   const t = Math.max(0, Math.min(tier, 8));
-  // Each tier is 2 semitones up from the last
+  /* Each tier is 2 semitones up from the last */
   const base = 660 * Math.pow(2, (t * 2) / 12);
   playArpeggio({
     notes: [base, base * 1.5],
@@ -455,14 +414,11 @@ export function playComboTier(tier: number) {
 }
 
 export function playLevelUp() {
-  // C E G C — major arpeggio
+  /* C E G C — major arpeggio */
   playArpeggio({ notes: [523, 659, 784, 1047], type: "square", spacing: 0.08, attack: 0.02, peak: 0.5, decay: 0.2 });
 }
 
-/**
- * Score milestone — slightly higher and more triumphant than level-up so
- * the two events don't feel identical when they happen close together.
- */
+/** Score milestone — higher/triumphant-er than level-up so back-to-back events feel distinct. */
 export function playMilestone() {
   playArpeggio({
     notes: [659, 988, 1319, 1568],
@@ -474,10 +430,7 @@ export function playMilestone() {
   });
 }
 
-/**
- * Quick warm two-note used when the player shakes off a chase. Distinct
- * from pickup audio so the "ESCAPED!" beat reads as its own moment.
- */
+/** Warm 2-note on chase escape. Distinct from pickup SFX so "ESCAPED!" reads as its own moment. */
 export function playEscape() {
   playArpeggio({
     notes: [784, 1175],
@@ -489,11 +442,7 @@ export function playEscape() {
   });
 }
 
-/**
- * Low-HP heartbeat — short sub-thump scheduled by main.ts at an interval
- * that scales with how close to dying the player is. Single oscillator,
- * cheap, doesn't fight other sounds because it sits in the very low end.
- */
+/** Low-HP heartbeat: sub-thump at HP-scaled interval (scheduled by main.ts). Sits in sub-bass. */
 export function playHeartbeat(intensity: number) {
   if (!ctx || !masterGain) return;
   const t = now();
@@ -513,14 +462,11 @@ export function playHeartbeat(intensity: number) {
 }
 
 export function playGameOver() {
-  // C Bb G Eb — descending sting
+  /* C Bb G Eb — descending sting */
   playArpeggio({ notes: [523, 466, 392, 311], type: "sawtooth", spacing: 0.15, attack: 0.03, peak: 0.55, decay: 0.4 });
 }
 
-// --- BGM (procedural, looping chord progression) ---
-// Simple driving-game vibe: 4-chord loop on a triangle bass + square pad,
-// scheduled note-by-note. Ducks via a dedicated gain node when sirens
-// get loud so the chase reads cleaner.
+/* BGM: 4-chord loop, triangle bass + square pad. Dedicated duck node — chase reads cleaner over sirens. */
 type IBgmNodes = {
   bus: GainNode;
   duck: GainNode;
@@ -531,12 +477,12 @@ let bgmNodes: IBgmNodes | null = null;
 
 const BGM_BPM = 110;
 const BGM_BEAT = 60 / BGM_BPM;
-// Cmin progression (Cm - Ab - Eb - Bb), 2 beats per chord, 4 chords = 8 beats
+/* Cmin progression (Cm - Ab - Eb - Bb), 2 beats per chord, 4 chords = 8 beats */
 const BGM_PROGRESSION: number[][] = [
-  [130.81, 155.56, 196.0], // Cm
-  [103.83, 130.81, 155.56], // Ab
-  [155.56, 196.0, 233.08], // Eb
-  [116.54, 146.83, 174.61], // Bb
+  [130.81, 155.56, 196.0] /* Cm */,
+  [103.83, 130.81, 155.56] /* Ab */,
+  [155.56, 196.0, 233.08] /* Eb */,
+  [116.54, 146.83, 174.61] /* Bb */,
 ];
 
 function scheduleBgmBar(startTime: number) {
@@ -544,7 +490,7 @@ function scheduleBgmBar(startTime: number) {
   for (let i = 0; i < BGM_PROGRESSION.length; i++) {
     const chord = BGM_PROGRESSION[i];
     const t = startTime + i * 2 * BGM_BEAT;
-    // Bass note (root, octave down) on the downbeat
+    /* Bass note (root, octave down) on the downbeat */
     const bass = ctx.createOscillator();
     const bassGain = ctx.createGain();
     bass.type = "triangle";
@@ -558,7 +504,7 @@ function scheduleBgmBar(startTime: number) {
     bass.stop(t + 2 * BGM_BEAT);
     bgmNodes.oscs.push(bass);
 
-    // Pad (chord triad) — quieter, square wave through implicit smoothing
+    /* Pad (chord triad) — quieter, square wave through implicit smoothing */
     for (const note of chord) {
       const pad = ctx.createOscillator();
       const padGain = ctx.createGain();
@@ -574,7 +520,7 @@ function scheduleBgmBar(startTime: number) {
       bgmNodes.oscs.push(pad);
     }
   }
-  // Trim the osc list so it doesn't grow unbounded — stopped oscs auto-disconnect
+  /* Trim the osc list so it doesn't grow unbounded — stopped oscs auto-disconnect */
   if (bgmNodes.oscs.length > 200) {
     bgmNodes.oscs.splice(0, bgmNodes.oscs.length - 200);
   }
@@ -590,14 +536,14 @@ export function startBgm() {
   duck.connect(masterGain);
   bgmNodes = { bus, duck, schedulerInterval: 0, oscs: [] };
 
-  // Schedule first bar immediately, then every 8 beats
+  /* Schedule first bar immediately, then every 8 beats */
   let nextBarStart = now() + 0.05;
   scheduleBgmBar(nextBarStart);
   nextBarStart += 8 * BGM_BEAT;
 
   bgmNodes.schedulerInterval = window.setInterval(() => {
     if (!ctx || !bgmNodes) return;
-    // Stay 1.5 bars ahead of current time
+    /* Stay 1.5 bars ahead of current time */
     while (nextBarStart < now() + 1.5 * 8 * BGM_BEAT) {
       scheduleBgmBar(nextBarStart);
       nextBarStart += 8 * BGM_BEAT;
@@ -606,7 +552,7 @@ export function startBgm() {
 }
 
 export function setBgmDuck(amount: number) {
-  // amount 0..1 — at 1, music is 30% as loud
+  /* amount 0..1 — at 1, music is 30% as loud */
   if (!ctx || !bgmNodes) return;
   const target = 1 - amount * 0.7;
   bgmNodes.duck.gain.setTargetAtTime(target, now(), 0.15);
@@ -623,19 +569,14 @@ export function stopBgm() {
   bgmNodes = null;
 }
 
-// Resume audio context after user gesture (mobile autoplay policy)
+/* Resume audio context after user gesture (mobile autoplay policy) */
 export function resumeAudio() {
   if (ctx?.state === "suspended") {
     attemptAsync(() => ctx!.resume());
   }
 }
 
-// --- Continuous radio hiss (open channel) ---
-// A low-volume looping noise routed through a bandpass filter so the police
-// channel feels "open" — that constant background fizzle real radios have
-// between transmissions. Started when the run begins and stopped on
-// game-over alongside the engine + siren so the dying slow-mo plays out
-// in proper silence.
+/* Radio hiss: low-vol loop noise + bandpass → "open channel" feel. Stops on gameover (dying slow-mo plays in silence). */
 
 let radioHissNodes: {
   src: AudioBufferSourceNode;
@@ -647,31 +588,28 @@ let radioHissNodes: {
 
 export function startRadioHiss() {
   if (!ctx || !masterGain || radioHissNodes) return;
-  // 2-second noise loop — long enough that the loop point isn't audible.
+  /* 2-second noise loop — long enough that the loop point isn't audible. */
   const buf = noiseBuffer(2.0);
   if (!buf) return;
   const src = ctx.createBufferSource();
   src.buffer = buf;
   src.loop = true;
 
-  // Bandpass narrow on the speech-radio range, with a gentle resonance so
-  // the hiss has that "tinny squelch" character instead of pure white noise.
+  /* Narrow bandpass on speech-radio range + gentle Q → "tinny squelch" not pure white noise. */
   const filter = ctx.createBiquadFilter();
   filter.type = "bandpass";
   filter.frequency.value = 1800;
   filter.Q.value = 1.4;
 
   const gain = ctx.createGain();
-  gain.gain.value = 0.06; // very quiet — must sit under the BGM + engine
+  gain.gain.value = 0.06; /* very quiet — must sit under the BGM + engine */
 
-  // Slow LFO modulating the gain so the hiss "breathes" like a live channel
-  // instead of being a flat wall of noise. Real PD radios have squelch
-  // gating that opens and closes faintly between transmissions.
+  /* LFO modulates gain so hiss "breathes" like a live channel (PD squelch gating between transmissions). */
   const lfo = ctx.createOscillator();
   lfo.type = "sine";
   lfo.frequency.value = 0.35;
   const lfoGain = ctx.createGain();
-  lfoGain.gain.value = 0.02; // ±0.02 around the 0.06 base
+  lfoGain.gain.value = 0.02; /* ±0.02 around the 0.06 base */
   lfo.connect(lfoGain);
   lfoGain.connect(gain.gain);
 
@@ -686,7 +624,7 @@ export function startRadioHiss() {
 export function stopRadioHiss() {
   if (!radioHissNodes) return;
   const t = now();
-  // Quick fade so the channel cuts out cleanly without a click on game over.
+  /* Quick fade so the channel cuts out cleanly without a click on game over. */
   radioHissNodes.gain.gain.cancelScheduledValues(t);
   radioHissNodes.gain.gain.setValueAtTime(radioHissNodes.gain.gain.value, t);
   radioHissNodes.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
@@ -697,19 +635,14 @@ export function stopRadioHiss() {
   }, 200);
 }
 
-/**
- * Short "kchk" radio static burst — used by the chatter system to punctuate
- * each voice line so the feed sounds like an actual police channel keying
- * up. Two staggered noise bursts through a bandpass filter give the
- * characteristic squelch tone without any sample assets.
- */
+/** "Kchk" radio static — punctuates each chatter line. 2 staggered bandpassed noise bursts → PTT key feel. */
 export function playRadioStatic() {
   if (!ctx || !masterGain) return;
   const buf = noiseBuffer(0.18);
   if (!buf) return;
   const t = now();
 
-  // First burst — short squelch tail at the start of the line.
+  /* First burst — short squelch tail at the start of the line. */
   const src1 = ctx.createBufferSource();
   const filter1 = ctx.createBiquadFilter();
   const gain1 = ctx.createGain();
@@ -726,7 +659,7 @@ export function playRadioStatic() {
   src1.start(t);
   src1.stop(t + 0.12);
 
-  // Second tighter chirp — completes the "kchk-chk" feel of a real PTT key.
+  /* Second tighter chirp — completes the "kchk-chk" feel of a real PTT key. */
   const src2 = ctx.createBufferSource();
   const filter2 = ctx.createBiquadFilter();
   const gain2 = ctx.createGain();

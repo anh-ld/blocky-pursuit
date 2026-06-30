@@ -1,13 +1,7 @@
-// Procedural cop-radio chatter. Lightweight state machine that takes
-// gameplay events and pushes short text bubbles into a Preact signal so the
-// HUD can render a fake radio feed. Lines are templates picked at random
-// from per-event pools, throttled so a chaotic moment can't spam the feed.
-//
-// Each line is also voiced via the radio-voice module — pre-generated
-// OpenAI TTS files routed through a Web Audio "radio FX" chain so they
-// sound like an actual police channel. The Web Speech API path was
-// removed because OS TTS quality is not even close to acceptable for
-// this use case (see ADR notes in `radio-voice.ts`).
+/* Procedural cop-radio chatter. State machine: gameplay events → text bubbles in a Preact signal for the HUD. */
+/* Lines are random picks from per-event pools, throttled so chaos can't spam. */
+/* Each line is voiced via radio-voice — pre-generated OpenAI TTS through a Web Audio "radio FX" chain. */
+/* Web Speech API path removed — OS TTS quality is unacceptable (see ADR in radio-voice.ts). */
 
 import { signal } from "@preact/signals";
 import { playRadioStatic } from "../audio/sound";
@@ -22,34 +16,23 @@ export type IRadioLine = {
   voice: "dispatch" | "unit" | "swat";
 };
 
-// Public signal — read by `<Radio />` to render the feed.
+/* Public signal — read by `<Radio />` to render the feed. */
 export const radioLines = signal<IRadioLine[]>([]);
 
-// Tuning
+/* Tuning */
 const MAX_VISIBLE = 3;
 const LINE_LIFETIME_MS = 4500;
-const MIN_GAP_MS = 350; // throttle: drop events fired faster than this
-const PER_EVENT_COOLDOWN_MS = 1200; // dedupe same event firing twice in a row
+const MIN_GAP_MS = 350; /* throttle: drop events fired faster than this */
+const PER_EVENT_COOLDOWN_MS = 1200; /* dedupe same event firing twice in a row */
 
 let _nextId = 1;
 let _lastEmitMs = 0;
 const _eventLastMs: Record<string, number> = {};
 
-// --- Line pools per event type. Keep them short — they need to read at a
-// glance during a chase, not be parsed. Cop-radio voice: clipped, urgent.
-//
-// Authentic 10-codes used throughout:
-//   10-4   acknowledged
-//   10-20  location ("what's your 20")
-//   10-23  arrived on scene
-//   10-50  vehicle accident
-//   10-80  pursuit in progress
-//   10-99  officer needs help
-//   Code 3 lights and sirens, urgent
-//   Code 4 no further assistance needed
-//   BOLO   be on the lookout
-// Mixing them with plain English keeps the feed scannable while still
-// reading as authentic dispatcher patter. ---
+/* Line pools per event. Keep short — read at a glance during a chase. Cop-radio voice: clipped, urgent. */
+/* 10-codes used: 10-4 acknowledged 10-20 location 10-23 on scene 10-50 accident 10-80 pursuit 10-99 officer down */
+/* Code 3 lights/sirens urgent · Code 4 no further help needed · BOLO be on lookout */
+/* Mix with plain English for scannable + authentic dispatcher patter. */
 
 const POOLS: Record<string, { voice: IRadioLine["voice"]; lines: string[] }> = {
   start: {
@@ -241,25 +224,19 @@ export function pushChatter(event: string): void {
   const text = pool.lines[Math.floor(Math.random() * pool.lines.length)];
   const line: IRadioLine = { id: _nextId++, text, ts: now, voice: pool.voice };
 
-  // Append + trim to MAX_VISIBLE. New array reference so signal subscribers
-  // re-render; ages out via the time-based fade in the component.
+  /* Append + trim to MAX_VISIBLE. New array ref so signal subscribers re-render; ages out via time-based fade in component. */
   const next = [...radioLines.value, line];
   if (next.length > MAX_VISIBLE) next.splice(0, next.length - MAX_VISIBLE);
   radioLines.value = next;
 
-  // Schedule removal so the feed clears even when nothing else is happening.
-  // Using setTimeout instead of a tick loop keeps this module independent of
-  // the game loop — safe to call from anywhere, including event handlers.
+  /* Schedule removal so feed clears even when nothing else happens. setTimeout keeps module game-loop independent. */
   setTimeout(() => {
     radioLines.value = radioLines.value.filter((l) => l.id !== line.id);
   }, LINE_LIFETIME_MS);
 
-  // Audio: brief PTT squelch + voiced radio line. Both are mute-aware via
-  // the existing sound module's mute toggle. The voice playback is async
-  // (decode + chain setup) — fire-and-forget; we don't await it.
+  /* Audio: PTT squelch + voiced line. Mute-aware via sound module's mute toggle. Voice is async — fire-and-forget. */
   playRadioStatic();
-  // Map event names to voice file slots. The slot name matches the
-  // POOLS key, which is what the generator script wrote to disk.
+  /* Map event names to voice file slots. Slot name matches the POOLS key (what the generator wrote to disk). */
   void playRadioVoice(event);
 }
 

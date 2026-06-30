@@ -42,9 +42,7 @@ import {
   TANK_DURATION,
 } from "../constants";
 
-// Weighted spawn — rarity tier sets the base weight (common = 30, rare = 10,
-// epic = 4) so rare/epic pickups feel like real loot drops. Within a tier,
-// every kind shares the same weight so the variety still rotates evenly.
+/* Rarity sets base weight (common=30, rare=10, epic=4) → rare/epic feel like loot. Kinds share weight within tier. */
 const RARITY_BASE_WEIGHT: Record<"common" | "rare" | "epic", number> = {
   common: 30,
   rare: 10,
@@ -61,13 +59,12 @@ const PICKUP_KINDS: IPickupKind[] = [
   "ghost",
   "tank",
 ];
-const PICKUP_WEIGHTS: { kind: IPickupKind; weight: number }[] = PICKUP_KINDS.map(
-  (kind) => ({ kind, weight: RARITY_BASE_WEIGHT[PICKUP_RARITY[kind]] }),
-);
+const PICKUP_WEIGHTS: { kind: IPickupKind; weight: number }[] = PICKUP_KINDS.map((kind) => ({
+  kind,
+  weight: RARITY_BASE_WEIGHT[PICKUP_RARITY[kind]],
+}));
 
-// Per-kind audio routing. Splits the 9 pickups into 5 sonic palettes so the
-// player can identify what they grabbed by ear without looking. Nitro layers
-// a noise whoosh on top of the score ding for extra "speed up" oomph.
+/* Per-kind audio routing — 9 pickups split into 5 sonic palettes so player ID's by ear. Nitro layers noise whoosh. */
 function playPickupSfx(kind: IPickupKind) {
   switch (kind) {
     case "repair":
@@ -146,14 +143,9 @@ export class PickupSystem {
     }
     if (!found) return;
     const kind = pickPickupKind();
-    const pos = new THREE.Vector3(
-      tileX * TILE_SIZE + TILE_SIZE / 2,
-      1,
-      tileZ * TILE_SIZE + TILE_SIZE / 2,
-    );
+    const pos = new THREE.Vector3(tileX * TILE_SIZE + TILE_SIZE / 2, 1, tileZ * TILE_SIZE + TILE_SIZE / 2);
     this.pickups.push(new Pickup(this.scene, pos, kind));
-    // Rare/epic pickups get a small confetti puff at spawn so the player
-    // notices them appearing in their peripheral vision.
+    /* Rare/epic pickups get a small confetti puff at spawn so the player notices them appearing in their peripheral vision. */
     if (PICKUP_RARITY[kind] !== "common") {
       spawnConfetti(pos.x, pos.y + 0.5, pos.z);
     }
@@ -172,16 +164,14 @@ export class PickupSystem {
       const dzp = p.position.z - car.body.position.z;
       const dist = Math.sqrt(dxp * dxp + dzp * dzp);
 
-      // Despawn far / aged-out pickups
+      /* Despawn far / aged-out pickups */
       if (dist > PICKUP_DESPAWN_DIST || p.age > PICKUP_MAX_AGE) {
         p.destroy();
         this.pickups.splice(i, 1);
         continue;
       }
 
-      // Magnetism: when close (but not yet collected), pull the pickup
-      // toward the car so tight roads don't feel frustrating. The Magnet
-      // pickup buff temporarily extends both range and pull strength.
+      /* Magnetism: when close (not yet collected), pull pickup toward car. Magnet buff extends range & pull. */
       const mag = run.magnetTimer > 0 ? MAGNET_RANGE_MULT : 1;
       const pullMul = run.magnetTimer > 0 ? MAGNET_PULL_MULT : 1;
       const magnetRange = PICKUP_MAGNET_RANGE * mag;
@@ -193,7 +183,7 @@ export class PickupSystem {
         p.mesh.position.z = p.position.z;
       }
 
-      // Collect on touch
+      /* Collect on touch */
       if (dist < PICKUP_COLLECT_DIST) {
         playPickupSfx(p.kind);
         haptics.pickup();
@@ -275,8 +265,7 @@ export class PickupSystem {
       }
     }
 
-    // Tick down all timed buffs. Nitro is special-cased because it has a
-    // car-side side effect (multiplier reset) when the timer hits zero.
+    /* Tick down all timed buffs. Nitro is special-cased — has a car-side effect (multiplier reset) at 0. */
     if (run.nitroTimer > 0) {
       run.nitroTimer = Math.max(0, run.nitroTimer - dt);
       if (run.nitroTimer === 0) car.setNitroMultiplier(1);

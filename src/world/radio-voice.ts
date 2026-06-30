@@ -1,18 +1,7 @@
-// Cop-radio voice playback. Loads pre-generated TTS files (made by
-// `scripts/generate-radio-voices.mjs`) and routes them through a Web Audio
-// "radio FX chain" so even mediocre TTS sounds like it's coming through a
-// real police channel.
-//
-// FX chain (matches what film/game mixers actually use for radio voice):
-//
-//   source → highpass 400Hz → peaking 2kHz +5dB → lowpass 3400Hz →
-//   waveshaper (mild saturation) → compressor (heavy) → make-up gain → out
-//
-// The bandpass narrows the spectrum to telephone bandwidth (≈300–3400 Hz),
-// the peaking EQ adds the characteristic radio "honk", saturation
-// introduces the warm distortion of an over-driven speaker, and the
-// compressor flattens the dynamics so every word sits at the same forward
-// loudness level — the same trick used on military comms and PD radios.
+/* Cop-radio voice playback. Pre-generated TTS (scripts/generate-radio-voices.mjs) through Web Audio "radio FX chain". */
+/* FX chain: source → highpass 400Hz → peaking 2kHz +5dB → lowpass 3400Hz → waveshaper → compressor → make-up gain → out. */
+/* Matches film/game mixer radio voice: bandpass = telephone bandwidth (≈300–3400 Hz), */
+/* peaking EQ = radio "honk", saturation = over-driven speaker warmth, compressor = flat in-your-face loudness. */
 
 import { getAudioContext, getMasterGain, isMuted } from "../audio/sound";
 
@@ -27,27 +16,19 @@ let _manifestPromise: Promise<IManifest | null> | null = null;
 const _bufferCache = new Map<string, AudioBuffer>();
 const _inFlight = new Map<string, Promise<AudioBuffer | null>>();
 
-// Last started source — kept so the next radio call can cancel a still-
-// playing line. Real PD radios are half-duplex; the new key-up always
-// preempts whatever's currently on the channel.
+/* Last started source — kept so the next radio call can cancel a still-playing line. */
+/* Real PD radios are half-duplex; the new key-up always preempts whatever's on the channel. */
 let _activeSource: AudioBufferSourceNode | null = null;
 let _activeGain: GainNode | null = null;
 
-// --- Radio FX chain ---
-//
-// Built lazily on first playback (after `initAudio` has run so the shared
-// context exists). The chain is a single static graph that every voice
-// line is routed through, so the radio character is consistent across
-// dispatch / unit / SWAT instead of being re-tweaked per line.
+/* Radio FX chain — built lazily on first playback (after initAudio so the shared context exists). */
+/* Single static graph all voice lines route through, so radio character is consistent across dispatch / unit / SWAT. */
 type IRadioFx = { input: GainNode; ctx: AudioContext };
 let _fx: IRadioFx | null = null;
 
 function makeSaturationCurve(amount: number): Float32Array<ArrayBuffer> {
-  // Soft tanh saturation curve. Higher `amount` = more crunch. The output
-  // is normalized so peaks stay at ±1, preserving headroom.
-  // Allocated through an explicit ArrayBuffer so the resulting typed array
-  // matches `WaveShaperNode.curve`'s expected `Float32Array<ArrayBuffer>`
-  // (rather than the wider `ArrayBufferLike` default).
+  /* Soft tanh saturation curve. Higher `amount` = more crunch. Output normalized so peaks stay at ±1, preserving headroom. */
+  /* Explicit ArrayBuffer so the typed array matches WaveShaperNode.curve's expected Float32Array<ArrayBuffer>. */
   const samples = 1024;
   const buffer = new ArrayBuffer(samples * 4);
   const curve = new Float32Array(buffer);
@@ -61,13 +42,11 @@ function makeSaturationCurve(amount: number): Float32Array<ArrayBuffer> {
 
 function buildFx(ctx: AudioContext, dest: AudioNode): IRadioFx {
   const input = ctx.createGain();
-  // Heavier pre-gain so the saturator clips more aggressively — the "the
-  // cop is shouting into the mic" character comes from this.
+  /* Heavier pre-gain so the saturator clips more — the "cop shouting into mic" character. */
   input.gain.value = 2.4;
 
-  // Telephone bandpass — kills sub-bass rumble and the "natural" highs
-  // that betray the voice as un-radioed. Tightened from 400-3400 to
-  // 500-3200 for a more radio-clipped feel.
+  /* Telephone bandpass — kills sub-bass + "natural" highs that betray the voice as un-radioed. */
+  /* Tightened from 400-3400 to 500-3200 for a more clipped feel. */
   const hp = ctx.createBiquadFilter();
   hp.type = "highpass";
   hp.frequency.value = 500;
@@ -78,30 +57,26 @@ function buildFx(ctx: AudioContext, dest: AudioNode): IRadioFx {
   lp.frequency.value = 3200;
   lp.Q.value = 0.7;
 
-  // Peaking EQ in the upper-mids gives the radio "honk" — the formant
-  // squashing real radios produce. +7dB around 2kHz, narrower Q.
+  /* Peaking EQ in upper-mids = radio "honk" — the formant squashing real radios produce. +7dB @ 2kHz, narrow Q. */
   const honk = ctx.createBiquadFilter();
   honk.type = "peaking";
   honk.frequency.value = 2000;
   honk.Q.value = 1.6;
   honk.gain.value = 7;
 
-  // Second peaking EQ at 3.2kHz adds "presence" — the bite of someone
-  // actively shouting close to the mic.
+  /* Second peaking EQ at 3.2kHz adds "presence" — the bite of someone actively shouting close to the mic. */
   const presence = ctx.createBiquadFilter();
   presence.type = "peaking";
   presence.frequency.value = 3200;
   presence.Q.value = 1.4;
   presence.gain.value = 4;
 
-  // Saturation. Pushed harder for the "urgent / blown speaker" character.
+  /* Saturation. Pushed harder for the "urgent / blown speaker" character. */
   const shaper = ctx.createWaveShaper();
   shaper.curve = makeSaturationCurve(3.6);
   shaper.oversample = "2x";
 
-  // Heavy compression so every word sits at the same in-your-face level.
-  // Real police comms compressors hit ratios of 10:1+ with fast attack.
-  // Pushed from 12:1 → 16:1, threshold lowered for more crunch.
+  /* Heavy compression so every word sits at the same level. PD radios 10:1+ fast attack. 12:1 → 16:1, threshold lowered. */
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -32;
   comp.knee.value = 4;
@@ -109,8 +84,7 @@ function buildFx(ctx: AudioContext, dest: AudioNode): IRadioFx {
   comp.attack.value = 0.002;
   comp.release.value = 0.18;
 
-  // Make-up gain after the compressor pulls the level back up. Pushed
-  // higher so the radio sits FORWARD in the mix, not behind the engine.
+  /* Make-up gain after the compressor pulls level back up. Pushed higher so radio sits FORWARD in mix, not behind engine. */
   const output = ctx.createGain();
   output.gain.value = 1.9;
 
@@ -135,7 +109,7 @@ function ensureFx(): IRadioFx | null {
   return _fx;
 }
 
-// --- Manifest + buffer loading ---
+/* Manifest + buffer loading */
 
 async function loadManifest(): Promise<IManifest | null> {
   if (_manifest) return _manifest;
@@ -229,7 +203,7 @@ export async function playRadioVoice(event: string): Promise<boolean> {
   const ctx = getAudioContext();
   if (!fx || !ctx) return false;
 
-  // Cancel any previously playing line.
+  /* Cancel any previously playing line. */
   if (_activeSource && _activeGain) {
     const t = ctx.currentTime;
     try {
@@ -238,15 +212,25 @@ export async function playRadioVoice(event: string): Promise<boolean> {
       _activeGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
       const oldSrc = _activeSource;
       setTimeout(() => {
-        try { oldSrc.stop(); } catch { /* already stopped */ }
-        try { oldSrc.disconnect(); } catch { /* noop */ }
+        try {
+          oldSrc.stop();
+        } catch {
+          /* already stopped */
+        }
+        try {
+          oldSrc.disconnect();
+        } catch {
+          /* noop */
+        }
       }, 60);
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
     _activeSource = null;
     _activeGain = null;
   }
 
-  // Per-line envelope gain so we can fade out cleanly on cancel.
+  /* Per-line envelope gain so we can fade out cleanly on cancel. */
   const env = ctx.createGain();
   env.gain.value = 1;
   const src = ctx.createBufferSource();
@@ -258,8 +242,16 @@ export async function playRadioVoice(event: string): Promise<boolean> {
       _activeSource = null;
       _activeGain = null;
     }
-    try { src.disconnect(); } catch { /* noop */ }
-    try { env.disconnect(); } catch { /* noop */ }
+    try {
+      src.disconnect();
+    } catch {
+      /* noop */
+    }
+    try {
+      env.disconnect();
+    } catch {
+      /* noop */
+    }
   };
   src.start();
   _activeSource = src;
@@ -270,8 +262,16 @@ export async function playRadioVoice(event: string): Promise<boolean> {
 /** Stop the currently playing line — used on game-over and pause. */
 export function stopRadioVoice(): void {
   if (!_activeSource) return;
-  try { _activeSource.stop(); } catch { /* noop */ }
-  try { _activeSource.disconnect(); } catch { /* noop */ }
+  try {
+    _activeSource.stop();
+  } catch {
+    /* noop */
+  }
+  try {
+    _activeSource.disconnect();
+  } catch {
+    /* noop */
+  }
   _activeSource = null;
   _activeGain = null;
 }

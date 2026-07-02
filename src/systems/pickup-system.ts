@@ -5,15 +5,6 @@ import { isRoad } from "../world/city-generator";
 import { TILE_SIZE } from "../world/terrain";
 import { spawnConfetti, spawnRing, triggerShake } from "../world/effects";
 import { spawnPopup } from "../world/popups";
-import {
-  playPickup,
-  playPickupHeal,
-  playPickupShield,
-  playPickupOffense,
-  playPickupScore,
-  playNitroWhoosh,
-} from "../audio/sound";
-import { haptics } from "../audio/haptics";
 import type { RunState, IGameContext } from "./run-state";
 import type { CopSystem } from "./cop-system";
 import { shouldShowPickupTip, markPickupTipSeen } from "./tutorial";
@@ -41,6 +32,7 @@ import {
   GHOST_DURATION,
   TANK_DURATION,
 } from "../constants";
+import { FrameEventBuffer } from "./frame-events";
 
 /* Rarity sets base weight (common=30, rare=10, epic=4) → rare/epic feel like loot. Kinds share weight within tier. */
 const RARITY_BASE_WEIGHT: Record<"common" | "rare" | "epic", number> = {
@@ -63,34 +55,6 @@ const PICKUP_WEIGHTS: { kind: IPickupKind; weight: number }[] = PICKUP_KINDS.map
   kind,
   weight: RARITY_BASE_WEIGHT[PICKUP_RARITY[kind]],
 }));
-
-/* Per-kind audio routing — 9 pickups split into 5 sonic palettes so player ID's by ear. Nitro layers noise whoosh. */
-function playPickupSfx(kind: IPickupKind) {
-  switch (kind) {
-    case "repair":
-      playPickupHeal();
-      return;
-    case "shield":
-      playPickupShield();
-      return;
-    case "emp":
-    case "tank":
-      playPickupOffense();
-      return;
-    case "nitro":
-      playPickupScore();
-      playNitroWhoosh();
-      return;
-    case "doubleScore":
-    case "magnet":
-    case "timeWarp":
-    case "ghost":
-      playPickupScore();
-      return;
-    default:
-      playPickup();
-  }
-}
 
 function pickPickupKind(): IPickupKind {
   const total = PICKUP_WEIGHTS.reduce((s, p) => s + p.weight, 0);
@@ -151,7 +115,7 @@ export class PickupSystem {
     }
   }
 
-  update(dt: number, timeInSeconds: number, car: Car, run: RunState, cops: CopSystem) {
+  update(dt: number, timeInSeconds: number, car: Car, run: RunState, cops: CopSystem, events: FrameEventBuffer) {
     if (timeInSeconds - this.lastSpawnTime > PICKUP_SPAWN_INTERVAL) {
       this.spawnNear(car.mesh.position);
       this.lastSpawnTime = timeInSeconds;
@@ -185,9 +149,11 @@ export class PickupSystem {
 
       /* Collect on touch */
       if (dist < PICKUP_COLLECT_DIST) {
-        playPickupSfx(p.kind);
-        haptics.pickup();
-        spawnConfetti(p.position.x, 2, p.position.z);
+        events.push({
+          kind: "pickupCollected",
+          position: { x: p.position.x, y: p.position.y, z: p.position.z },
+          pickup: p.kind,
+        });
         if (p.kind === "nitro") {
           run.nitroTimer = NITRO_DURATION;
           car.setNitroMultiplier(NITRO_SPEED_MULT);
@@ -206,7 +172,7 @@ export class PickupSystem {
         } else if (p.kind === "emp") {
           spawnRing(car.body.position.x, car.body.position.y, car.body.position.z, EMP_RING_RADIUS);
           spawnPopup(car.body.position.x, 3, car.body.position.z, "💥 EMP", "#66ddff");
-          const kills = cops.empBlast(car, run);
+          const kills = cops.empBlast(car, run, events);
           if (kills > 0) {
             spawnPopup(car.body.position.x, 5, car.body.position.z, `+${kills * SCORE_EMP_KILL}`, "#ffcc22");
           }

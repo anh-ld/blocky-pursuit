@@ -9,50 +9,35 @@ import { RunState, COMBO_DECAY } from "./systems/run-state";
 import { CopSystem } from "./systems/cop-system";
 import { CivilianSystem } from "./systems/civilian-system";
 import { PickupSystem } from "./systems/pickup-system";
+import { FrameEventBuffer } from "./systems/frame-events";
+import { WorldFx, type ICarDisplaySample } from "./world/world-fx";
 import {
   initAudio,
   resumeAudio,
   startEngine,
   stopEngine,
   setEngineSpeed,
-  startSiren,
   stopSiren,
-  setSirenVolume,
   startRadioHiss,
   stopRadioHiss,
   playSplash,
-  playLevelUp,
-  playGameOver,
   toggleMute,
   isMuted,
   startBgm,
   stopBgm,
-  setBgmDuck,
-  playComboTick,
-  playComboLost,
-  playMilestone,
-  playEscape,
-  playHeartbeat,
 } from "./audio/sound";
-import { haptics } from "./audio/haptics";
 import {
   applyShake,
-  spawnSplash,
-  spawnSparks,
-  spawnConfetti,
-  spawnSpeedLine,
   clearParticles,
   clearEffects,
   updateEffects,
   updateTimeSlow,
   getTimeSlowFactor,
-  triggerScreenFlash,
-  triggerShake,
 } from "./world/effects";
 import { spawnPopup, updatePopups, clearPopups } from "./world/popups";
 import { pushChatter, clearChatter } from "./world/radio";
 import { preloadRadioVoices, stopRadioVoice } from "./world/radio-voice";
-import { spawnSkid, updateSkids, clearSkids } from "./world/skids";
+import { updateSkids, clearSkids } from "./world/skids";
 import { captureGhost, updateGhostTrail, clearGhostTrail } from "./world/ghost-trail";
 import { updateRain, updateSnow } from "./world/weather";
 import { App } from "./ui/app";
@@ -187,6 +172,8 @@ const run = new RunState();
 const cops = new CopSystem(systemsCtx);
 const civilians = new CivilianSystem(systemsCtx);
 const pickups = new PickupSystem(systemsCtx);
+const worldFx = new WorldFx();
+const frameEvents = new FrameEventBuffer();
 
 /* `currentState` = loop's internal state. Superset of IGameStateValue with "dying" for slow-mo. */
 type ICurrentState = IGameStateValue | "dying";
@@ -395,10 +382,7 @@ function gameOver(reason: string = "BUSTED") {
   stopRadioHiss();
   stopRadioVoice();
 
-  /* Radio sign-off — dispatch announces the end of the chase based on cause. */
-  if (reason === "DROWNED") pushChatter("drowned_self");
-  else if (reason === "BUSTED") pushChatter("busted");
-  else pushChatter("wrecked");
+  /* Radio sign-off + explosion juice dispatched via WorldFx in finishGameOver (after slow-mo). */
 }
 
 /**
@@ -411,35 +395,16 @@ function finishGameOver(reason: string) {
   currentState = "gameover";
   gameOverReason.value = reason;
 
-  /* Explosion juice: bigger than crash (1s slow-mo just happened). Multiple confetti+sparks = real wreck. */
-  triggerScreenFlash(0.95);
-  triggerShake(1.1);
-  for (let i = 0; i < 3; i++) {
-    const ox = (Math.random() - 0.5) * 4;
-    const oz = (Math.random() - 0.5) * 4;
-    spawnConfetti(car.body.position.x + ox, car.body.position.y + 1.5, car.body.position.z + oz);
-    spawnSparks(car.body.position.x + ox, car.body.position.y + 1, car.body.position.z + oz);
-  }
-  spawnSparks(car.body.position.x, car.body.position.y + 2, car.body.position.z);
-  /* Drowned wrecks get an extra splash so the cause-of-death reads. */
-  if (reason === "DROWNED") {
-    spawnSplash(car.body.position.x, car.body.position.y, car.body.position.z);
-  }
-
-  /* Sting + haptic — only here, after the replay (so it punctuates the wreck moment instead of competing with the slow-mo). */
-  playGameOver();
-  haptics.death();
-
-  /* Persist progression now (panel reads right values) but defer panel-visible state. */
+  /* Explosion juice + radio sign-off flow through WorldFx. We compute isNewBest
+   * here (the panel needs the value) but defer the FX dispatch to a single event. */
   isNewBest.value = saveBest(Math.floor(run.score));
-  /* New-best celebration: extra confetti bursts during death moment so the achievement lands before the panel. */
-  if (isNewBest.value) {
-    for (let i = 0; i < 5; i++) {
-      const ox = (Math.random() - 0.5) * 6;
-      const oz = (Math.random() - 0.5) * 6;
-      spawnConfetti(car.body.position.x + ox, car.body.position.y + 1.5, car.body.position.z + oz);
-    }
-  }
+  worldFx.dispatch({
+    kind: "playerDied",
+    position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
+    reason: reason as "WRECKED" | "DROWNED" | "BUSTED",
+    isNewBest: isNewBest.value,
+  });
+
   incrementRuns();
   addDrownedCops(run.drownedThisRun);
   runDrowned.value = run.drownedThisRun;
@@ -530,21 +495,16 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
 
   run.survivalTime += dt;
 
-  /* Level progression */
+  /* Level progression — emit PlayerLeveledUp event; HP heal is state, FX goes through drain. */
   const prevLevel = run.advanceLevel();
   if (run.level > prevLevel) {
     run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_ON_LEVEL_UP);
-    playLevelUp();
-    haptics.levelUp();
-    spawnPopup(car.body.position.x, car.body.position.y + 1, car.body.position.z, `LV ${run.level}`, "#ffaa22");
-    spawnPopup(
-      car.body.position.x,
-      car.body.position.y + 2,
-      car.body.position.z,
-      `+${HP_HEAL_ON_LEVEL_UP} HP`,
-      "#66ff88",
-    );
-    pushChatter("level_up");
+    frameEvents.push({
+      kind: "playerLeveledUp",
+      position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
+      level: run.level,
+      hpHeal: HP_HEAL_ON_LEVEL_UP,
+    });
   }
 
   /* Engine pitch follows speed */
@@ -556,26 +516,27 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   run.decayDrownChain(dt);
   run.recordMovement(car);
 
-  /* Combo lifeline: warning tick + "lost it" sting. Window = `comboInDanger` (ratio < 0.25). */
+  /* Combo lifeline: window is `comboInDanger` (ratio < 0.25). Per-frame scheduler
+   * decides when to fire; the audio dispatch itself is the event. */
   const comboRatio = run.comboTimer / COMBO_DECAY;
   if (run.comboCount >= 5 && comboRatio > 0 && comboRatio < 0.25) {
     _comboTickAccum += dt;
     if (_comboTickAccum >= COMBO_TICK_INTERVAL) {
       _comboTickAccum = 0;
-      playComboTick();
+      frameEvents.push({ kind: "comboTick", urgency: 1 - comboRatio / 0.25 });
     }
   } else {
     _comboTickAccum = 0;
   }
   if (_prevComboCount >= 10 && run.comboCount === 0) {
-    playComboLost();
+    frameEvents.push({ kind: "comboLost" });
   }
   _prevComboCount = run.comboCount;
 
-  /* Entity systems */
+  /* Entity systems — they emit FX events into the buffer; the conductor drains after the tick. */
   civilians.update(dt, timeInSeconds, car, run);
-  pickups.update(dt, timeInSeconds, car, run, cops);
-  const { nearestCopDist, nearbyCount } = cops.update(dt, timeInSeconds, car, run);
+  pickups.update(dt, timeInSeconds, car, run, cops, frameEvents);
+  const { nearestCopDist, nearbyCount } = cops.update(dt, timeInSeconds, car, run, frameEvents);
 
   /* Death triggers gated on `state "playing"` — tickPlaying runs during dying. Without gate, water-car re-calls gameOver. */
   if (currentState === "playing") {
@@ -584,12 +545,11 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
       gameOver("WRECKED");
     }
 
-    /* Water check (player drowning) */
+    /* Water check (player drowning) — splash is FX; goes through the dying slow-mo sequence, not the per-frame event drain. */
     const carTileX = Math.floor(car.body.position.x / TILE_SIZE);
     const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
     if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
       playSplash();
-      spawnSplash(car.body.position.x, car.body.position.y, car.body.position.z);
       gameOver("DROWNED");
     }
 
@@ -629,18 +589,11 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   while (run.nextMilestoneIdx < SCORE_MILESTONES.length && run.score >= SCORE_MILESTONES[run.nextMilestoneIdx]) {
     const value = SCORE_MILESTONES[run.nextMilestoneIdx];
     run.nextMilestoneIdx++;
-    spawnPopup(
-      car.body.position.x,
-      car.body.position.y + 4,
-      car.body.position.z,
-      `${value.toLocaleString()}!`,
-      "#ffdd44",
-      1.6,
-      14,
-    );
-    triggerScreenFlash(0.35);
-    playMilestone();
-    haptics.levelUp();
+    frameEvents.push({
+      kind: "scoreMilestone",
+      position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
+      value,
+    });
   }
 
   /* Escape reward: disengage pays off so player has a reason to use cover/distance instead of orbiting cops. */
@@ -653,11 +606,11 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
         run.score += ESCAPE_REWARD;
         run.copScore += ESCAPE_REWARD;
         run.hp = Math.min(MAX_HP, run.hp + ESCAPE_HEAL);
-        spawnPopup(car.body.position.x, car.body.position.y + 4, car.body.position.z, "ESCAPED!", "#66ff88", 1.6, 14);
-        spawnPopup(car.body.position.x, car.body.position.y + 2.5, car.body.position.z, `+${ESCAPE_REWARD}`, "#ffcc22");
-        triggerScreenFlash(0.25);
-        playEscape();
-        pushChatter("escape");
+        frameEvents.push({
+          kind: "escaped",
+          position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
+          reward: ESCAPE_REWARD,
+        });
       }
     }
   } else {
@@ -666,58 +619,43 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     run.escapeArmed = true;
   }
 
-  /* Low-HP heartbeat: interval scales with closeness to dying. Audio only (vignette = UI). Suppressed during dying. */
+  /* Low-HP heartbeat: interval scales with closeness to dying. The scheduler
+   * stays inline (per-frame, can't be an event); the audio itself is the event. */
   if (currentState === "playing" && run.hp > 0 && run.hp < LOW_HP_THRESHOLD) {
     _heartbeatAccum += dt;
     const danger = 1 - run.hp / LOW_HP_THRESHOLD; /* 0..1 */
     const interval = 1.1 - danger * 0.65; /* 1.1s → 0.45s */
     if (_heartbeatAccum >= interval) {
       _heartbeatAccum = 0;
-      playHeartbeat(danger);
+      frameEvents.push({ kind: "lowHpHeartbeat", danger });
     }
   } else {
     _heartbeatAccum = 0;
   }
 
-  /* Siren on when any cop in range; intensity scales with closeness. Suppressed during dying. */
-  let sirenIntensity = 0;
-  if (currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE) {
-    startSiren();
-    sirenIntensity = 1 - nearestCopDist / SIREN_MAX_RANGE;
-    setSirenVolume(sirenIntensity);
-  } else {
-    stopSiren();
-  }
-  setBgmDuck(sirenIntensity);
+  /* Siren — gated on `state "playing"`. Suppressed during dying. Event carries intensity. */
+  const sirenIntensity = currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE ? 1 - nearestCopDist / SIREN_MAX_RANGE : 0;
+  frameEvents.push({ kind: "siren", intensity: sirenIntensity });
 
-  /* Skid marks: emit at rear wheels when drifting hard or boosting */
-  const isDrifting = car.lateralSpeed > 4;
-  const isBoosting = run.nitroTimer > 0 && car.body.velocity.length() > car.baseMaxSpeed * 0.6;
-  if (isDrifting || isBoosting) {
-    car.body.pointToWorldFrame(_rearLocal, _rearWorld);
-    /* Yaw from quaternion. Safe: cannon angularFactor constrained to (0,1,0) so x/z quaternion components stay zero. */
-    const heading = Math.atan2(
-      2 * (car.body.quaternion.w * car.body.quaternion.y),
-      1 - 2 * car.body.quaternion.y * car.body.quaternion.y,
-    );
-    const offX = Math.cos(heading) * 1.25;
-    const offZ = -Math.sin(heading) * 1.25;
-    spawnSkid(_rearWorld.x + offX, _rearWorld.z + offZ, heading);
-    spawnSkid(_rearWorld.x - offX, _rearWorld.z - offZ, heading);
-  }
-
-  /* Speed lines: peak-speed nitro flourish. Both nitro active AND car at 80%+ boosted top. 2 streaks/frame = enough to read. */
-  if (run.nitroTimer > 0 && car.body.velocity.length() > car.maxSpeed * 0.8) {
-    const heading = Math.atan2(
-      2 * (car.body.quaternion.w * car.body.quaternion.y),
-      1 - 2 * car.body.quaternion.y * car.body.quaternion.y,
-    );
-    /* Yaw = XZ-plane facing. Forward in cannon-local-space = -Z → heading→world = (sin h, _, -cos h). */
-    const fx = -Math.cos(heading);
-    const fz = Math.sin(heading);
-    spawnSpeedLine(car.body.position.x, car.body.position.y, car.body.position.z, fx, fz);
-    spawnSpeedLine(car.body.position.x, car.body.position.y, car.body.position.z, fx, fz);
-  }
+  /* Per-frame display-side FX (skids, speed lines) — driven from a car sample, not from
+   * a per-frame event. WorldFx reads the sample we hand it and decides what to emit. */
+  car.body.pointToWorldFrame(_rearLocal, _rearWorld);
+  const heading = Math.atan2(
+    2 * (car.body.quaternion.w * car.body.quaternion.y),
+    1 - 2 * car.body.quaternion.y * car.body.quaternion.y,
+  );
+  const carSample: ICarDisplaySample = {
+    position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
+    heading,
+    rearLeft: { x: _rearWorld.x, z: _rearWorld.z },
+    rearRight: { x: _rearWorld.x, z: _rearWorld.z },
+    lateralSpeed: car.lateralSpeed,
+    speed: car.body.velocity.length(),
+    baseMaxSpeed: car.baseMaxSpeed,
+    maxSpeed: car.maxSpeed,
+  };
+  worldFx.setCarSample(carSample);
+  worldFx.emitDrivenFx(run.nitroTimer > 0);
 
   /* Vibe Jam portal check: redirect if the car drove through one */
   const portalDest = portals.update(car.mesh.position);
@@ -725,11 +663,16 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     stopEngine();
     stopSiren();
     stopBgm();
+    worldFx.drain(frameEvents.drain());
     window.location.href = portalDest;
     return;
   }
 
   run.syncHud();
+
+  /* Drain the per-frame FX events through WorldFx. Order-independent
+   * (each event is self-contained) so a single pass at end of tick is enough. */
+  worldFx.drain(frameEvents.drain());
 }
 
 function animate(time: number) {

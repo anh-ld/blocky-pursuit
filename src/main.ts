@@ -81,7 +81,6 @@ import {
   MAX_HP,
   HP_REGEN_PER_SEC,
   HP_REGEN_SAFE_DIST,
-  HP_HEAL_ON_LEVEL_UP,
   HP_HEAL_SPEED_STREAK,
   BUSTED_TIME_THRESHOLD,
   BUSTED_COP_COUNT,
@@ -489,17 +488,13 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
 
   run.survivalTime += dt;
 
-  /* Level progression — emit PlayerLeveledUp event; HP heal is state, FX goes through drain. */
-  const prevLevel = run.advanceLevel();
-  if (run.level > prevLevel) {
-    run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_ON_LEVEL_UP);
-    frameEvents.push({
-      kind: "playerLeveledUp",
-      position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
-      level: run.level,
-      hpHeal: HP_HEAL_ON_LEVEL_UP,
-    });
-  }
+  /* Level progression — heal + event come out of run-state; FX goes through drain. */
+  const leveled = run.advanceLevel({
+    x: car.body.position.x,
+    y: car.body.position.y,
+    z: car.body.position.z,
+  });
+  if (leveled) frameEvents.push(leveled);
 
   /* Engine pitch follows speed */
   setEngineSpeed(Math.min(car.body.velocity.length() / car.maxSpeed, 1));

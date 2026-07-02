@@ -44,11 +44,9 @@ export type ICopUpdateResult = {
 };
 
 /* SWAT mini-boss tuning. Lives outside `constants.ts` — emergent escalation, not a balance lever. */
-const SWAT_MIN_LEVEL = 7;
 const SWAT_RESPAWN_DELAY = 25; /* seconds between SWAT spawns */
 const SWAT_KILL_SCORE = 80;
 const SWAT_KILL_HEAL = 25;
-const BOUNTY_SPAWN_CHANCE = 0.16;
 const BOUNTY_MULTIPLIER = 5;
 
 export class CopSystem {
@@ -115,7 +113,7 @@ export class CopSystem {
     const heatTier = getHeat(run.score, run.level);
     const effectiveInterval = Math.max(HEAT_INTERVAL_FLOOR, levelDef.spawnInterval - heatTier * HEAT_INTERVAL_SHAVE);
     if (timeInSeconds - this.lastSpawnTime > effectiveInterval) {
-      const isBounty = run.level >= 2 && !this.cops.some((c) => c.isBounty) && Math.random() < BOUNTY_SPAWN_CHANCE;
+      const isBounty = levelDef.bountyRate > 0 && !this.cops.some((c) => c.isBounty) && Math.random() < levelDef.bountyRate;
       spawnCop({
         scene: this.scene,
         world: this.world,
@@ -130,9 +128,9 @@ export class CopSystem {
       pushChatter("cop_spawn");
     }
 
-    /* SWAT mini-boss spawn: at most one alive, level 7+. Lives outside maxCops so regular swarm cadence is unaffected. */
+    /* SWAT mini-boss spawn: at most one alive, def-gated. Lives outside maxCops so regular swarm cadence is unaffected. */
     if (
-      run.level >= SWAT_MIN_LEVEL &&
+      levelDef.swatEnabled &&
       timeInSeconds - this.lastSwatSpawn > SWAT_RESPAWN_DELAY &&
       !this.cops.some((c) => c.isSwat)
     ) {
@@ -141,7 +139,7 @@ export class CopSystem {
         world: this.world,
         cops: this.cops,
         maxCops: levelDef.maxCops,
-        level: Math.max(run.level, SWAT_MIN_LEVEL),
+        level: run.level,
         playerPosition: car.mesh.position,
         playerVelocity: car.body.velocity,
         isSwat: true,

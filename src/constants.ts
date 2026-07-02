@@ -2,7 +2,6 @@
 export const MAX_HP = 100;
 export const HP_REGEN_PER_SEC = 1;
 export const HP_REGEN_SAFE_DIST = 30; /* no cop within this radius → passive regen */
-export const HP_HEAL_ON_LEVEL_UP = 15;
 export const HP_HEAL_SPEED_STREAK = 5;
 export const HP_HEAL_DROWNED_COP = 10;
 export const HP_HEAL_EMP_KILL = 10;

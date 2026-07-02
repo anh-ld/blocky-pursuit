@@ -2,7 +2,8 @@ import type * as THREE from "three";
 import type * as CANNON from "cannon-es";
 import type { Car } from "../entities/car";
 import { isRoad, TILE_SIZE } from "../world/terrain";
-import { LEVEL_DEFS, getLevelProgress, getHeat } from "./leveling";
+import { LEVEL_DEFS, getLevelDef, getLevelProgress, getHeat } from "./leveling";
+import type { PlayerLeveledUpEvent } from "./frame-events";
 import { MAX_HP, SCORE_BASE_TILE, COMBO_MULT_PER_COUNT, COMBO_MULT_MAX, BUSTED_TIME_THRESHOLD } from "../constants";
 
 /* Bootstrap context shared by every system constructor. Held for the app lifetime — references never change after init. */
@@ -90,10 +91,11 @@ export class RunState {
 
   /**
    * Advance current level if score crosses the next threshold.
-   * Returns the previous level so the caller can detect a level-up
-   * and play its own popup/audio cue.
+   * On level-up, applies the def's hpHeal and returns the FX event for
+   * the conductor to push onto the frame buffer. Returns null if no level
+   * was crossed.
    */
-  advanceLevel(): number {
+  advanceLevel(position: { x: number; y: number; z: number }): PlayerLeveledUpEvent | null {
     const prev = this.level;
     for (let lv = LEVEL_DEFS.length; lv >= 1; lv--) {
       if (this.score >= LEVEL_DEFS[lv - 1].scoreThreshold) {
@@ -101,7 +103,10 @@ export class RunState {
         break;
       }
     }
-    return prev;
+    if (this.level === prev) return null;
+    const def = getLevelDef(this.level);
+    this.hp = Math.min(MAX_HP, this.hp + def.hpHeal);
+    return { kind: "playerLeveledUp", position, level: this.level, hpHeal: def.hpHeal };
   }
 
   /** Active score multiplier from the doubleScore pickup buff (1 when off). */

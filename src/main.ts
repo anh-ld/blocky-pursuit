@@ -385,18 +385,12 @@ function gameOver(reason: string = "BUSTED") {
   /* Radio sign-off + explosion juice dispatched via WorldFx in finishGameOver (after slow-mo). */
 }
 
-/**
- * Second half of the death sequence — runs once the slow-mo dying phase
- * finishes. Triggers the explosion juice, persists progression, then
- * schedules the panel reveal. Always called from the animate loop, never
- * directly from a fail trigger.
- */
+/** Second half of the death sequence — runs once the slow-mo dying phase finishes. */
 function finishGameOver(reason: string) {
   currentState = "gameover";
   gameOverReason.value = reason;
 
-  /* Explosion juice + radio sign-off flow through WorldFx. We compute isNewBest
-   * here (the panel needs the value) but defer the FX dispatch to a single event. */
+  /* Explosion + signoff flow through WorldFx; compute isNewBest here so the panel reads the right value. */
   isNewBest.value = saveBest(Math.floor(run.score));
   worldFx.dispatch({
     kind: "playerDied",
@@ -516,8 +510,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   run.decayDrownChain(dt);
   run.recordMovement(car);
 
-  /* Combo lifeline: window is `comboInDanger` (ratio < 0.25). Per-frame scheduler
-   * decides when to fire; the audio dispatch itself is the event. */
+  /* Combo lifeline: window is `comboInDanger` (ratio < 0.25); per-frame scheduler decides when to fire. */
   const comboRatio = run.comboTimer / COMBO_DECAY;
   if (run.comboCount >= 5 && comboRatio > 0 && comboRatio < 0.25) {
     _comboTickAccum += dt;
@@ -545,7 +538,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
       gameOver("WRECKED");
     }
 
-    /* Water check (player drowning) — splash is FX; goes through the dying slow-mo sequence, not the per-frame event drain. */
+    /* Water check (player drowning) — splash is FX; goes through the dying slow-mo, not the per-frame event drain. */
     const carTileX = Math.floor(car.body.position.x / TILE_SIZE);
     const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
     if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
@@ -619,8 +612,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     run.escapeArmed = true;
   }
 
-  /* Low-HP heartbeat: interval scales with closeness to dying. The scheduler
-   * stays inline (per-frame, can't be an event); the audio itself is the event. */
+  /* Low-HP heartbeat: scheduler stays inline (per-frame, can't be an event); the audio itself is the event. */
   if (currentState === "playing" && run.hp > 0 && run.hp < LOW_HP_THRESHOLD) {
     _heartbeatAccum += dt;
     const danger = 1 - run.hp / LOW_HP_THRESHOLD; /* 0..1 */
@@ -637,8 +629,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   const sirenIntensity = currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE ? 1 - nearestCopDist / SIREN_MAX_RANGE : 0;
   frameEvents.push({ kind: "siren", intensity: sirenIntensity });
 
-  /* Per-frame display-side FX (skids, speed lines) — driven from a car sample, not from
-   * a per-frame event. WorldFx reads the sample we hand it and decides what to emit. */
+  /* Per-frame display-side FX (skids, speed lines) — driven from car sample, not a per-frame event. */
   car.body.pointToWorldFrame(_rearLocal, _rearWorld);
   const heading = Math.atan2(
     2 * (car.body.quaternion.w * car.body.quaternion.y),
@@ -670,8 +661,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
 
   run.syncHud();
 
-  /* Drain the per-frame FX events through WorldFx. Order-independent
-   * (each event is self-contained) so a single pass at end of tick is enough. */
+  /* Drain per-frame FX events through WorldFx — order-independent, single pass at end of tick. */
   worldFx.drain(frameEvents.drain());
 }
 

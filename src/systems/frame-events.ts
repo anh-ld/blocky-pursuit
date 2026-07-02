@@ -1,15 +1,4 @@
-/* FrameEvent — typed channel between gameplay logic and the WorldFx facade.
- *
- * The conductor (main.ts) and the systems (cop-system, pickup-system) emit
- * these instead of calling into effects/popups/sound/haptics/radio directly.
- * WorldFx is the single consumer; it fans events out to the underlying
- * effects modules so the conductor stays thin and the call-site knowledge
- * of "what happens at X" lives in one place.
- *
- * Phase 1: types only. No call site emits these yet — that lands in Phase 2.
- * Discriminated union on `kind` so dispatch is exhaustive and a missing
- * case is a TypeScript error, not a silent no-op.
- */
+/* FrameEvent — typed channel between gameplay logic and the WorldFx facade. */
 
 export type Vec3Like = { x: number; y: number; z: number };
 
@@ -131,9 +120,7 @@ export type FrameEvent =
   | LowHpHeartbeatEvent
   | SirenEvent;
 
-/* Drain helper — push events from a per-frame branch without allocating
- * a fresh array on the hot path. Reuse the same `events` array across
- * calls within a single frame; the conductor drains it after the tick. */
+/* Drain helper — reuse the same buffer across calls within a single frame; conductor drains after the tick. */
 export class FrameEventBuffer {
   private buf: FrameEvent[] = [];
   push(ev: FrameEvent) {

@@ -1,19 +1,4 @@
-/* WorldFx — the single facade between gameplay events and the effects modules.
- *
- * Why this exists: the conductor (main.ts) currently calls into
- * effects/popups/sound/haptics/radio imperatively at every gameplay event.
- * Adding a cue means editing the conductor and 5+ call sites. With WorldFx
- * as the sole consumer of FrameEvents, the "what happens at X" knowledge
- * lives here, in one place, behind one interface.
- *
- * Phase 1: interface + empty stub implementations. No call site invokes
- * these yet. Phase 2 fills the bodies (one method per FrameEvent variant)
- * and rewires the conductor + systems to drain through here.
- *
- * The interface is the test surface — a test can construct a `WorldFx` with
- * a recording sink and assert the full FX sequence for any event without
- * booting the game.
- */
+/* WorldFx — the single facade between gameplay events and the effects modules. */
 
 import type { FrameEvent } from "../systems/frame-events";
 import { spawnConfetti, spawnSparks, spawnSplash, spawnSpeedLine, triggerScreenFlash, triggerShake } from "./effects";
@@ -45,8 +30,7 @@ import {
 } from "../audio/sound";
 import { HP_HEAL_DROWNED_COP } from "../constants";
 
-/* Per-kind pickup SFX — preserved verbatim from pickup-system.ts so the
- * sonic palette (5 buckets across 9 kinds) is identical to pre-refactor. */
+/* Per-kind pickup SFX — 9 kinds split into 5 sonic palettes. */
 function playPickupSfx(kind: Extract<FrameEvent, { kind: "pickupCollected" }>["pickup"]) {
   switch (kind) {
     case "repair":
@@ -74,8 +58,7 @@ function playPickupSfx(kind: Extract<FrameEvent, { kind: "pickupCollected" }>["p
   }
 }
 
-/* Car state needed for display-side effects. Provided by the conductor via
- * setCarSample() each frame; kept off Car itself so the seam stays clean. */
+/* Car state needed for display-side effects — provided per frame via setCarSample. */
 export type ICarDisplaySample = {
   position: { x: number; y: number; z: number };
   /** Yaw in radians, derived from the cannon quaternion. */
@@ -94,9 +77,7 @@ export type ICarDisplaySample = {
 export class WorldFx {
   private car: ICarDisplaySample | null = null;
 
-  /** Conductor calls this once per frame before draining events.
-   *  Optional for events that don't need car state; required for siren
-   *  and any future event that wants to read car state. */
+  /** Conductor calls once per frame before draining events. */
   setCarSample(sample: ICarDisplaySample) {
     this.car = sample;
   }
@@ -252,10 +233,7 @@ export class WorldFx {
     setBgmDuck(ev.intensity);
   }
 
-  /** Skid + speed-line emission — driven from car sample, not from a single
-   *  per-frame event. The conductor reads car state and calls this directly
-   *  because emission is per-frame (not per-event) and the gate depends on
-   *  multiple per-frame conditions (drift, nitro, speed). */
+  /** Per-frame skids + speed lines from car sample — gates depend on drift/nitro/speed, not on a discrete event. */
   emitDrivenFx(nitroActive: boolean) {
     const c = this.car;
     if (!c) return;
@@ -320,8 +298,7 @@ export class WorldFx {
     }
   }
 
-  /** Drain an array of events through dispatch. The conductor calls this
-   *  once per frame after the gameplay tick. */
+  /** Conductor calls once per frame after the gameplay tick. */
   drain(events: readonly FrameEvent[]) {
     for (let i = 0; i < events.length; i++) this.dispatch(events[i]);
   }

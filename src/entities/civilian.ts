@@ -281,14 +281,11 @@ export class Civilian {
       this.stunTimer -= dt;
     }
 
-    /* Sync visuals */
-    this.mesh.position.set(this.body.position.x, this.body.position.y, this.body.position.z);
-    this.mesh.quaternion.set(
-      this.body.quaternion.x,
-      this.body.quaternion.y,
-      this.body.quaternion.z,
-      this.body.quaternion.w,
-    );
+    /* Sync visuals — interpolated pos/quat: smooth between fixed steps, raw snaps → jitter. */
+    const ip = this.body.interpolatedPosition;
+    const iq = this.body.interpolatedQuaternion;
+    this.mesh.position.set(ip.x, ip.y, ip.z);
+    this.mesh.quaternion.set(iq.x, iq.y, iq.z, iq.w);
   }
 
   destroy() {

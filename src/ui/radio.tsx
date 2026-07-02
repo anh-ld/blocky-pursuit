@@ -35,9 +35,7 @@ export function Radio() {
           >
             {VOICE_LABELS[l.voice]}
           </span>
-          <span class="font-mono-ui text-[11px] sm:text-xs text-[var(--text)] leading-tight truncate">
-            {l.text}
-          </span>
+          <span class="font-mono-ui text-[11px] sm:text-xs text-[var(--text)] leading-tight truncate">{l.text}</span>
         </div>
       ))}
     </div>

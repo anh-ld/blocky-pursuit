@@ -9,10 +9,7 @@ export function Feedback() {
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
       <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[480px] md:max-w-[92vw] bg-[var(--bg-1)] pointer-events-auto flex flex-col">
         <div class="px-5 pt-5 pb-3 border-b-2 border-[var(--line)]">
-          <h2
-            class="font-pixel text-[var(--cyan)] text-xs leading-none"
-            style={{ textShadow: "2px 2px 0 #000" }}
-          >
+          <h2 class="font-pixel text-[var(--cyan)] text-xs leading-none" style={{ textShadow: "2px 2px 0 #000" }}>
             FEEDBACK
           </h2>
           <p class="font-mono-ui text-[10px] text-[var(--text-mute)] mt-1.5">
@@ -20,13 +17,7 @@ export function Feedback() {
           </p>
         </div>
 
-        <form
-          name="feedback"
-          method="POST"
-          action="/"
-          data-netlify="true"
-          class="flex-1 p-5 flex flex-col gap-3"
-        >
+        <form name="feedback" method="POST" action="/" data-netlify="true" class="flex-1 p-5 flex flex-col gap-3">
           <input type="hidden" name="form-name" value="feedback" />
           <textarea
             name="message"

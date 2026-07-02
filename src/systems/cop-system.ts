@@ -113,7 +113,8 @@ export class CopSystem {
     const heatTier = getHeat(run.score, run.level);
     const effectiveInterval = Math.max(HEAT_INTERVAL_FLOOR, levelDef.spawnInterval - heatTier * HEAT_INTERVAL_SHAVE);
     if (timeInSeconds - this.lastSpawnTime > effectiveInterval) {
-      const isBounty = levelDef.bountyRate > 0 && !this.cops.some((c) => c.isBounty) && Math.random() < levelDef.bountyRate;
+      const isBounty =
+        levelDef.bountyRate > 0 && !this.cops.some((c) => c.isBounty) && Math.random() < levelDef.bountyRate;
       spawnCop({
         scene: this.scene,
         world: this.world,

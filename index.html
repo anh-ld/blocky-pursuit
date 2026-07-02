@@ -67,7 +67,10 @@
         border: 2px solid #000;
         border-bottom-width: 4px;
         cursor: pointer;
-        transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+        transition:
+          transform 80ms ease,
+          background 120ms ease,
+          border-color 120ms ease;
         user-select: none;
       }
       .arcade-btn:hover {
@@ -115,7 +118,9 @@
       .pixel-panel {
         background: var(--bg-1);
         border: 2px solid var(--line-2);
-        box-shadow: 0 0 0 1px #000, 4px 4px 0 0 rgba(0, 0, 0, 0.6);
+        box-shadow:
+          0 0 0 1px #000,
+          4px 4px 0 0 rgba(0, 0, 0, 0.6);
       }
       /* Scanline overlay — subtle CRT vibe, fixed to viewport, never blocks input. */
       .crt-scanlines::after {

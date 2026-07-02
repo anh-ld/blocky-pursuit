@@ -14,20 +14,12 @@ export function ControlsGuide() {
   const bodyHex = `#${skin.bodyColor.toString(16).padStart(6, "0")}`;
 
   return (
-    <div
-      class={`self-end mb-3 mr-3 gap-1.5 flex-wrap justify-end ${
-        state === "paused" ? "flex" : "hidden md:flex"
-      }`}
-    >
+    <div class={`self-end mb-3 mr-3 gap-1.5 flex-wrap justify-end ${state === "paused" ? "flex" : "hidden md:flex"}`}>
       <Chip>
         <span class="font-mono-ui text-[10px] text-[var(--text)] truncate max-w-24">{name}</span>
       </Chip>
       <Chip>
-        <span
-          class="inline-block w-2.5 h-2.5"
-          style={{ background: bodyHex }}
-          aria-hidden
-        />
+        <span class="inline-block w-2.5 h-2.5" style={{ background: bodyHex }} aria-hidden />
         <span class="font-mono-ui text-[10px] text-[var(--text)] truncate max-w-24">{skin.name}</span>
       </Chip>
       <div class="flex items-stretch h-7">
@@ -66,9 +58,7 @@ export function ControlsGuide() {
           <Key>A</Key>
           <Key>D</Key>
         </div>
-        <span class="font-mono-ui text-[9px] text-[var(--text-mute)] uppercase tracking-widest ml-1">
-          steer
-        </span>
+        <span class="font-mono-ui text-[9px] text-[var(--text-mute)] uppercase tracking-widest ml-1">steer</span>
       </Chip>
     </div>
   );
@@ -76,17 +66,13 @@ export function ControlsGuide() {
 
 function Chip({ children }: { children: preact.ComponentChildren }) {
   return (
-    <div class="h-7 px-2 bg-[var(--bg-1)] border-2 border-[var(--line)] flex items-center gap-1.5">
-      {children}
-    </div>
+    <div class="h-7 px-2 bg-[var(--bg-1)] border-2 border-[var(--line)] flex items-center gap-1.5">{children}</div>
   );
 }
 
 function Key({ children }: { children: preact.ComponentChildren }) {
   return (
-    <span
-      class="font-pixel text-[8px] text-[var(--text)] bg-[var(--bg-3)] border border-[var(--line-2)] w-4 h-4 flex items-center justify-center leading-none"
-    >
+    <span class="font-pixel text-[8px] text-[var(--text)] bg-[var(--bg-3)] border border-[var(--line-2)] w-4 h-4 flex items-center justify-center leading-none">
       {children}
     </span>
   );

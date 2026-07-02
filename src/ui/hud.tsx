@@ -16,16 +16,7 @@ import {
   tankRemaining,
 } from "../state";
 import { COMBO_MILESTONE } from "../constants";
-import {
-  IconBolt,
-  IconShield,
-  IconCoin,
-  IconClock,
-  IconMagnet,
-  IconGhost,
-  IconTank,
-  IconFlame,
-} from "./icons";
+import { IconBolt, IconShield, IconCoin, IconClock, IconMagnet, IconGhost, IconTank, IconFlame } from "./icons";
 
 /* Compact power-up chip — square icon + mono number. Tinted by buff type, no extra padding. */
 function PowerChip({
@@ -72,10 +63,7 @@ export function Hud() {
     <div class="flex items-center gap-1.5 min-w-0">
       {/* HP — single thin bar, color carries health state */}
       <div class="w-12 sm:w-16 h-1.5 bg-[var(--bg-3)] overflow-hidden shrink-0">
-        <div
-          class="h-full transition-all duration-200"
-          style={{ width: `${Math.max(0, v)}%`, background: hpColor }}
-        />
+        <div class="h-full transition-all duration-200" style={{ width: `${Math.max(0, v)}%`, background: hpColor }} />
       </div>
 
       {/* Score — pixel font, the hero number */}
@@ -134,18 +122,10 @@ export function Hud() {
       {/* Power-ups — flat chips, color carries the type */}
       {nitro > 0 && <PowerChip tint="var(--amber)" icon={<IconBolt size={12} />} value={nitro.toFixed(1)} />}
       {shield && <PowerChip tint="var(--cyan)" icon={<IconShield size={12} />} value="" />}
-      {scoreMult > 0 && (
-        <PowerChip tint="var(--amber)" icon={<IconCoin size={12} />} value={scoreMult.toFixed(1)} />
-      )}
-      {timeWarp > 0 && (
-        <PowerChip tint="var(--cyan)" icon={<IconClock size={12} />} value={timeWarp.toFixed(1)} />
-      )}
-      {magnet > 0 && (
-        <PowerChip tint="var(--red)" icon={<IconMagnet size={12} />} value={magnet.toFixed(1)} danger />
-      )}
-      {ghost > 0 && (
-        <PowerChip tint="var(--text-dim)" icon={<IconGhost size={12} />} value={ghost.toFixed(1)} />
-      )}
+      {scoreMult > 0 && <PowerChip tint="var(--amber)" icon={<IconCoin size={12} />} value={scoreMult.toFixed(1)} />}
+      {timeWarp > 0 && <PowerChip tint="var(--cyan)" icon={<IconClock size={12} />} value={timeWarp.toFixed(1)} />}
+      {magnet > 0 && <PowerChip tint="var(--red)" icon={<IconMagnet size={12} />} value={magnet.toFixed(1)} danger />}
+      {ghost > 0 && <PowerChip tint="var(--text-dim)" icon={<IconGhost size={12} />} value={ghost.toFixed(1)} />}
       {tank > 0 && <PowerChip tint="var(--red)" icon={<IconTank size={12} />} value={tank.toFixed(1)} danger />}
     </div>
   );

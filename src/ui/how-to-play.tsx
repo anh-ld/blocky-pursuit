@@ -1,7 +1,17 @@
 import { screen, canInstallPwa, actions, bestScore, totalRuns, copsDrowned } from "../state";
 import { CAR_SKINS, isUnlocked } from "../entities/car-skins";
 import { fetchLeaderboard } from "../api";
-import { IconSteer, IconCar, IconCop, IconWater, IconBolt, IconSkull, IconStar, IconTrophy, IconDownload } from "./icons";
+import {
+  IconSteer,
+  IconCar,
+  IconCop,
+  IconWater,
+  IconBolt,
+  IconSkull,
+  IconStar,
+  IconTrophy,
+  IconDownload,
+} from "./icons";
 
 /* Two columns on desktop: rules left, CTAs right. Single column on mobile — CTAs pinned to bottom. */
 export function HowToPlay() {
@@ -55,18 +65,12 @@ export function HowToPlay() {
 
           {showCareer && (
             <div class="mt-2 pt-3 border-t-2 border-dashed border-[var(--line)]">
-              <div class="font-mono-ui text-[9px] text-[var(--text-mute)] uppercase tracking-widest mb-2">
-                Career
-              </div>
+              <div class="font-mono-ui text-[9px] text-[var(--text-mute)] uppercase tracking-widest mb-2">Career</div>
               <div class="grid grid-cols-4 gap-1">
                 <Stat label="Best" value={bestScore.value.toLocaleString()} tint="var(--amber)" />
                 <Stat label="Runs" value={String(totalRuns.value)} />
                 <Stat label="Drowned" value={String(copsDrowned.value)} tint="var(--cyan)" />
-                <Stat
-                  label="Cars"
-                  value={`${unlockedCount}/${CAR_SKINS.length}`}
-                  tint="var(--pink)"
-                />
+                <Stat label="Cars" value={`${unlockedCount}/${CAR_SKINS.length}`} tint="var(--pink)" />
               </div>
             </div>
           )}
@@ -108,15 +112,7 @@ export function HowToPlay() {
   );
 }
 
-function Row({
-  icon,
-  label,
-  kbd,
-}: {
-  icon: preact.ComponentChildren;
-  label: string;
-  kbd?: [string, string];
-}) {
+function Row({ icon, label, kbd }: { icon: preact.ComponentChildren; label: string; kbd?: [string, string] }) {
   return (
     <div class="flex items-center gap-3 min-w-0">
       <span class="text-[var(--text-dim)] shrink-0 w-4 h-4 flex items-center justify-center">{icon}</span>
@@ -124,9 +120,7 @@ function Row({
       {kbd && (
         <span class="ml-auto flex gap-1 shrink-0">
           {kbd.map((k) => (
-            <kbd
-              class="font-pixel text-[8px] leading-none text-[var(--text)] bg-[var(--bg-3)] border border-[var(--line-2)] px-1.5 py-1 min-w-5 text-center"
-            >
+            <kbd class="font-pixel text-[8px] leading-none text-[var(--text)] bg-[var(--bg-3)] border border-[var(--line-2)] px-1.5 py-1 min-w-5 text-center">
               {k}
             </kbd>
           ))}

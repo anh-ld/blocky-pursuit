@@ -177,9 +177,7 @@ export function GameOver() {
         {/* Share card preview */}
         {previewUrl && (
           <div class="px-5 py-4 border-b-2 border-[var(--line)] flex flex-col gap-2">
-            <span class="font-mono-ui text-[9px] text-[var(--text-mute)] uppercase tracking-widest">
-              Share card
-            </span>
+            <span class="font-mono-ui text-[9px] text-[var(--text-mute)] uppercase tracking-widest">Share card</span>
             <div class="border-2 border-[var(--line-2)]">
               <img
                 src={previewUrl}
@@ -189,19 +187,11 @@ export function GameOver() {
               />
             </div>
             <div class="flex gap-2">
-              <button
-                onClick={handleCopyCard}
-                disabled={cardBusy}
-                class="arcade-btn arcade-btn-sm flex-1"
-              >
+              <button onClick={handleCopyCard} disabled={cardBusy} class="arcade-btn arcade-btn-sm flex-1">
                 <IconCopy size={12} />
                 {cardStatus === "copied" ? "Copied" : "Copy"}
               </button>
-              <button
-                onClick={handleDownloadCard}
-                disabled={cardBusy}
-                class="arcade-btn arcade-btn-sm flex-1"
-              >
+              <button onClick={handleDownloadCard} disabled={cardBusy} class="arcade-btn arcade-btn-sm flex-1">
                 <IconDownload size={12} />
                 {cardStatus === "saved" ? "Saved" : "Save"}
               </button>
@@ -265,9 +255,7 @@ function Bar({ label, value, total, tint }: { label: string; value: number; tota
   const pct = Math.round((value / total) * 100);
   return (
     <div class="flex items-center gap-2">
-      <span class="font-mono-ui text-[9px] text-[var(--text-dim)] uppercase tracking-wider w-12 shrink-0">
-        {label}
-      </span>
+      <span class="font-mono-ui text-[9px] text-[var(--text-dim)] uppercase tracking-wider w-12 shrink-0">{label}</span>
       <div class="flex-1 h-2 bg-[var(--bg-3)]">
         <div class="h-full" style={{ width: `${pct}%`, background: tint }} />
       </div>

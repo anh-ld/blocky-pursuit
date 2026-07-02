@@ -25,10 +25,7 @@ export function Leaderboard() {
       <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[480px] md:max-w-[92vw] bg-[var(--bg-1)] pointer-events-auto flex flex-col">
         <div class="px-5 pt-5 pb-3 border-b-2 border-[var(--line)] flex items-center gap-2">
           <IconTrophy size={18} class="text-[var(--amber)] shrink-0" />
-          <h2
-            class="font-pixel text-[var(--amber)] text-xs leading-none"
-            style={{ textShadow: "2px 2px 0 #000" }}
-          >
+          <h2 class="font-pixel text-[var(--amber)] text-xs leading-none" style={{ textShadow: "2px 2px 0 #000" }}>
             LEADERBOARD
           </h2>
         </div>
@@ -52,10 +49,7 @@ export function Leaderboard() {
                       isMe ? "bg-[var(--bg-3)]" : ""
                     }`}
                   >
-                    <span
-                      class="font-pixel text-[10px] tabular-nums w-6 shrink-0"
-                      style={{ color: tint }}
-                    >
+                    <span class="font-pixel text-[10px] tabular-nums w-6 shrink-0" style={{ color: tint }}>
                       {String(i + 1).padStart(2, "0")}
                     </span>
                     <span

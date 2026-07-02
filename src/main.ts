@@ -1,6 +1,5 @@
 import "virtual:uno.css";
 import { render, h } from "preact";
-import * as CANNON from "cannon-es";
 import { updateCopLights } from "./entities/cop";
 import { isRoad } from "./world/city-generator";
 import { isWater, TILE_SIZE } from "./world/terrain";
@@ -10,7 +9,7 @@ import { CopSystem } from "./systems/cop-system";
 import { CivilianSystem } from "./systems/civilian-system";
 import { PickupSystem } from "./systems/pickup-system";
 import { FrameEventBuffer } from "./systems/frame-events";
-import { WorldFx, type ICarDisplaySample } from "./world/world-fx";
+import { WorldFx } from "./world/world-fx";
 import {
   initAudio,
   resumeAudio,
@@ -177,10 +176,6 @@ const frameEvents = new FrameEventBuffer();
 /* `currentState` = loop's internal state. Superset of IGameStateValue with "dying" for slow-mo. */
 type ICurrentState = IGameStateValue | "dying";
 let currentState: ICurrentState = "start";
-
-/* Per-frame scratch for skid emitter — hoisted to avoid 2 Vec3 allocations/frame. */
-const _rearLocal = new CANNON.Vec3(0, 0, 1.25);
-const _rearWorld = new CANNON.Vec3();
 
 /* Combo lifeline tracking — drives warning tick cadence + "lost it" sting on edge transitions. */
 let _prevComboCount = 0;
@@ -621,26 +616,12 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   }
 
   /* Siren — gated on `state "playing"`. Suppressed during dying. Event carries intensity. */
-  const sirenIntensity = currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE ? 1 - nearestCopDist / SIREN_MAX_RANGE : 0;
+  const sirenIntensity =
+    currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE ? 1 - nearestCopDist / SIREN_MAX_RANGE : 0;
   frameEvents.push({ kind: "siren", intensity: sirenIntensity });
 
   /* Per-frame display-side FX (skids, speed lines) — driven from car sample, not a per-frame event. */
-  car.body.pointToWorldFrame(_rearLocal, _rearWorld);
-  const heading = Math.atan2(
-    2 * (car.body.quaternion.w * car.body.quaternion.y),
-    1 - 2 * car.body.quaternion.y * car.body.quaternion.y,
-  );
-  const carSample: ICarDisplaySample = {
-    position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
-    heading,
-    rearLeft: { x: _rearWorld.x, z: _rearWorld.z },
-    rearRight: { x: _rearWorld.x, z: _rearWorld.z },
-    lateralSpeed: car.lateralSpeed,
-    speed: car.body.velocity.length(),
-    baseMaxSpeed: car.baseMaxSpeed,
-    maxSpeed: car.maxSpeed,
-  };
-  worldFx.setCarSample(carSample);
+  worldFx.setCarSample(car.sampleDisplay());
   worldFx.emitDrivenFx(run.nitroTimer > 0);
 
   /* Vibe Jam portal check: redirect if the car drove through one */

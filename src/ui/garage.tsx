@@ -28,10 +28,7 @@ export function Garage() {
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
       <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[720px] md:max-w-[92vw] bg-[var(--bg-1)] pointer-events-auto flex flex-col">
         <div class="px-5 pt-5 pb-3 flex items-baseline justify-between border-b-2 border-[var(--line)]">
-          <h2
-            class="font-pixel text-[var(--amber)] text-xs leading-none"
-            style={{ textShadow: "2px 2px 0 #000" }}
-          >
+          <h2 class="font-pixel text-[var(--amber)] text-xs leading-none" style={{ textShadow: "2px 2px 0 #000" }}>
             GARAGE
           </h2>
           <span class="font-mono-ui text-[10px] text-[var(--text-mute)] uppercase tracking-widest">

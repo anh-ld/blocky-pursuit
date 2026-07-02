@@ -17,10 +17,7 @@ export function Recordings() {
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
       <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[480px] md:max-w-[92vw] bg-[var(--bg-1)] pointer-events-auto flex flex-col">
         <div class="px-5 pt-5 pb-2 border-b-2 border-[var(--line)]">
-          <h2
-            class="font-pixel text-[var(--cyan)] text-xs leading-none"
-            style={{ textShadow: "2px 2px 0 #000" }}
-          >
+          <h2 class="font-pixel text-[var(--cyan)] text-xs leading-none" style={{ textShadow: "2px 2px 0 #000" }}>
             RECORDINGS
           </h2>
           <p class="font-mono-ui text-[10px] text-[var(--text-mute)] mt-1.5">
@@ -32,9 +29,7 @@ export function Recordings() {
           {leaderboardLoading.value ? (
             <div class="font-mono-ui text-[10px] text-[var(--text-mute)] text-center py-8">Loading…</div>
           ) : entries.length === 0 ? (
-            <div class="font-mono-ui text-xs text-[var(--text-mute)] text-center py-8">
-              No recordings yet.
-            </div>
+            <div class="font-mono-ui text-xs text-[var(--text-mute)] text-center py-8">No recordings yet.</div>
           ) : (
             <div class="flex flex-col">
               {entries.map((e, i) => {

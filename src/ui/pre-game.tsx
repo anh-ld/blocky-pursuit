@@ -41,10 +41,7 @@ export function PreGame() {
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
       <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[720px] md:max-w-[92vw] bg-[var(--bg-1)] pointer-events-auto flex flex-col">
         <div class="px-5 pt-5 pb-3 border-b-2 border-[var(--line)] flex items-baseline justify-between">
-          <h2
-            class="font-pixel text-[var(--amber)] text-xs leading-none"
-            style={{ textShadow: "2px 2px 0 #000" }}
-          >
+          <h2 class="font-pixel text-[var(--amber)] text-xs leading-none" style={{ textShadow: "2px 2px 0 #000" }}>
             CHOOSE RIDE
           </h2>
           <span class="font-mono-ui text-[10px] text-[var(--text-mute)] uppercase tracking-widest">
@@ -58,9 +55,7 @@ export function PreGame() {
             <CarPreview skin={currentSkin} />
           </div>
           <div class="flex-1 flex flex-col gap-1.5 min-w-0">
-            <span class="font-pixel text-[var(--text)] text-[10px] leading-none truncate">
-              {currentSkin.name}
-            </span>
+            <span class="font-pixel text-[var(--text)] text-[10px] leading-none truncate">{currentSkin.name}</span>
             <span class="font-mono-ui text-[10px] text-[var(--text-dim)] uppercase tracking-wider">
               {currentSkin.brand}
             </span>

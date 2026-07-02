@@ -4,6 +4,21 @@ import { getSkin, massForWeight, type ICarSkin } from "./car-skins";
 import { buildCarMesh, CAR_UNIT } from "./car-mesh";
 import { installCarPhysics } from "./car-physics";
 
+/* Read-only snapshot of car state needed by display-side FX (skids, speed lines). Single source of truth — replaces per-frame heading + rear-anchor math in the conductor. */
+export type ICarDisplaySample = {
+  position: { x: number; y: number; z: number };
+  /* Yaw in radians, derived from the cannon quaternion. */
+  heading: number;
+  /* World-space anchor behind the car; FX layers add lateral offset for left/right skids. */
+  rearCenter: { x: number; z: number };
+  /* Magnitude of lateral slip — used to gate skid emission. */
+  lateralSpeed: number;
+  /* Current scalar speed, used for speed-line gating. */
+  speed: number;
+  baseMaxSpeed: number;
+  maxSpeed: number;
+};
+
 export class Car {
   scene: THREE.Scene;
   world: CANNON.World;
@@ -36,6 +51,9 @@ export class Car {
   private _onKeyDown!: (e: KeyboardEvent) => void;
   private _onKeyUp!: (e: KeyboardEvent) => void;
   private _onWindowTouchEnd: ((e: TouchEvent) => void) | null = null;
+  /* Per-frame scratch for sampleDisplay() — keeps the 60Hz call alloc-free. */
+  private _rearLocal = new CANNON.Vec3(0, 0, 1.25);
+  private _rearWorld = new CANNON.Vec3();
 
   constructor(scene: THREE.Scene, world: CANNON.World, skinId: string = "vf3") {
     this.scene = scene;
@@ -295,5 +313,20 @@ export class Car {
       this.body.quaternion.z,
       this.body.quaternion.w,
     );
+  }
+
+  /** Snapshot of car state needed by display-side FX (skids, speed lines). */
+  sampleDisplay(): ICarDisplaySample {
+    const q = this.body.quaternion;
+    this.body.pointToWorldFrame(this._rearLocal, this._rearWorld);
+    return {
+      position: { x: this.body.position.x, y: this.body.position.y, z: this.body.position.z },
+      heading: Math.atan2(2 * (q.w * q.y), 1 - 2 * q.y * q.y),
+      rearCenter: { x: this._rearWorld.x, z: this._rearWorld.z },
+      lateralSpeed: this.lateralSpeed,
+      speed: this.body.velocity.length(),
+      baseMaxSpeed: this.baseMaxSpeed,
+      maxSpeed: this.maxSpeed,
+    };
   }
 }

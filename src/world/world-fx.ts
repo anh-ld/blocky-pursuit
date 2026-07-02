@@ -1,6 +1,7 @@
 /* WorldFx — the single facade between gameplay events and the effects modules. */
 
 import type { FrameEvent } from "../systems/frame-events";
+import type { ICarDisplaySample } from "../entities/car";
 import { spawnConfetti, spawnSparks, spawnSplash, spawnSpeedLine, triggerScreenFlash, triggerShake } from "./effects";
 import { spawnPopup } from "./popups";
 import { spawnSkid } from "./skids";
@@ -58,21 +59,8 @@ function playPickupSfx(kind: Extract<FrameEvent, { kind: "pickupCollected" }>["p
   }
 }
 
-/* Car state needed for display-side effects — provided per frame via setCarSample. */
-export type ICarDisplaySample = {
-  position: { x: number; y: number; z: number };
-  /** Yaw in radians, derived from the cannon quaternion. */
-  heading: number;
-  /** World-space rear-left and rear-right wheel anchor positions for skids. */
-  rearLeft: { x: number; z: number };
-  rearRight: { x: number; z: number };
-  /** Magnitude of lateral slip — used to gate skid emission. */
-  lateralSpeed: number;
-  /** Current scalar speed, used for speed-line gating. */
-  speed: number;
-  baseMaxSpeed: number;
-  maxSpeed: number;
-};
+/* Re-exported from car so existing callers (main.ts) keep their import path; the type lives with the producer. */
+export type { ICarDisplaySample } from "../entities/car";
 
 export class WorldFx {
   private car: ICarDisplaySample | null = null;
@@ -242,8 +230,8 @@ export class WorldFx {
     if (isDrifting || isBoosting) {
       const offX = Math.cos(c.heading) * 1.25;
       const offZ = -Math.sin(c.heading) * 1.25;
-      spawnSkid(c.rearLeft.x + offX, c.rearLeft.z + offZ, c.heading);
-      spawnSkid(c.rearRight.x - offX, c.rearRight.z - offZ, c.heading);
+      spawnSkid(c.rearCenter.x + offX, c.rearCenter.z + offZ, c.heading);
+      spawnSkid(c.rearCenter.x - offX, c.rearCenter.z - offZ, c.heading);
     }
     if (nitroActive && c.speed > c.maxSpeed * 0.8) {
       const fx = -Math.cos(c.heading);

@@ -36,11 +36,7 @@ export function ReplayModal() {
   return (
     <div class="absolute inset-0 z-50 flex items-center justify-center bg-black/85">
       <div class="w-full max-w-[92vw] md:w-[768px] flex flex-col items-end gap-2">
-        <button
-          onClick={close}
-          class="arcade-btn arcade-btn-sm arcade-btn-ghost"
-          aria-label="Close replay"
-        >
+        <button onClick={close} class="arcade-btn arcade-btn-sm arcade-btn-ghost" aria-label="Close replay">
           <IconClose size={12} />
           Close
         </button>
@@ -54,16 +50,12 @@ export function ReplayModal() {
           style={{ maxHeight: "75vh" }}
         />
         <div class="flex items-center gap-1 self-center">
-          <span class="font-mono-ui text-[9px] text-[var(--text-mute)] uppercase tracking-widest mr-1">
-            Speed
-          </span>
+          <span class="font-mono-ui text-[9px] text-[var(--text-mute)] uppercase tracking-widest mr-1">Speed</span>
           {SPEEDS.map((s) => (
             <button
               key={s}
               onClick={() => setSpeed(s)}
-              class={`arcade-btn arcade-btn-sm ${
-                s === speed ? "" : "arcade-btn-ghost"
-              }`}
+              class={`arcade-btn arcade-btn-sm ${s === speed ? "" : "arcade-btn-ghost"}`}
             >
               {s}×
             </button>

@@ -24,26 +24,29 @@ function svg(props: IconProps, children: JSX.Element): JSX.Element {
 }
 
 export const IconSteer = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <circle cx="8" cy="8" r="6" />
       <path d="M8 2v3M8 11v3M2 8h3M11 8h3" />
-    </>
-  ));
+    </>,
+  );
 
 export const IconCar = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <path d="M2 11h12v2H2z" />
       <path d="M3.5 11l1.2-3.5h6.6L12.5 11" />
       <path d="M5.5 7.5h5" />
       <circle cx="4.5" cy="13" r="1" fill="currentColor" />
       <circle cx="11.5" cy="13" r="1" fill="currentColor" />
-    </>
-  ));
+    </>,
+  );
 
 export const IconCop = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <path d="M2 11h12v2H2z" />
       <path d="M3.5 11l1.2-3.5h6.6L12.5 11" />
@@ -52,19 +55,19 @@ export const IconCop = (p: IconProps) =>
       <circle cx="9.5" cy="7.5" r="0.6" fill="#000" stroke="none" />
       <circle cx="4.5" cy="13" r="1" fill="currentColor" />
       <circle cx="11.5" cy="13" r="1" fill="currentColor" />
-    </>
-  ));
+    </>,
+  );
 
 export const IconWater = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <path d="M2 11c1.5 0 1.5-1.5 3-1.5s1.5 1.5 3 1.5 1.5-1.5 3-1.5 1.5 1.5 3 1.5" />
       <path d="M2 13.5c1.5 0 1.5-1.5 3-1.5s1.5 1.5 3 1.5 1.5-1.5 3-1.5 1.5 1.5 3 1.5" />
-    </>
-  ));
+    </>,
+  );
 
-export const IconBolt = (p: IconProps) =>
-  svg(p, <path d="M9 1L3 9h4l-1 6 6-8H8z" fill="currentColor" />);
+export const IconBolt = (p: IconProps) => svg(p, <path d="M9 1L3 9h4l-1 6 6-8H8z" fill="currentColor" />);
 
 export const IconHeart = (p: IconProps) =>
   svg(
@@ -73,10 +76,7 @@ export const IconHeart = (p: IconProps) =>
   );
 
 export const IconShield = (p: IconProps) =>
-  svg(
-    { ...p, fill: "currentColor" },
-    <path d="M8 1.5L2.5 4v5c0 3 2.5 5 5.5 5.5 3-.5 5.5-2.5 5.5-5.5V4z" />,
-  );
+  svg({ ...p, fill: "currentColor" }, <path d="M8 1.5L2.5 4v5c0 3 2.5 5 5.5 5.5 3-.5 5.5-2.5 5.5-5.5V4z" />);
 
 export const IconSkull = (p: IconProps) =>
   svg(
@@ -105,18 +105,16 @@ export const IconCoin = (p: IconProps) =>
   );
 
 export const IconClock = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <circle cx="8" cy="8" r="6" />
       <path d="M8 4v4l3 2" />
-    </>
-  ));
+    </>,
+  );
 
 export const IconMagnet = (p: IconProps) =>
-  svg(
-    { ...p, fill: "currentColor" },
-    <path d="M3 2h3v6c0 1.5 1 2 2 2s2-.5 2-2V2h3v6c0 3-2 5-5 5s-5-2-5-5z" />,
-  );
+  svg({ ...p, fill: "currentColor" }, <path d="M3 2h3v6c0 1.5 1 2 2 2s2-.5 2-2V2h3v6c0 3-2 5-5 5s-5-2-5-5z" />);
 
 export const IconGhost = (p: IconProps) =>
   svg(
@@ -142,26 +140,25 @@ export const IconArrowRight = (p: IconProps) => svg(p, <path d="M5 3l6 5-6 5z" f
 
 export const IconPlay = (p: IconProps) => svg(p, <path d="M4 2l8 6-8 6z" fill="currentColor" />);
 export const IconPause = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <rect x="4" y="2" width="3" height="12" fill="currentColor" />
       <rect x="9" y="2" width="3" height="12" fill="currentColor" />
-    </>
-  ));
+    </>,
+  );
 
 export const IconClose = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <path d="M3 3l10 10" />
       <path d="M13 3L3 13" />
-    </>
-  ));
+    </>,
+  );
 
 export const IconStar = (p: IconProps) =>
-  svg(
-    { ...p, fill: "currentColor" },
-    <path d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z" />,
-  );
+  svg({ ...p, fill: "currentColor" }, <path d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z" />);
 
 export const IconTrophy = (p: IconProps) =>
   svg(
@@ -185,13 +182,14 @@ export const IconLock = (p: IconProps) =>
   );
 
 export const IconDownload = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <path d="M8 2v9" />
       <path d="M4 8l4 4 4-4" fill="currentColor" />
       <path d="M2 14h12" />
-    </>
-  ));
+    </>,
+  );
 
 export const IconCopy = (p: IconProps) =>
   svg(
@@ -203,15 +201,16 @@ export const IconCopy = (p: IconProps) =>
   );
 
 export const IconShare = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <circle cx="4" cy="8" r="2" fill="currentColor" />
       <circle cx="12" cy="3" r="2" fill="currentColor" />
       <circle cx="12" cy="13" r="2" fill="currentColor" />
       <path d="M5.5 7l5-3" />
       <path d="M5.5 9l5 3" />
-    </>
-  ));
+    </>,
+  );
 
 export const IconSound = (p: IconProps) =>
   svg(
@@ -224,17 +223,19 @@ export const IconSound = (p: IconProps) =>
   );
 
 export const IconSoundOff = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <path d="M2 6h3l4-3v10L5 10H2z" fill="currentColor" />
       <path d="M11 5c1 1 1 5 0 6" fill="currentColor" />
       <path d="M2 2l12 12" />
-    </>
-  ));
+    </>,
+  );
 
 export const IconBust = (p: IconProps) =>
-  svg(p, (
+  svg(
+    p,
     <>
       <path d="M3 4l5 5 5-5 2 2-5 5 5 5-2 2-5-5-5 5-2-2 5-5-5-5z" fill="currentColor" />
-    </>
-  ));
+    </>,
+  );

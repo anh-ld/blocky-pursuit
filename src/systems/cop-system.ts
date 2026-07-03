@@ -34,6 +34,7 @@ import {
   TANK_KILL_SCORE,
 } from "../constants";
 import { FrameEventBuffer } from "./frame-events";
+import { PlayerKinematics } from "../entities/player-kinematics";
 
 /* Per-frame scratch — avoids Vec3 alloc in cop loop's hot branch. Safe: update() is single-threaded, never re-enters. */
 const _relVel = new CANNON.Vec3();
@@ -56,6 +57,8 @@ export class CopSystem {
   lastSpawnTime = 0;
   /* Last SWAT mini-boss spawn. Tracked separately so SWAT cadence is independent of the regular timer. */
   lastSwatSpawn = -SWAT_RESPAWN_DELAY;
+  /* Short heading history for the chase loop — feeds curvature + lateral lead. */
+  kinematics = new PlayerKinematics();
 
   constructor(ctx: IGameContext) {
     this.scene = ctx.scene;
@@ -66,6 +69,7 @@ export class CopSystem {
     this.cops.forEach((c) => c.destroy());
     this.cops.length = 0;
     this.lastSwatSpawn = -SWAT_RESPAWN_DELAY;
+    this.kinematics.reset();
   }
 
   rebaseTimers(timeInSeconds: number) {
@@ -107,6 +111,8 @@ export class CopSystem {
   }
 
   update(dt: number, timeInSeconds: number, car: Car, run: RunState, events: FrameEventBuffer): ICopUpdateResult {
+    /* Sample the player's heading so the chase loop can estimate angular velocity. */
+    this.kinematics.update(timeInSeconds, car.body.quaternion);
     /* Spawning is level-dependent */
     const levelDef = getLevelDef(run.level);
     /* Endgame heat shaves spawn interval past max level so survivor runs keep escalating (not plateau at LV10 cadence). */
@@ -168,7 +174,7 @@ export class CopSystem {
         cop.role = "chaser";
       }
 
-      cop.update(dt, car.mesh.position, car.body.velocity);
+      cop.update(dt, car.mesh.position, car.body.velocity, this.kinematics);
 
       /* Time warp: clamp cop velocity to half its cap so player can weave through a swarm at full speed for a few seconds. */
       if (timeWarp) {

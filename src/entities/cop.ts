@@ -1,6 +1,13 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { isRoad, isWater, TILE_SIZE } from "../world/terrain";
+import { PlayerKinematics } from "./player-kinematics";
+
+/* Curvature / lateral-lead tuning for the chase loop. ω below TURN_RAD/S means "straight" — cop uses
+ * perpendicular lead. TURN_RAD/S and above means "turning" — cop uses arc projection. STRAIGHT_LEAD_K
+ * is the perpendicular scale (fraction of distance) for the straight branch; higher = harder escape. */
+const TURN_THRESHOLD = 0.05;
+const STRAIGHT_LEAD_K = 0.3;
 
 /* Shared materials (one set for all cop instances) */
 const UNIT = 0.5;
@@ -231,6 +238,7 @@ export class Cop {
   recoveryDuration: number;
   targetPosition: THREE.Vector3 | null = null;
   targetVelocity: CANNON.Vec3 | null = null;
+  kinematics: PlayerKinematics | null = null;
   level: number;
   config: ICopLevelConfig;
   flankSide: number; /* +1 or -1 */
@@ -494,6 +502,37 @@ export class Cop {
         if (pTime > 0 && this.targetVelocity) {
           aimX += this.targetVelocity.x * pTime;
           aimZ += this.targetVelocity.z * pTime;
+
+          /* Curvature-aware lead: if the player is turning, project along the arc instead of the tangent.
+           * Falls back to linear when |ω| < TURN_THRESHOLD. The straight-line case gets a perpendicular
+           * lead so a cop behind a straight-moving target drives a pursuit curve (closes the gap)
+           * instead of running parallel. */
+          const v = Math.sqrt(this.targetVelocity.x ** 2 + this.targetVelocity.z ** 2);
+          if (v > 0.5) {
+            const omega = this.kinematics?.angularVelocity() ?? 0;
+            if (Math.abs(omega) >= TURN_THRESHOLD) {
+              /* Arc lead: integrate the player's velocity as it rotates at omega over the horizon.
+               * Derived straight from the velocity vector (no yaw/heading), signed omega handles
+               * both turn directions, and it collapses to the linear tangent lead as omega -> 0. */
+              const t = Math.min(pTime, 1.0); /* cap arc lead to prevent overshoot */
+              const phi = omega * t;
+              const s = Math.sin(phi);
+              const c = 1 - Math.cos(phi);
+              const vx = this.targetVelocity.x;
+              const vz = this.targetVelocity.z;
+              aimX = this.targetPosition.x + (vx * s + vz * c) / omega;
+              aimZ = this.targetPosition.z + (vz * s - vx * c) / omega;
+            } else {
+              /* Straight target: bias the lead toward the cop's side of the path so it cuts the
+               * corner instead of tailing. side aligns the perpendicular with (cop -> player). */
+              const perpX = -this.targetVelocity.z / v;
+              const perpZ = this.targetVelocity.x / v;
+              const side = Math.sign(perpX * -dxToPlayer + perpZ * -dzToPlayer) || 1;
+              const perpScale = distToPlayer * STRAIGHT_LEAD_K * side;
+              aimX += perpX * perpScale;
+              aimZ += perpZ * perpScale;
+            }
+          }
         }
 
         /* Flanking: offset aim perpendicular to player's heading */
@@ -553,9 +592,10 @@ export class Cop {
     this.world.addEventListener("preStep", this.preStepCallback);
   }
 
-  update(dt: number, targetPosition: THREE.Vector3, targetVelocity?: CANNON.Vec3) {
+  update(dt: number, targetPosition: THREE.Vector3, targetVelocity?: CANNON.Vec3, kinematics?: PlayerKinematics) {
     this.targetPosition = targetPosition;
     this.targetVelocity = targetVelocity || null;
+    this.kinematics = kinematics || null;
 
     /* Tick down damage cooldown */
     if (this.damageCooldown > 0) this.damageCooldown -= dt;

@@ -13,6 +13,7 @@ import {
   isDeepWater,
 } from "./terrain";
 import { createMaterials, createGeometries, tickWaterMaterial, type IMaterials, type IGeometries } from "./materials";
+import { disposeBuildingGeometries } from "./building-geo";
 import { placeDowntown } from "./zones/downtown";
 import { placeSuburbs } from "./zones/suburbs";
 import { placeNature, placeWaterDecor, placeShoreDecor } from "./zones/nature";
@@ -284,6 +285,7 @@ export class CityGenerator {
         val.dispose();
       }
     }
+    disposeBuildingGeometries();
   }
 
   unloadChunk(key: string, chunk: IChunkData) {

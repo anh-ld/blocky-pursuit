@@ -5,6 +5,10 @@ import type { IMaterials, IGeometries } from "../materials";
 import type { IChunkData } from "../city-generator";
 import { addTree, addFlowers } from "../decorators";
 
+/* Shared decor geometries — flat lily pad disc, small bloom sphere. Reused across all instances. */
+const LILY_PAD_GEO = new THREE.CylinderGeometry(1, 1, 0.1, 16);
+const LILY_FLOWER_GEO = new THREE.SphereGeometry(0.15, 8, 6);
+
 export function placeNature(
   chunk: IChunkData,
   materials: IMaterials,
@@ -186,8 +190,9 @@ export function placeWaterDecor(
       const lx = worldX + (pseudoRandom(globalTileX, globalTileZ, 610 + lp) - 0.5) * 7;
       const lz = worldZ + (pseudoRandom(globalTileX, globalTileZ, 620 + lp) - 0.5) * 7;
       const size = 0.4 + pseudoRandom(globalTileX, globalTileZ, 630 + lp) * 0.5;
-      const pad = new THREE.Mesh(geometries.building, materials.lilypad);
-      pad.scale.set(size, 0.05, size);
+      const pad = new THREE.Mesh(LILY_PAD_GEO, materials.lilypad);
+      /* Old box: scale (size, 0.05, size) on unit cube. New cylinder: radius 1, height 0.1. Scale X/Z by size, Y by 0.5 so the disc stays a disc. */
+      pad.scale.set(size, 0.5, size);
       /* Sit on the new sunken water surface (-0.18) instead of ground level. */
       pad.position.set(lx, -0.13, lz);
       chunk.group.add(pad);
@@ -195,8 +200,9 @@ export function placeWaterDecor(
       /* Occasional flower on lily pad */
       if (pseudoRandom(globalTileX, globalTileZ, 640 + lp) > 0.6) {
         const flowerIdx = Math.floor(pseudoRandom(globalTileX, globalTileZ, 650 + lp) * materials.flower.length);
-        const f = new THREE.Mesh(geometries.building, materials.flower[flowerIdx]);
-        f.scale.set(0.2, 0.3, 0.2);
+        const f = new THREE.Mesh(LILY_FLOWER_GEO, materials.flower[flowerIdx]);
+        /* Old box: scale (0.2, 0.3, 0.2). New sphere: radius 0.15. Match the box's longest extent. */
+        f.scale.set(0.2 / 0.15, 0.3 / 0.15, 0.2 / 0.15);
         f.position.set(lx, 0.0, lz);
         chunk.group.add(f);
       }

@@ -86,7 +86,8 @@ type IParticle = {
 let particleScene: THREE.Scene | null = null;
 let particles: IParticle[] = [];
 
-const PARTICLE_GEO = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+/* Single shared particle geometry. Icosahedron (0 subdivisions) = 20 faces, reads as a smooth ball at gameplay distance. Diameter 0.32 ≈ old 0.3 cube. */
+const PARTICLE_GEO = new THREE.IcosahedronGeometry(0.16, 0);
 const SPARK_MAT = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
 const SPLASH_MAT = new THREE.MeshBasicMaterial({ color: 0x66ccff });
 const SPEED_LINE_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });

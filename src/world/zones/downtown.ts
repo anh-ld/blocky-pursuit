@@ -2,6 +2,7 @@ import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import type { IMaterials, IGeometries } from "../materials";
 import type { IChunkData } from "../city-generator";
+import { getBuildingGeometry } from "../building-geo";
 import { addTree, addWindows, addRooftopDetail } from "../decorators";
 
 export function placeDowntown(
@@ -23,8 +24,7 @@ export function placeDowntown(
 
     const colorIndex = Math.floor(r3 * materials.downtownColors.length);
     const mat = materials.downtownColors[colorIndex];
-    const mesh = new THREE.Mesh(geometries.building, mat);
-    mesh.scale.set(width, height, depth);
+    const mesh = new THREE.Mesh(getBuildingGeometry(width, height, depth), mat);
     mesh.position.set(x, height / 2, z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -38,7 +38,7 @@ export function placeDowntown(
     chunk.bodies.push(body);
 
     addWindows(chunk, geometries, materials, x, z, width, height, depth);
-    addRooftopDetail(chunk, geometries, materials, x, z, height, width, depth, r4);
+    addRooftopDetail(chunk, materials, x, z, height, width, depth, r4);
   } /* 10% small tree/planter */ else if (r1 > 0.6) {
     addTree(chunk, materials, geometries, x, z, r2, r3, true);
   }

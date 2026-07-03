@@ -2,6 +2,7 @@ import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import type { IMaterials, IGeometries } from "../materials";
 import type { IChunkData } from "../city-generator";
+import { getBuildingGeometry } from "../building-geo";
 import { addTree, addFlowers, addWindows } from "../decorators";
 
 /* Roof geometry cache. Buckets (w, d, roofH) to 0.5u → at most 9*9*2 = 162 entries; materials live in IMaterials and dispose via CityGenerator.dispose(). Previous code allocated per house and never freed. */
@@ -42,8 +43,7 @@ export function placeSuburbs(
 
     const colorIndex = Math.floor(r3 * materials.suburbColors.length);
     const mat = materials.suburbColors[colorIndex];
-    const mesh = new THREE.Mesh(geometries.building, mat);
-    mesh.scale.set(width, height, depth);
+    const mesh = new THREE.Mesh(getBuildingGeometry(width, height, depth), mat);
     mesh.position.set(x, height / 2, z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;

@@ -80,7 +80,7 @@ export function HowToPlay() {
         </div>
 
         {/* Right — CTAs. Single column of chunky arcade buttons. */}
-        <div class="md:w-56 flex md:flex-col gap-2 px-5 pb-6 md:p-0 md:border-l-2 md:border-[var(--line)] md:pl-6">
+        <div class="md:w-56 flex flex-col gap-2 px-5 pb-6 md:p-0 md:border-l-2 md:border-[var(--line)] md:pl-6">
           <button onClick={() => actions.startGame()} class="arcade-btn w-full">
             Start
           </button>

@@ -100,7 +100,8 @@ export function updatePopups(dt: number) {
       continue;
     }
     p.sprite.position.y += p.vy * dt;
-    p.vy *= 0.94;
+    /* Frame-rate independent: pow(0.94, dt*60) = "per 60th-of-a-second" semantics at any FPS. */
+    p.vy *= Math.pow(0.94, dt * 60);
     const t = p.age / p.life;
     (p.sprite.material as THREE.SpriteMaterial).opacity = 1 - t * t;
   }

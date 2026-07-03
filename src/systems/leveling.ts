@@ -101,7 +101,7 @@ export function getLevelDef(level: number): ILevelDef {
 }
 
 /* Endgame heat: every HEAT_STEP_SCORE past max level adds a tier; each tier shaves spawn interval. */
-export const HEAT_STEP_SCORE = 1500;
+const HEAT_STEP_SCORE = 1500;
 export const HEAT_INTERVAL_SHAVE = 0.05;
 export const HEAT_INTERVAL_FLOOR = 0.4;
 

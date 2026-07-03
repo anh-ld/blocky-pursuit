@@ -3,9 +3,7 @@ import * as CANNON from "cannon-es";
 import { isRoad, isWater, TILE_SIZE } from "../world/terrain";
 import { PlayerKinematics } from "./player-kinematics";
 
-/* Curvature / lateral-lead tuning for the chase loop. ω below TURN_RAD/S means "straight" — cop uses
- * perpendicular lead. TURN_RAD/S and above means "turning" — cop uses arc projection. STRAIGHT_LEAD_K
- * is the perpendicular scale (fraction of distance) for the straight branch; higher = harder escape. */
+/* Chase curvature/lead tuning. ω < threshold = "straight" (perpendicular lead); ω >= = "turning" (arc projection). STRAIGHT_LEAD_K = perpendicular scale; higher = harder escape. */
 const TURN_THRESHOLD = 0.05;
 const STRAIGHT_LEAD_K = 0.3;
 
@@ -19,6 +17,7 @@ type ICopTier = {
   bodyMat: THREE.MeshStandardMaterial;
   cabinMat: THREE.MeshStandardMaterial;
 };
+
 const COP_TIERS: ICopTier[] = [
   {
     bodyMat: new THREE.MeshStandardMaterial({ color: 0x1c1c1c, ...matProps }),
@@ -37,6 +36,7 @@ const COP_TIERS: ICopTier[] = [
     cabinMat: new THREE.MeshStandardMaterial({ color: 0xdaa520, ...cabinProps }) /* Goldenrod */,
   },
 ];
+
 function tierForLevel(level: number): ICopTier {
   if (level >= 6) return COP_TIERS[3];
   if (level >= 4) return COP_TIERS[2];
@@ -51,45 +51,55 @@ const SWAT_BODY_MAT = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.3,
   ...matProps,
 });
+
 const SWAT_CABIN_MAT = new THREE.MeshStandardMaterial({
   color: 0xff2222,
   emissive: 0xaa0000,
   emissiveIntensity: 0.4,
   ...cabinProps,
 });
+
 const SWAT_TIER: ICopTier = { bodyMat: SWAT_BODY_MAT, cabinMat: SWAT_CABIN_MAT };
+
 const COP_RED_LIGHT_MAT = new THREE.MeshStandardMaterial({
   color: 0xff1111,
   emissive: 0xff1111,
   emissiveIntensity: 1.0,
   flatShading: true,
 });
+
 const COP_BLUE_LIGHT_MAT = new THREE.MeshStandardMaterial({
   color: 0x1111ff,
   emissive: 0x1111ff,
   emissiveIntensity: 1.0,
   flatShading: true,
 });
+
 const COP_GRILLE_MAT = new THREE.MeshStandardMaterial({ color: 0x222222, flatShading: true });
+
 const COP_HEADLIGHT_MAT = new THREE.MeshStandardMaterial({
   color: 0xffee88,
   emissive: 0xffee88,
   emissiveIntensity: 0.8,
   flatShading: true,
 });
+
 const COP_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
   color: 0xff2222,
   emissive: 0xff2222,
   emissiveIntensity: 0.6,
   flatShading: true,
 });
+
 const COP_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x111111, ...matProps });
+
 const BOUNTY_MARKER_MAT = new THREE.MeshStandardMaterial({
   color: 0xffd54a,
   emissive: 0xb7791f,
   emissiveIntensity: 0.9,
   flatShading: true,
 });
+
 const DAMAGE_MARKER_MAT = new THREE.MeshStandardMaterial({
   color: 0x7f1d1d,
   emissive: 0x2b0a0a,
@@ -145,7 +155,7 @@ export type ICopLevelConfig = {
 };
 
 /* Player: maxSpeed=40, mass=100 */
-export const COP_LEVEL_CONFIGS: Record<number, ICopLevelConfig> = {
+const COP_LEVEL_CONFIGS: Record<number, ICopLevelConfig> = {
   1: {
     mass: 100,
     speed: 44,
@@ -357,6 +367,7 @@ export class Cop {
 
     /* Physics (Cannon-es) */
     const shape = new CANNON.Box(new CANNON.Vec3(unit * 2, unit * 1.5, unit * 4));
+
     this.body = new CANNON.Body({
       mass: this.config.mass,
       position: new CANNON.Vec3(position.x, position.y, position.z),
@@ -386,6 +397,7 @@ export class Cop {
       this.baseForwardForce *= 1.3;
       this.baseMaxSpeed += 3;
     }
+
     this.forwardForce = this.baseForwardForce;
     this.turnSpeed = this.baseTurnSpeed;
     this.maxSpeed = this.baseMaxSpeed;
@@ -401,6 +413,7 @@ export class Cop {
     /* Listen for collisions with static objects (buildings, walls, etc.) */
     this.body.addEventListener("collide", (event: { body: CANNON.Body }) => {
       const other = event.body;
+
       if (other.mass === 0 && other.shapes[0] instanceof CANNON.Box) {
         this.bounceBackTimer = this.bounceBackDuration;
       }
@@ -418,6 +431,7 @@ export class Cop {
 
       /* Water Fear (Level 5+) If cop is about to hit water, force brake + steer away. */
       let waterInFront = false;
+
       if (this.config.avoidWater) {
         /* Look ahead based on speed */
         const speed = this.body.velocity.length();
@@ -427,6 +441,7 @@ export class Cop {
         const checkZ = this.body.position.z + _worldForward.z * lookAhead;
         const tx = Math.floor(checkX / TILE_SIZE);
         const tz = Math.floor(checkZ / TILE_SIZE);
+
         if (!isRoad(tx, tz) && isWater(tx, tz)) {
           waterInFront = true;
         }
@@ -455,6 +470,7 @@ export class Cop {
         }
       } else {
         let forceScale: number;
+
         if (forwardSpeed < 0) {
           forceScale = 1.0; /* stronger acceleration from standstill */
         } else {
@@ -485,12 +501,14 @@ export class Cop {
 
       /* Cap max speed */
       const speed = this.body.velocity.length();
+
       if (speed > activeMaxSpeed) {
         this.body.velocity.scale(activeMaxSpeed / speed, this.body.velocity);
       }
 
       /* 3. Steering toward player — with prediction and flanking */
       this.body.angularVelocity.y = 0;
+
       if (speed > 0.5) {
         /* Calculate target point: base position + velocity prediction */
         let aimX = this.targetPosition.x;
@@ -504,17 +522,14 @@ export class Cop {
           aimX += this.targetVelocity.x * pTime;
           aimZ += this.targetVelocity.z * pTime;
 
-          /* Curvature-aware lead: if the player is turning, project along the arc instead of the tangent.
-           * Falls back to linear when |ω| < TURN_THRESHOLD. The straight-line case gets a perpendicular
-           * lead so a cop behind a straight-moving target drives a pursuit curve (closes the gap)
-           * instead of running parallel. */
+          /* Curvature-aware lead: turning → arc project; |ω| < TURN_THRESHOLD → linear + perpendicular lead so a trailing cop curves in instead of running parallel. */
           const v = Math.sqrt(this.targetVelocity.x ** 2 + this.targetVelocity.z ** 2);
+
           if (v > 0.5) {
             const omega = this.kinematics?.angularVelocity() ?? 0;
+
             if (Math.abs(omega) >= TURN_THRESHOLD) {
-              /* Arc lead: integrate the player's velocity as it rotates at omega over the horizon.
-               * Derived straight from the velocity vector (no yaw/heading), signed omega handles
-               * both turn directions, and it collapses to the linear tangent lead as omega -> 0. */
+              /* Arc lead: integrate velocity rotating at omega over horizon. From velocity vector (no yaw); signed omega handles both directions; → linear tangent as omega → 0. */
               const t = Math.min(pTime, 1.0); /* cap arc lead to prevent overshoot */
               const phi = omega * t;
               const s = Math.sin(phi);
@@ -524,8 +539,7 @@ export class Cop {
               aimX = this.targetPosition.x + (vx * s + vz * c) / omega;
               aimZ = this.targetPosition.z + (vz * s - vx * c) / omega;
             } else {
-              /* Straight target: bias the lead toward the cop's side of the path so it cuts the
-               * corner instead of tailing. side aligns the perpendicular with (cop -> player). */
+              /* Straight target: bias lead to cop's side so it cuts the corner. side aligns perpendicular with (cop → player). */
               const perpX = -this.targetVelocity.z / v;
               const perpZ = this.targetVelocity.x / v;
               const side = Math.sign(perpX * -dxToPlayer + perpZ * -dzToPlayer) || 1;
@@ -539,6 +553,7 @@ export class Cop {
         /* Flanking: offset aim perpendicular to player's heading */
         if (this.config.flank && this.targetVelocity) {
           const tvLen = Math.sqrt(this.targetVelocity.x ** 2 + this.targetVelocity.z ** 2);
+
           if (tvLen > 1) {
             const perpX = -this.targetVelocity.z / tvLen;
             const perpZ = this.targetVelocity.x / tvLen;
@@ -556,6 +571,7 @@ export class Cop {
           /* Check if roughly parallel (dot product of headings) */
           this.body.quaternion.vmult(COP_FORWARD, _worldForward);
           this.body.vectorToLocalFrame(this.targetVelocity, _localVel);
+
           /* If player is parallel and moving in same direction */
           if (_localVel.z < -10) {
             /* Apply sideways impulse toward player */
@@ -578,6 +594,7 @@ export class Cop {
 
         if (dot < 0.98) {
           let steerAngle = 0;
+
           if (_cross.y > 0) {
             steerAngle = this.turnSpeed;
           } else {
@@ -605,6 +622,7 @@ export class Cop {
     /* Tick down bounce-back timer; start recovery when it expires */
     if (this.bounceBackTimer > 0) {
       this.bounceBackTimer -= dt;
+
       if (this.bounceBackTimer <= 0) {
         this.recoveryTimer = this.recoveryDuration;
       }
@@ -620,6 +638,7 @@ export class Cop {
     const iq = this.body.interpolatedQuaternion;
     this.mesh.position.set(ip.x, ip.y, ip.z);
     this.mesh.quaternion.set(iq.x, iq.y, iq.z, iq.w);
+
     if (this.isBounty) {
       this.bountyMarker.position.y = UNIT * 4.1 + Math.sin(performance.now() * 0.008) * 0.18;
     }
@@ -628,8 +647,10 @@ export class Cop {
   applyDamage(impactSpeed: number): number {
     if (this.isSwat) return this.damageTier;
     this.damagePoints += Math.max(0, impactSpeed - DAMAGE_THRESHOLD_SPEED);
+
     const nextTier =
       this.damagePoints >= DAMAGE_TIER2_THRESHOLD ? 2 : this.damagePoints >= DAMAGE_TIER1_THRESHOLD ? 1 : 0;
+
     if (nextTier === this.damageTier) return this.damageTier;
     this.damageTier = nextTier;
     const speedMul = this.damageTier === 1 ? 0.86 : 0.68;

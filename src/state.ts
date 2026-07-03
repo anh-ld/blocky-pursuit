@@ -89,6 +89,7 @@ export function saveBest(s: number): boolean {
     persist();
     return true;
   }
+
   return false;
 }
 

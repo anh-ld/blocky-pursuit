@@ -11,6 +11,7 @@ let muted = false;
 
 let engineBuffers: { idle: AudioBuffer; rev: AudioBuffer } | null = null;
 let engineLoadPromise: Promise<void> | null = null;
+
 let engineNodes: {
   idleSrc: AudioBufferSourceNode;
   revSrc: AudioBufferSourceNode;
@@ -18,6 +19,7 @@ let engineNodes: {
   revGain: GainNode;
   bus: GainNode;
 } | null = null;
+
 let sirenNodes: {
   osc: OscillatorNode;
   gain: GainNode;
@@ -29,6 +31,7 @@ type IWindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContex
 
 export function initAudio() {
   if (ctx) return;
+
   const [err, created] = attempt(() => {
     const Ctor = window.AudioContext || (window as IWindowWithWebkitAudio).webkitAudioContext;
     if (!Ctor) throw new Error("Web Audio not supported");
@@ -38,6 +41,7 @@ export function initAudio() {
     gain.connect(audioCtx.destination);
     return { audioCtx, gain };
   });
+
   if (err || !created) return; /* Audio not supported — silently ignore */
   ctx = created.audioCtx;
   masterGain = created.gain;
@@ -77,9 +81,11 @@ function now(): number {
 function safeDispose(...nodes: (AudioNode | null | undefined)[]) {
   for (const node of nodes) {
     if (!node) continue;
+
     if ("stop" in node && typeof (node as AudioScheduledSourceNode).stop === "function") {
       attempt(() => (node as AudioScheduledSourceNode).stop());
     }
+
     attempt(() => node.disconnect());
   }
 }
@@ -106,15 +112,18 @@ function noiseBuffer(duration: number): AudioBuffer | null {
 
 async function fetchBuffer(url: string): Promise<AudioBuffer | null> {
   if (!ctx) return null;
+
   const [err, buf] = await attemptAsync(async () => {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return ctx!.decodeAudioData(await res.arrayBuffer());
   });
+
   if (err) {
     console.warn(`[audio] failed to load ${url}`, err);
     return null;
   }
+
   return buf;
 }
 
@@ -122,8 +131,10 @@ async function fetchBuffer(url: string): Promise<AudioBuffer | null> {
 function loadEngineBuffers(): Promise<void> {
   if (engineBuffers) return Promise.resolve();
   if (engineLoadPromise) return engineLoadPromise;
+
   engineLoadPromise = (async () => {
     const [idle, rev] = await Promise.all([fetchBuffer("/sounds/engine.mp3"), fetchBuffer("/sounds/accelerate.mp3")]);
+
     if (idle && rev) {
       engineBuffers = { idle, rev };
       console.log("[audio] engine MP3s loaded successfully");
@@ -131,6 +142,7 @@ function loadEngineBuffers(): Promise<void> {
       console.warn("[audio] engine buffers failed to load — no engine sound");
     }
   })();
+
   return engineLoadPromise;
 }
 
@@ -173,6 +185,7 @@ export function startEngine() {
   if (!ctx || !masterGain) return;
   engineWanted = true;
   if (engineNodes) return;
+
   if (engineBuffers) {
     buildEngineNodes();
   } else {
@@ -229,6 +242,7 @@ export function startSiren() {
   osc.start();
 
   let high = false;
+
   const toggleInterval = window.setInterval(() => {
     if (!ctx || !sirenNodes) return;
     high = !high;
@@ -313,6 +327,7 @@ type IArpeggioOpts = {
 function playArpeggio(opts: IArpeggioOpts) {
   if (!ctx || !masterGain) return;
   const t0 = now();
+
   for (let i = 0; i < opts.notes.length; i++) {
     const start = t0 + i * opts.spacing;
     const o = ctx.createOscillator();
@@ -403,6 +418,7 @@ export function playComboTier(tier: number) {
   const t = Math.max(0, Math.min(tier, 8));
   /* Each tier is 2 semitones up from the last */
   const base = 660 * Math.pow(2, (t * 2) / 12);
+
   playArpeggio({
     notes: [base, base * 1.5],
     type: "triangle",
@@ -473,10 +489,12 @@ type IBgmNodes = {
   schedulerInterval: number;
   oscs: OscillatorNode[];
 };
+
 let bgmNodes: IBgmNodes | null = null;
 
 const BGM_BPM = 110;
 const BGM_BEAT = 60 / BGM_BPM;
+
 /* Cmin progression (Cm - Ab - Eb - Bb), 2 beats per chord, 4 chords = 8 beats */
 const BGM_PROGRESSION: number[][] = [
   [130.81, 155.56, 196.0] /* Cm */,
@@ -487,6 +505,7 @@ const BGM_PROGRESSION: number[][] = [
 
 function scheduleBgmBar(startTime: number) {
   if (!ctx || !bgmNodes) return;
+
   for (let i = 0; i < BGM_PROGRESSION.length; i++) {
     const chord = BGM_PROGRESSION[i];
     const t = startTime + i * 2 * BGM_BEAT;
@@ -520,6 +539,7 @@ function scheduleBgmBar(startTime: number) {
       bgmNodes.oscs.push(pad);
     }
   }
+
   /* Trim the osc list so it doesn't grow unbounded — stopped oscs auto-disconnect */
   if (bgmNodes.oscs.length > 200) {
     bgmNodes.oscs.splice(0, bgmNodes.oscs.length - 200);
@@ -543,6 +563,7 @@ export function startBgm() {
 
   bgmNodes.schedulerInterval = window.setInterval(() => {
     if (!ctx || !bgmNodes) return;
+
     /* Stay 1.5 bars ahead of current time */
     while (nextBarStart < now() + 1.5 * 8 * BGM_BEAT) {
       scheduleBgmBar(nextBarStart);
@@ -561,10 +582,12 @@ export function setBgmDuck(amount: number) {
 export function stopBgm() {
   if (!bgmNodes) return;
   clearInterval(bgmNodes.schedulerInterval);
+
   for (const o of bgmNodes.oscs) {
     attempt(() => o.stop());
     attempt(() => o.disconnect());
   }
+
   safeDispose(bgmNodes.bus, bgmNodes.duck);
   bgmNodes = null;
 }
@@ -630,6 +653,7 @@ export function stopRadioHiss() {
   radioHissNodes.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
   const nodes = radioHissNodes;
   radioHissNodes = null;
+
   setTimeout(() => {
     safeDispose(nodes.src, nodes.lfo, nodes.lfoGain, nodes.filter, nodes.gain);
   }, 200);

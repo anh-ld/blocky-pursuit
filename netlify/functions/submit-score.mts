@@ -13,6 +13,7 @@ type IScoreEntry = {
   sessionId?: string;
   recordingUrl?: string;
 };
+
 const SESSION_ID_RE = /^[a-z0-9-]{8,64}$/;
 
 function normalizeRecordingUrl(input: unknown): string | undefined {
@@ -45,12 +46,15 @@ export default async function handler(req: Request, _context: Context) {
         sessionId?: string;
       }>,
   );
+
   if (parseErr || !body) return new Response("Bad request", { status: 400 });
 
   const { name, score, recordingUrl, sessionId } = body;
+
   if (!name || !Number.isFinite(score) || score <= 0 || score > MAX_SCORE) {
     return new Response("Invalid payload", { status: 400 });
   }
+
   if (sessionId !== undefined && !SESSION_ID_RE.test(String(sessionId))) {
     return new Response("Invalid payload", { status: 400 });
   }
@@ -62,12 +66,14 @@ export default async function handler(req: Request, _context: Context) {
     score: Math.floor(score),
     ts: Date.now(),
   };
+
   if (sessionId) {
     newEntry.sessionId = sessionId;
   }
 
   // Attach recording URL only if it matches expected local replay endpoint.
   const normalizedRecordingUrl = normalizeRecordingUrl(recordingUrl);
+
   if (normalizedRecordingUrl) {
     newEntry.recordingUrl = normalizedRecordingUrl;
   }
@@ -88,6 +94,7 @@ export default async function handler(req: Request, _context: Context) {
       const existing = entries[existingIndex]!;
       existing.name = newEntry.name;
       existing.score = newEntry.score;
+
       // Preserve existing timestamp so ranking order remains stable.
       if (normalizedRecordingUrl) {
         existing.recordingUrl = normalizedRecordingUrl;

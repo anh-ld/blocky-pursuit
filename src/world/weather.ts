@@ -117,6 +117,7 @@ export type IRain = {
 
 export function createRain(scene: THREE.Scene): IRain {
   const positions = new Float32Array(RAIN_COUNT * 2 * 3);
+
   for (let i = 0; i < RAIN_COUNT; i++) {
     const x = (Math.random() - 0.5) * 2 * RAIN_AREA;
     const z = (Math.random() - 0.5) * 2 * RAIN_AREA;
@@ -129,14 +130,17 @@ export function createRain(scene: THREE.Scene): IRain {
     positions[o + 4] = y;
     positions[o + 5] = z;
   }
+
   const geom = new THREE.BufferGeometry();
   geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
   const mat = new THREE.LineBasicMaterial({
     color: 0xc8d8ec,
     transparent: true,
     opacity: 0.55,
     fog: true,
   });
+
   const lines = new THREE.LineSegments(geom, mat);
   lines.frustumCulled = false;
   lines.visible = false;
@@ -151,10 +155,12 @@ export function updateRain(rain: IRain, dt: number, centerX: number, centerZ: nu
   rain.group.position.z = centerZ;
   const pos = rain.positions;
   const fall = RAIN_FALL_SPEED * dt;
+
   for (let i = 0; i < RAIN_COUNT; i++) {
     const o = i * 6;
     pos[o + 1] -= fall;
     pos[o + 4] -= fall;
+
     if (pos[o + 4] < 0) {
       const x = (Math.random() - 0.5) * 2 * RAIN_AREA;
       const z = (Math.random() - 0.5) * 2 * RAIN_AREA;
@@ -167,6 +173,7 @@ export function updateRain(rain: IRain, dt: number, centerX: number, centerZ: nu
       pos[o + 5] = z;
     }
   }
+
   (rain.group.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
 }
 
@@ -208,14 +215,17 @@ function makeSnowflakeTexture(): THREE.CanvasTexture {
 export function createSnow(scene: THREE.Scene): ISnow {
   const positions = new Float32Array(SNOW_COUNT * 3);
   const phases = new Float32Array(SNOW_COUNT);
+
   for (let i = 0; i < SNOW_COUNT; i++) {
     positions[i * 3 + 0] = (Math.random() - 0.5) * 2 * SNOW_AREA;
     positions[i * 3 + 1] = Math.random() * SNOW_HEIGHT;
     positions[i * 3 + 2] = (Math.random() - 0.5) * 2 * SNOW_AREA;
     phases[i] = Math.random() * Math.PI * 2;
   }
+
   const geom = new THREE.BufferGeometry();
   geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
   /* sizeAttenuation:false → pixel-sized; world-scaled points become unreadably tiny under our ortho camera. */
   /* fog:false → near-white fog would tint flakes into the background. */
   const mat = new THREE.PointsMaterial({
@@ -228,6 +238,7 @@ export function createSnow(scene: THREE.Scene): ISnow {
     sizeAttenuation: false,
     fog: false,
   });
+
   const points = new THREE.Points(geom, mat);
   points.frustumCulled = false;
   points.visible = false;
@@ -242,17 +253,20 @@ export function updateSnow(snow: ISnow, dt: number, centerX: number, centerZ: nu
   snow.group.position.z = centerZ;
   const pos = snow.positions;
   const fall = SNOW_FALL_SPEED * dt;
+
   for (let i = 0; i < SNOW_COUNT; i++) {
     const o = i * 3;
     pos[o + 1] -= fall;
     /* Sideways drift wobble */
     pos[o + 0] += Math.sin(snow.time * 0.8 + snow.phases[i]) * SNOW_DRIFT_AMP * dt;
+
     if (pos[o + 1] < 0) {
       pos[o + 0] = (Math.random() - 0.5) * 2 * SNOW_AREA;
       pos[o + 1] = SNOW_HEIGHT * (0.6 + Math.random() * 0.4);
       pos[o + 2] = (Math.random() - 0.5) * 2 * SNOW_AREA;
     }
   }
+
   (snow.group.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
 }
 
@@ -286,16 +300,20 @@ export function getWeatherModifiers(id: IWeatherId): IWeatherModifiers {
 export function getWeatherSummary(id: IWeatherId): string {
   const m = getWeatherModifiers(id);
   const parts: string[] = [];
+
   if (m.topSpeedMul !== 1) {
     const pct = Math.round((m.topSpeedMul - 1) * 100);
     parts.push(`${pct > 0 ? "+" : ""}${pct}% speed`);
   }
+
   if (m.accelMul !== 1) {
     const pct = Math.round((m.accelMul - 1) * 100);
     parts.push(`${pct > 0 ? "+" : ""}${pct}% accel`);
   }
+
   if (m.gripAdd >= 0.06) parts.push("very slippery");
   else if (m.gripAdd > 0) parts.push("slippery");
+
   return parts.length === 0 ? "Neutral handling" : parts.join(" · ");
 }
 
@@ -308,10 +326,13 @@ export function applyWeather(
   const w = WEATHERS.find((x) => x.id === id) ?? WEATHERS[0];
   /* Dispose old sky texture to avoid GPU leaks on switch */
   const prev = scene.background;
+
   if (prev && (prev as THREE.CanvasTexture).isTexture) {
     (prev as THREE.CanvasTexture).dispose();
   }
+
   scene.background = makeSkyTexture(w.sky[0], w.sky[1], w.sky[2]);
+
   if (!scene.fog || !(scene.fog as THREE.Fog).isFog) {
     scene.fog = new THREE.Fog(w.fogColor, w.fogNear, w.fogFar);
   } else {
@@ -320,6 +341,7 @@ export function applyWeather(
     fog.near = w.fogNear;
     fog.far = w.fogFar;
   }
+
   ambient.color.setHex(w.ambientColor);
   ambient.intensity = w.ambientIntensity;
   directional.color.setHex(w.dirColor);

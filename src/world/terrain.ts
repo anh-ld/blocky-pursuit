@@ -52,6 +52,7 @@ export function isWater(globalTileX: number, globalTileZ: number): boolean {
 /* Cosmetic only — drown logic still uses isWater. */
 export function isDeepWater(globalTileX: number, globalTileZ: number): boolean {
   if (!isWater(globalTileX, globalTileZ)) return false;
+
   return (
     isWater(globalTileX + 1, globalTileZ) &&
     isWater(globalTileX - 1, globalTileZ) &&
@@ -64,6 +65,7 @@ export function isDeepWater(globalTileX: number, globalTileZ: number): boolean {
 export function isShore(globalTileX: number, globalTileZ: number): boolean {
   if (isWater(globalTileX, globalTileZ)) return false;
   if (getZone(globalTileX, globalTileZ) !== Zone.NATURE) return false;
+
   return (
     isWater(globalTileX + 1, globalTileZ) ||
     isWater(globalTileX - 1, globalTileZ) ||
@@ -93,6 +95,7 @@ export function isRoad(globalTileX: number, globalTileZ: number): boolean {
   const rRoadZ = pseudoRandom(0, globalTileZ, 11);
 
   let road = false;
+
   if (globalTileX === 0 || globalTileZ === 0) {
     road = true;
   } else {

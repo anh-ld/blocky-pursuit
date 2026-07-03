@@ -56,6 +56,7 @@ export function spawnPopup(
   scaleX: number = 8,
 ) {
   if (!popupScene) return;
+
   /* Drop the oldest popup if at cap so a flurry of pickups doesn't queue up */
   if (popups.length >= MAX_POPUPS) {
     const oldest = popups.shift()!;
@@ -63,6 +64,7 @@ export function spawnPopup(
     oldest.texture.dispose();
     (oldest.sprite.material as THREE.SpriteMaterial).dispose();
   }
+
   const { texture, aspect } = makeTexture(text, color);
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(material);
@@ -79,19 +81,23 @@ export function spawnPopup(
 /** Tear down every active popup. Called from startGame() so a mid-combo rage-restart doesn't carry stale labels. */
 export function clearPopups() {
   if (!popupScene) return;
+
   for (const p of popups) {
     popupScene.remove(p.sprite);
     p.texture.dispose();
     (p.sprite.material as THREE.SpriteMaterial).dispose();
   }
+
   popups.length = 0;
 }
 
 export function updatePopups(dt: number) {
   if (!popupScene) return;
+
   for (let i = popups.length - 1; i >= 0; i--) {
     const p = popups[i];
     p.age += dt;
+
     if (p.age >= p.life) {
       popupScene.remove(p.sprite);
       p.texture.dispose();
@@ -99,6 +105,7 @@ export function updatePopups(dt: number) {
       popups.splice(i, 1);
       continue;
     }
+
     p.sprite.position.y += p.vy * dt;
     /* Frame-rate independent: pow(0.94, dt*60) = "per 60th-of-a-second" semantics at any FPS. */
     p.vy *= Math.pow(0.94, dt * 60);

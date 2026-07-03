@@ -89,20 +89,17 @@ export class RunState {
   comboScore = 0;
   copScore = 0;
 
-  /**
-   * Advance current level if score crosses the next threshold.
-   * On level-up, applies the def's hpHeal and returns the FX event for
-   * the conductor to push onto the frame buffer. Returns null if no level
-   * was crossed.
-   */
+  /** Advance level if score crosses next threshold. On level-up: apply hpHeal, return FX event for conductor. Null if none crossed. */
   advanceLevel(position: { x: number; y: number; z: number }): PlayerLeveledUpEvent | null {
     const prev = this.level;
+
     for (let lv = LEVEL_DEFS.length; lv >= 1; lv--) {
       if (this.score >= LEVEL_DEFS[lv - 1].scoreThreshold) {
         if (lv > this.level) this.level = lv;
         break;
       }
     }
+
     if (this.level === prev) return null;
     const def = getLevelDef(this.level);
     this.hp = Math.min(MAX_HP, this.hp + def.hpHeal);
@@ -119,6 +116,7 @@ export class RunState {
     const tx = Math.floor(car.body.position.x / TILE_SIZE);
     const tz = Math.floor(car.body.position.z / TILE_SIZE);
     if (tx === this.lastScoreTileX && tz === this.lastScoreTileZ) return;
+
     if (isRoad(tx, tz)) {
       const speedRatio = Math.min(car.body.velocity.length() / car.maxSpeed, 1);
       const speedMult = 1 + speedRatio;
@@ -127,6 +125,7 @@ export class RunState {
       this.score += earned;
       this.tileScore += earned;
     }
+
     this.lastScoreTileX = tx;
     this.lastScoreTileZ = tz;
   }

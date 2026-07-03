@@ -40,6 +40,7 @@ const RARITY_BASE_WEIGHT: Record<"common" | "rare" | "epic", number> = {
   rare: 10,
   epic: 4,
 };
+
 const PICKUP_KINDS: IPickupKind[] = [
   "nitro",
   "shield",
@@ -51,6 +52,7 @@ const PICKUP_KINDS: IPickupKind[] = [
   "ghost",
   "tank",
 ];
+
 const PICKUP_WEIGHTS: { kind: IPickupKind; weight: number }[] = PICKUP_KINDS.map((kind) => ({
   kind,
   weight: RARITY_BASE_WEIGHT[PICKUP_RARITY[kind]],
@@ -59,10 +61,12 @@ const PICKUP_WEIGHTS: { kind: IPickupKind; weight: number }[] = PICKUP_KINDS.map
 function pickPickupKind(): IPickupKind {
   const total = PICKUP_WEIGHTS.reduce((s, p) => s + p.weight, 0);
   let roll = Math.random() * total;
+
   for (const p of PICKUP_WEIGHTS) {
     roll -= p.weight;
     if (roll <= 0) return p.kind;
   }
+
   return PICKUP_WEIGHTS[0].kind;
 }
 
@@ -94,6 +98,7 @@ export class PickupSystem {
     let tileX = Math.floor(x / TILE_SIZE);
     let tileZ = Math.floor(z / TILE_SIZE);
     let found = false;
+
     for (let r = 0; r < 4 && !found; r++) {
       for (let dx = -r; dx <= r && !found; dx++) {
         for (let dz = -r; dz <= r && !found; dz++) {
@@ -105,10 +110,12 @@ export class PickupSystem {
         }
       }
     }
+
     if (!found) return;
     const kind = pickPickupKind();
     const pos = new THREE.Vector3(tileX * TILE_SIZE + TILE_SIZE / 2, 1, tileZ * TILE_SIZE + TILE_SIZE / 2);
     this.pickups.push(new Pickup(this.scene, pos, kind));
+
     /* Rare/epic pickups get a small confetti puff at spawn so the player notices them appearing in their peripheral vision. */
     if (PICKUP_RARITY[kind] !== "common") {
       spawnConfetti(pos.x, pos.y + 0.5, pos.z);
@@ -139,6 +146,7 @@ export class PickupSystem {
       const mag = run.magnetTimer > 0 ? MAGNET_RANGE_MULT : 1;
       const pullMul = run.magnetTimer > 0 ? MAGNET_PULL_MULT : 1;
       const magnetRange = PICKUP_MAGNET_RANGE * mag;
+
       if (dist < magnetRange && dist > PICKUP_COLLECT_DIST) {
         const pull = PICKUP_MAGNET_PULL * pullMul * dt;
         p.position.x -= (dxp / dist) * pull;
@@ -154,10 +162,12 @@ export class PickupSystem {
           position: { x: p.position.x, y: p.position.y, z: p.position.z },
           pickup: p.kind,
         });
+
         if (p.kind === "nitro") {
           run.nitroTimer = NITRO_DURATION;
           car.setNitroMultiplier(NITRO_SPEED_MULT);
           spawnPopup(p.position.x, 2, p.position.z, "⚡ NITRO", "#ffdd44");
+
           if (shouldShowPickupTip("nitro")) {
             markPickupTipSeen("nitro");
             spawnPopup(p.position.x, 3.5, p.position.z, "Speed boost for 3s!", "#ffffff", 2.4, 12);
@@ -165,6 +175,7 @@ export class PickupSystem {
         } else if (p.kind === "shield") {
           run.shieldActive = true;
           spawnPopup(p.position.x, 2, p.position.z, "🛡 SHIELD", "#66ddff");
+
           if (shouldShowPickupTip("shield")) {
             markPickupTipSeen("shield");
             spawnPopup(p.position.x, 3.5, p.position.z, "Blocks one cop hit", "#ffffff", 2.4, 12);
@@ -173,19 +184,23 @@ export class PickupSystem {
           spawnRing(car.body.position.x, car.body.position.y, car.body.position.z, EMP_RING_RADIUS);
           spawnPopup(car.body.position.x, 3, car.body.position.z, "💥 EMP", "#66ddff");
           const kills = cops.empBlast(car, run, events);
+
           if (kills > 0) {
             spawnPopup(car.body.position.x, 5, car.body.position.z, `+${kills * SCORE_EMP_KILL}`, "#ffcc22");
           }
+
           if (shouldShowPickupTip("emp")) {
             markPickupTipSeen("emp");
             spawnPopup(car.body.position.x, 6.5, car.body.position.z, "Wipes nearby cops", "#ffffff", 2.4, 12);
           }
+
           triggerShake(0.6);
         } else if (p.kind === "repair") {
           const before = run.hp;
           run.hp = Math.min(MAX_HP, run.hp + REPAIR_HEAL);
           const healed = Math.round(run.hp - before);
           spawnPopup(p.position.x, 2, p.position.z, `+${healed} HP`, "#66ff77");
+
           if (shouldShowPickupTip("repair")) {
             markPickupTipSeen("repair");
             spawnPopup(p.position.x, 3.5, p.position.z, "Patches up your ride", "#ffffff", 2.4, 12);
@@ -193,6 +208,7 @@ export class PickupSystem {
         } else if (p.kind === "doubleScore") {
           run.scoreMultTimer = SCORE_MULT_DURATION;
           spawnPopup(p.position.x, 2, p.position.z, "💰 2X SCORE", "#ffdd44");
+
           if (shouldShowPickupTip("doubleScore")) {
             markPickupTipSeen("doubleScore");
             spawnPopup(p.position.x, 3.5, p.position.z, "Double points for 8s", "#ffffff", 2.4, 14);
@@ -200,6 +216,7 @@ export class PickupSystem {
         } else if (p.kind === "timeWarp") {
           run.timeWarpTimer = TIME_WARP_DURATION;
           spawnPopup(p.position.x, 2, p.position.z, "⏳ TIME WARP", "#66aaff");
+
           if (shouldShowPickupTip("timeWarp")) {
             markPickupTipSeen("timeWarp");
             spawnPopup(p.position.x, 3.5, p.position.z, "Cops slowed for 5s", "#ffffff", 2.4, 14);
@@ -207,6 +224,7 @@ export class PickupSystem {
         } else if (p.kind === "magnet") {
           run.magnetTimer = MAGNET_DURATION;
           spawnPopup(p.position.x, 2, p.position.z, "🧲 MAGNET", "#ff5555");
+
           if (shouldShowPickupTip("magnet")) {
             markPickupTipSeen("magnet");
             spawnPopup(p.position.x, 3.5, p.position.z, "Pickups fly to you", "#ffffff", 2.4, 14);
@@ -214,6 +232,7 @@ export class PickupSystem {
         } else if (p.kind === "ghost") {
           run.ghostTimer = GHOST_DURATION;
           spawnPopup(p.position.x, 2, p.position.z, "👻 GHOST", "#ddddff");
+
           if (shouldShowPickupTip("ghost")) {
             markPickupTipSeen("ghost");
             spawnPopup(p.position.x, 3.5, p.position.z, "Phase through cops 3s", "#ffffff", 2.4, 14);
@@ -221,11 +240,13 @@ export class PickupSystem {
         } else if (p.kind === "tank") {
           run.tankTimer = TANK_DURATION;
           spawnPopup(p.position.x, 2, p.position.z, "💢 TANK", "#ff6666");
+
           if (shouldShowPickupTip("tank")) {
             markPickupTipSeen("tank");
             spawnPopup(p.position.x, 3.5, p.position.z, "Ram cops to wreck them", "#ffffff", 2.4, 14);
           }
         }
+
         p.destroy();
         this.pickups.splice(i, 1);
       }
@@ -236,6 +257,7 @@ export class PickupSystem {
       run.nitroTimer = Math.max(0, run.nitroTimer - dt);
       if (run.nitroTimer === 0) car.setNitroMultiplier(1);
     }
+
     if (run.scoreMultTimer > 0) run.scoreMultTimer = Math.max(0, run.scoreMultTimer - dt);
     if (run.timeWarpTimer > 0) run.timeWarpTimer = Math.max(0, run.timeWarpTimer - dt);
     if (run.magnetTimer > 0) run.magnetTimer = Math.max(0, run.magnetTimer - dt);

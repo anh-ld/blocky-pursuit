@@ -28,6 +28,7 @@ let captureAccum = 0;
 
 export function initGhostTrail(scene: THREE.Scene) {
   if (ghosts.length > 0) return; /* idempotent */
+
   for (let i = 0; i < GHOST_POOL; i++) {
     /* One material per slot — fade opacity independently. Color updated by setGhostTrailColor on skin swap. */
     const material = new THREE.MeshBasicMaterial({
@@ -36,6 +37,7 @@ export function initGhostTrail(scene: THREE.Scene) {
       opacity: 0,
       depthWrite: false,
     });
+
     const mesh = new THREE.Mesh(GHOST_GEO, material);
     mesh.visible = false;
     scene.add(mesh);
@@ -59,9 +61,11 @@ export function captureGhost(
     captureAccum = 0;
     return;
   }
+
   captureAccum += dt;
   if (captureAccum < GHOST_INTERVAL) return;
   captureAccum = 0;
+
   /* Find an inactive slot. Pool is sized so one is always free; if not (huge dt spike), drop silently. */
   for (let i = 0; i < ghosts.length; i++) {
     const slot = ghosts[i];
@@ -81,12 +85,14 @@ export function updateGhostTrail(dt: number) {
     const g = ghosts[i];
     if (!g.active) continue;
     g.life -= dt;
+
     if (g.life <= 0) {
       g.mesh.visible = false;
       g.material.opacity = 0;
       g.active = false;
       continue;
     }
+
     g.material.opacity = (g.life / GHOST_LIFE) * GHOST_PEAK_OPACITY;
   }
 }
@@ -94,6 +100,7 @@ export function updateGhostTrail(dt: number) {
 /** Hide every active ghost — called from startGame() so a restart is clean. */
 export function clearGhostTrail() {
   captureAccum = 0;
+
   for (const g of ghosts) {
     g.mesh.visible = false;
     g.material.opacity = 0;

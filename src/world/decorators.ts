@@ -7,57 +7,72 @@ import type { IChunkData } from "./city-generator";
 
 /* Tree geometry caches — bucketed to 0.5u. Trunks vary by height (1-4u), leaves vary in all axes (1.5-4u). Small total entry count. */
 const _trunkGeoCache = new Map<number, THREE.BufferGeometry>();
+
 function getTrunkGeometry(height: number): THREE.BufferGeometry {
   const key = Math.round(height * 2) / 2;
   let geo = _trunkGeoCache.get(key);
+
   if (!geo) {
     /* Unit box scaled (0.6, height, 0.6) — bake those dimensions into the geo so the mesh keeps identity transform. */
     geo = new RoundedBoxGeometry(0.6, height, 0.6, 2, 0.12);
     _trunkGeoCache.set(key, geo);
   }
+
   return geo;
 }
+
 const _leafGeoCache = new Map<number, THREE.SphereGeometry>();
+
 function getLeafGeometry(size: number): THREE.SphereGeometry {
   const key = Math.round(size * 2) / 2;
   let geo = _leafGeoCache.get(key);
+
   if (!geo) {
     /* 8x6 segments = enough facets to read as a smooth blob at gameplay distance without over-tessellating. */
     geo = new THREE.SphereGeometry(size * 0.5, 8, 6);
     _leafGeoCache.set(key, geo);
   }
+
   return geo;
 }
+
 /* Sphere flower geometry — small bloom. Per-instance scale handles variety. */
 const FLOWER_GEO = new THREE.SphereGeometry(0.3, 8, 6);
 /* Rooftop AC unit — soft-chamfered box. Bucketed by (w, h) since size varies with r. */
 const _acUnitGeoCache = new Map<string, THREE.BufferGeometry>();
+
 function getACUnitGeometry(w: number, h: number): THREE.BufferGeometry {
   const key = `${Math.round(w * 2) / 2}_${Math.round(h * 2) / 2}`;
   let geo = _acUnitGeoCache.get(key);
+
   if (!geo) {
     geo = new RoundedBoxGeometry(w, h, w, 2, 0.08);
     _acUnitGeoCache.set(key, geo);
   }
+
   return geo;
 }
+
 /* Antenna pole — slim cylinder, height varies with r. */
 const _antennaGeoCache = new Map<number, THREE.CylinderGeometry>();
+
 function getAntennaGeometry(height: number): THREE.CylinderGeometry {
   const key = Math.round(height * 2) / 2;
   let geo = _antennaGeoCache.get(key);
+
   if (!geo) {
     /* Pole is symmetric on X/Z so the cylinder can be a single radius. 8 segments reads as smooth at distance. */
     geo = new THREE.CylinderGeometry(0.075, 0.075, height, 8);
     _antennaGeoCache.set(key, geo);
   }
+
   return geo;
 }
 
 export function addTree(
   chunk: IChunkData,
   materials: IMaterials,
-  geometries: IGeometries,
+  _geometries: IGeometries,
   x: number,
   z: number,
   r2: number,
@@ -89,13 +104,14 @@ export function addTree(
 export function addFlowers(
   chunk: IChunkData,
   materials: IMaterials,
-  geometries: IGeometries,
+  _geometries: IGeometries,
   x: number,
   z: number,
   r2: number,
   r3: number,
 ) {
   const count = 2 + Math.floor(r2 * 3);
+
   for (let f = 0; f < count; f++) {
     const fr = pseudoRandom(Math.floor(x * 100), Math.floor(z * 100), 60 + f);
     const fx = x + (fr - 0.5) * 4;
@@ -143,12 +159,14 @@ export function addWindows(
           Math.floor(z * 10) + row,
           400 + (face.axis === "x" ? face.dir * 50 : face.dir * 100),
         );
+
         if (wr < 0.35) continue;
 
         const wy = 1.5 + row * spacingY;
         const wOffset = -((cols - 1) * spacingH) / 2 + col * spacingH;
 
         const win = new THREE.Mesh(geometries.building, materials.window);
+
         if (face.axis === "z") {
           win.scale.set(winSize, winSize, winDepth);
           win.position.set(x + wOffset, wy, z + (face.dir * depth) / 2 + face.dir * 0.05);
@@ -156,6 +174,7 @@ export function addWindows(
           win.scale.set(winDepth, winSize, winSize);
           win.position.set(x + (face.dir * face.faceD) / 2 + face.dir * 0.05, wy, z + wOffset);
         }
+
         chunk.group.add(win);
       }
     }

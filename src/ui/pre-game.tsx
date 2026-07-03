@@ -30,11 +30,14 @@ export function PreGame() {
     copsDrowned: copsDrowned.value,
     selectedSkin: selectedSkin.value,
   };
+
   const muted = audioMuted.value;
   const currentWeather = weather.value;
+
   const back = () => {
     screen.value = gameState.value === "start" ? "howToPlay" : "none";
   };
+
   const currentSkin = CAR_SKINS.find((s) => s.id === selectedSkin.value) ?? CAR_SKINS[0];
 
   return (
@@ -81,6 +84,7 @@ export function PreGame() {
             {CAR_SKINS.map((s) => {
               const unlocked = isUnlocked(s, progress);
               const isSelected = selectedSkin.value === s.id;
+
               return (
                 <button
                   key={s.id}
@@ -107,6 +111,7 @@ export function PreGame() {
             <div class="flex items-stretch h-7">
               {WEATHERS.map((w, i) => {
                 const active = currentWeather === w.id;
+
                 return (
                   <button
                     key={w.id}

@@ -7,6 +7,7 @@ export function LowHpWarning() {
   if (v <= 0 || v >= LOW_HP_THRESHOLD) return null;
   const danger = 1 - v / LOW_HP_THRESHOLD;
   const opacity = 0.2 + danger * 0.45;
+
   return (
     <div class="absolute inset-0 z-[15] pointer-events-none">
       <div

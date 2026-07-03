@@ -6,6 +6,7 @@ export function Recordings() {
   const back = () => {
     screen.value = gameState.value === "start" ? "howToPlay" : "none";
   };
+
   const playRecording = (url: string) => {
     replayUrl.value = url;
   };
@@ -34,6 +35,7 @@ export function Recordings() {
             <div class="flex flex-col">
               {entries.map((e, i) => {
                 const isMe = e.name === me;
+
                 return (
                   <div
                     key={`${e.name}-${i}`}

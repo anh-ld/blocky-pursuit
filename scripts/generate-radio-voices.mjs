@@ -25,6 +25,7 @@ const OUT_DIR = join(ROOT, "public", "audio", "radio");
 const MANIFEST_PATH = join(OUT_DIR, "manifest.json");
 
 const API_KEY = process.env.OPENAI_API_KEY;
+
 if (!API_KEY) {
   console.error("ERROR: set OPENAI_API_KEY in your environment.");
   process.exit(1);
@@ -252,6 +253,7 @@ const POOLS = {
 async function synthesize(text, role) {
   const profile = ROLES[role];
   if (!profile) throw new Error(`unknown role: ${role}`);
+
   const res = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: {
@@ -267,10 +269,12 @@ async function synthesize(text, role) {
       speed: profile.speed,
     }),
   });
+
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`OpenAI TTS ${res.status}: ${body}`);
   }
+
   const buf = Buffer.from(await res.arrayBuffer());
   return buf;
 }
@@ -292,15 +296,19 @@ async function main() {
 
   for (const [event, pool] of Object.entries(POOLS)) {
     manifest[event] = { voice: pool.voice, count: pool.lines.length };
+
     for (let i = 0; i < pool.lines.length; i++) {
       const line = pool.lines[i];
       const filename = `${event}_${i}.opus`;
       const filepath = join(OUT_DIR, filename);
+
       if (!FORCE && (await fileExists(filepath))) {
         skipped++;
         continue;
       }
+
       process.stdout.write(`  generating ${filename} … `);
+
       try {
         const buf = await synthesize(line, pool.voice);
         await writeFile(filepath, buf);

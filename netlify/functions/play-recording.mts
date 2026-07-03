@@ -16,9 +16,11 @@ export default async function handler(req: Request, _context: Context) {
 
   try {
     const result = await store.getWithMetadata(key, { type: "arrayBuffer" });
+
     if (!result?.data) {
       return new Response("Recording not found", { status: 404 });
     }
+
     // Newer recordings are MP4/H.264 (HW encoded). Older ones are webm.
     // The actual container is stored in metadata; default to webm so
     // legacy uploads keep working.

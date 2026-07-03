@@ -85,8 +85,10 @@ export async function startRecording(gameCanvas: HTMLCanvasElement): Promise<voi
 
   /* Drive capture: every 1000/CAPTURE_FPS ms, downscale & commit a frame. attempt() guards against GL context loss mid-run. */
   const frameMs = Math.round(1000 / CAPTURE_FPS);
+
   captureFrameTimer = window.setInterval(() => {
     if (!captureCtx || !captureTrack) return;
+
     attempt(() => {
       captureCtx!.drawImage(gameCanvas, 0, 0, CAPTURE_WIDTH, CAPTURE_HEIGHT);
       captureTrack!.requestFrame?.();
@@ -102,17 +104,14 @@ export async function startRecording(gameCanvas: HTMLCanvasElement): Promise<voi
   }, MAX_DURATION_MS);
 }
 
-/**
- * Stop recording and return the recorded blob.
- * Returns null if recording wasn't active, the final blob is empty,
- * or the recorder failed.
- */
+/** Stop recording, return blob. Null if inactive, empty, or recorder failed. */
 export function stopRecording(): Promise<Blob | null> {
   return new Promise((resolve) => {
     if (!mediaRecorder || !isRecording) {
       resolve(null);
       return;
     }
+
     const recorder = mediaRecorder;
 
     /* Stop capture interval immediately — don't waste cycles blitting/requestFrame during ~100-500ms teardown window. */
@@ -128,18 +127,22 @@ export function stopRecording(): Promise<Blob | null> {
     recorder.onstop = () => {
       isRecording = false;
       attempt(() => recorder.stream.getTracks().forEach((t) => t.stop()));
+
       /* Reject empty blobs so handleRecordingUpload short-circuits instead of POSTing a zero-byte file. */
       if (chunks.length === 0) {
         cleanup();
         resolve(null);
         return;
       }
+
       const blob = new Blob(chunks, { type: mimeType });
       cleanup();
+
       if (blob.size === 0) {
         resolve(null);
         return;
       }
+
       resolve(blob);
     };
 
@@ -147,19 +150,16 @@ export function stopRecording(): Promise<Blob | null> {
   });
 }
 
-/**
- * Discard the current recording without uploading.
- */
+/** Discard current recording without uploading. */
 export function discardRecording(): void {
   if (mediaRecorder && isRecording) {
     attempt(() => mediaRecorder!.stream.getTracks().forEach((t) => t.stop()));
   }
+
   cleanup();
 }
 
-/**
- * Get the current session ID for reference.
- */
+/** Current session ID. */
 export function getSessionId(): string | null {
   return recordingSessionId;
 }
@@ -169,9 +169,11 @@ export function getSessionId(): string | null {
 function getSupportedMimeType(): string | null {
   /* HW H.264 only — no SW fallback. Browsers with MediaRecorder MP4 = platform has HW encoder. No match → null. */
   const types = ["video/mp4;codecs=avc1.42E01F" /* H.264 baseline profile, level 3.1 */, "video/mp4"];
+
   for (const type of types) {
     if (MediaRecorder.isTypeSupported(type)) return type;
   }
+
   return null;
 }
 
@@ -180,10 +182,12 @@ function cleanup(): void {
     clearTimeout(durationCapTimer);
     durationCapTimer = null;
   }
+
   if (captureFrameTimer !== null) {
     clearInterval(captureFrameTimer);
     captureFrameTimer = null;
   }
+
   mediaRecorder = null;
   /* recordedChunks intentionally NOT reset — racing discardRecording during pending stopRecording must not strand the ref. */
   recordingSessionId = null;
@@ -201,14 +205,18 @@ function generateSessionId(): string {
 function waitForPaintFrames(count: number): Promise<void> {
   return new Promise((resolve) => {
     let remaining = Math.max(1, count);
+
     const tick = () => {
       remaining -= 1;
+
       if (remaining <= 0) {
         resolve();
         return;
       }
+
       window.requestAnimationFrame(tick);
     };
+
     window.requestAnimationFrame(tick);
   });
 }

@@ -6,24 +6,28 @@ const CIVILIAN_COLORS = [0x4caf50, 0x2196f3, 0xffeb3b, 0xffffff, 0x9c27b0, 0xff9
 
 /* Shared materials (color-independent ones; body/cabin/stripe stay per-instance) */
 const matProps = { roughness: 0.8, flatShading: true } as const;
+
 const CIV_GLASS_MAT = new THREE.MeshStandardMaterial({
   color: 0xaaddee,
   roughness: 0.2,
   flatShading: true,
   metalness: 0.6,
 });
+
 const CIV_HEADLIGHT_MAT = new THREE.MeshStandardMaterial({
   color: 0xffee88,
   emissive: 0xffee88,
   emissiveIntensity: 0.8,
   flatShading: true,
 });
+
 const CIV_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
   color: 0xff2222,
   emissive: 0xff2222,
   emissiveIntensity: 0.6,
   flatShading: true,
 });
+
 const CIV_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x111111, ...matProps });
 
 /* Shared geometries (one set). All civilians share proportions, so GPU buffers only need to live once. */
@@ -148,6 +152,7 @@ export class Civilian {
       [-unit * 2.5, unit * 0.5, -unit * 2.5],
       [unit * 2.5, unit * 0.5, -unit * 2.5],
     ];
+
     wheelPositions.forEach((pos) => {
       const wheel = new THREE.Mesh(CIV_WHEEL_GEO, CIV_WHEEL_MAT);
       wheel.position.set(pos[0], pos[1], pos[2]);
@@ -158,6 +163,7 @@ export class Civilian {
 
     /* Physics */
     const shape = new CANNON.Box(new CANNON.Vec3(unit * 2, unit * 2, unit * 4));
+
     this.body = new CANNON.Body({
       mass: 80,
       position: new CANNON.Vec3(position.x, position.y, position.z),
@@ -165,6 +171,7 @@ export class Civilian {
       angularDamping: 0.9,
       allowSleep: false,
     });
+
     this.body.addShape(shape, new CANNON.Vec3(0, unit, 0));
     this.body.angularFactor.set(0, 1, 0);
     world.addBody(this.body);
@@ -221,12 +228,14 @@ export class Civilian {
       if (!onRoad || !isRoad(aheadTileX, aheadTileZ)) {
         /* Find adjacent road tiles to turn toward */
         const roadDirs: { dx: number; dz: number }[] = [];
+
         const neighbors = [
           { dx: 1, dz: 0 },
           { dx: -1, dz: 0 },
           { dx: 0, dz: 1 },
           { dx: 0, dz: -1 },
         ];
+
         for (const n of neighbors) {
           if (isRoad(tileX + n.dx, tileZ + n.dz)) {
             /* Skip the direction we came from (unless we're off-road) */
@@ -234,6 +243,7 @@ export class Civilian {
               const dot = _civWorldForward.x * n.dx + _civWorldForward.z * n.dz;
               if (dot < -0.5) continue;
             }
+
             roadDirs.push(n);
           }
         }
@@ -265,6 +275,7 @@ export class Civilian {
 
       /* Cap speed */
       const speed = this.body.velocity.length();
+
       if (speed > this.maxSpeed) {
         this.body.velocity.scale(this.maxSpeed / speed, this.body.velocity);
       }

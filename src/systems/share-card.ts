@@ -63,12 +63,14 @@ function drawProceduralBackground(ctx: CanvasRenderingContext2D) {
   ctx.strokeStyle = "rgba(255,255,255,0.025)";
   ctx.lineWidth = 1;
   const tile = 30;
+
   for (let x = 0; x <= W; x += tile) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, H);
     ctx.stroke();
   }
+
   for (let y = 0; y <= H; y += tile) {
     ctx.beginPath();
     ctx.moveTo(0, y);
@@ -77,12 +79,7 @@ function drawProceduralBackground(ctx: CanvasRenderingContext2D) {
   }
 }
 
-/**
- * Draw the captured wreck screenshot as a full-bleed background, then
- * apply a multi-stop gradient overlay so the text panels remain readable.
- * The screenshot is "cover" cropped (preserve aspect, fill the entire
- * card) so the wreck stays centered regardless of the source aspect ratio.
- */
+/** Full-bleed wreck screenshot bg + gradient overlay for text legibility. Cover-cropped, centered. */
 async function drawScreenshotBackground(ctx: CanvasRenderingContext2D, dataUrl: string): Promise<void> {
   const img = await loadImage(dataUrl);
   /* Cover-fit: scale up to whichever axis fills the card, center the rest. */
@@ -208,6 +205,7 @@ function drawStats(ctx: CanvasRenderingContext2D, data: IShareCardData) {
   const gap = 50;
   let totalW = 0;
   ctx.font = valueFont;
+
   const widths = stats.map((s) => {
     const vw = ctx.measureText(s.value).width;
     ctx.font = labelFont;
@@ -215,10 +213,12 @@ function drawStats(ctx: CanvasRenderingContext2D, data: IShareCardData) {
     ctx.font = valueFont;
     return Math.max(vw, lw);
   });
+
   totalW = widths.reduce((a, b) => a + b, 0) + gap * (stats.length - 1);
 
   let x = (W - totalW) / 2;
   const y = 530;
+
   for (let i = 0; i < stats.length; i++) {
     const s = stats[i];
     const w = widths[i];
@@ -231,6 +231,7 @@ function drawStats(ctx: CanvasRenderingContext2D, data: IShareCardData) {
     ctx.fillText(s.value, x + w / 2, y + 16);
     x += w + gap;
   }
+
   ctx.textAlign = "left";
 }
 
@@ -263,19 +264,16 @@ function drawFooter(ctx: CanvasRenderingContext2D, data: IShareCardData) {
   ctx.fillStyle = COLORS.grayDim;
   ctx.font = "700 11px system-ui, -apple-system, sans-serif";
   let host = "blockypursuit.com";
+
   if (typeof window !== "undefined") {
     host = window.location.host || host;
   }
+
   ctx.fillText(host, W - 40, 606);
   ctx.textAlign = "left";
 }
 
-/**
- * Render the share card to a fresh `<canvas>` and return it. Caller can
- * then either grab a data URL for a preview <img> or convert to a Blob.
- * Splitting render-to-canvas from canvas-to-blob keeps preview rendering
- * synchronous from the caller's perspective.
- */
+/** Render share card to fresh `<canvas>`. Split from canvas-to-blob so preview stays sync. */
 export async function renderShareCardToCanvas(data: IShareCardData): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -306,6 +304,7 @@ export async function renderShareCardToCanvas(data: IShareCardData): Promise<HTM
 /** Build share card → PNG Blob. Fresh canvas each call → GC'd as soon as Blob is consumed. */
 export async function buildShareCard(data: IShareCardData): Promise<Blob> {
   const canvas = await renderShareCardToCanvas(data);
+
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(blob);
@@ -339,6 +338,7 @@ export async function copyShareCardToClipboard(data: IShareCardData): Promise<bo
   if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
     return false;
   }
+
   try {
     const blob = await buildShareCard(data);
     await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);

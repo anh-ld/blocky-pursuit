@@ -33,12 +33,14 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
 
   /* Cabin — rounded box; sits on the smoothed chassis, reads as one continuous body. */
   const cabinGeo = new RoundedBoxGeometry(unit * s.cabinW, unit * s.cabinH, unit * s.cabinL, 2, unit * 0.15);
+
   const cabinMat = new THREE.MeshStandardMaterial({
     color: skin.cabinColor,
     roughness: 0.3,
     flatShading: true,
     metalness: 0.5,
   });
+
   const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
   const bodyTopY = unit * (0.5 + s.bodyH);
   cabinMesh.position.set(0, bodyTopY + (unit * s.cabinH) / 2, unit * s.cabinZ);
@@ -50,11 +52,13 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
   if (s.hasFlag) {
     const flagSize = Math.min(s.cabinW, s.cabinL) * unit * 0.85;
     const flagGeo = new THREE.PlaneGeometry(flagSize, flagSize);
+
     const flagMat = new THREE.MeshStandardMaterial({
       color: 0xda251d,
       flatShading: true,
       side: THREE.DoubleSide,
     });
+
     const flag = new THREE.Mesh(flagGeo, flagMat);
     flag.rotation.x = -Math.PI / 2;
     flag.position.set(0, roofY, unit * s.cabinZ);
@@ -65,21 +69,26 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     const starPoints = 5;
     const outerR = flagSize * 0.34;
     const innerR = flagSize * 0.14;
+
     for (let i = 0; i < starPoints * 2; i++) {
       const r = i % 2 === 0 ? outerR : innerR;
       const angle = (i * Math.PI) / starPoints - Math.PI / 2;
       const x = Math.cos(angle) * r;
       const y = Math.sin(angle) * r;
+
       if (i === 0) starShape.moveTo(x, y);
       else starShape.lineTo(x, y);
     }
+
     starShape.closePath();
     const starGeo = new THREE.ShapeGeometry(starShape);
+
     const starMat = new THREE.MeshStandardMaterial({
       color: 0xffcd00,
       flatShading: true,
       side: THREE.DoubleSide,
     });
+
     const star = new THREE.Mesh(starGeo, starMat);
     star.rotation.x = -Math.PI / 2;
     star.position.set(0, roofY + 0.01, unit * s.cabinZ);
@@ -89,11 +98,13 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
   /* Racing stripe along the body length (Mustang) */
   if (s.hasStripe) {
     const stripeGeo = new THREE.PlaneGeometry(unit * 0.8, unit * s.bodyL * 0.95);
+
     const stripeMat = new THREE.MeshStandardMaterial({
       color: skin.accentColor,
       flatShading: true,
       side: THREE.DoubleSide,
     });
+
     const stripe = new THREE.Mesh(stripeGeo, stripeMat);
     stripe.rotation.x = -Math.PI / 2;
     stripe.position.set(0, unit * (0.5 + s.bodyH) + 0.005, 0);
@@ -128,12 +139,14 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
 
   /* Headlights (front = -Z) */
   const headlightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
+
   const headlightMat = new THREE.MeshStandardMaterial({
     color: 0xffee88,
     emissive: 0xffee88,
     emissiveIntensity: 0.8,
     flatShading: true,
   });
+
   const hlY = unit * (0.5 + s.bodyH * 0.6);
   const hlX = unit * (s.bodyW / 2 - 0.5);
   const hlZ = -unit * (s.bodyL / 2 + 0.1);
@@ -146,12 +159,14 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
 
   /* Taillights (rear = +Z, red) */
   const taillightGeo = new THREE.BoxGeometry(unit * 0.6, unit * 0.4, unit * 0.3);
+
   const taillightMat = new THREE.MeshStandardMaterial({
     color: 0xff2222,
     emissive: 0xff2222,
     emissiveIntensity: 0.6,
     flatShading: true,
   });
+
   const tlZ = unit * (s.bodyL / 2 + 0.1);
   const tlLeft = new THREE.Mesh(taillightGeo, taillightMat);
   tlLeft.position.set(-hlX, hlY, tlZ);
@@ -164,12 +179,14 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
   const wheelMat = new THREE.MeshStandardMaterial({ color: skin.wheelColor, ...matProps });
   const wx = unit * (s.bodyW / 2 + 0.05);
   const wz = unit * (s.bodyL / 2 - 1.2);
+
   const wheelPositions: [number, number, number][] = [
     [-wx, unit * 0.5, wz],
     [wx, unit * 0.5, wz],
     [-wx, unit * 0.5, -wz],
     [wx, unit * 0.5, -wz],
   ];
+
   for (const pos of wheelPositions) {
     const wheel = new THREE.Mesh(WHEEL_GEO, wheelMat);
     wheel.position.set(pos[0], pos[1], pos[2]);

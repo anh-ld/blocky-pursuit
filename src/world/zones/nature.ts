@@ -60,6 +60,7 @@ function addBush(
   const colorIdx = Math.floor(r3 * materials.bush.length);
   const mat = materials.bush[colorIdx];
   const blobs = 2 + Math.floor(r2 * 3);
+
   for (let i = 0; i < blobs; i++) {
     const br = pseudoRandom(Math.floor(x * 100), Math.floor(z * 100), 700 + i);
     const bs = 0.7 + br * 0.7;
@@ -105,10 +106,7 @@ function addLog(
   chunk.bodies.push(body);
 }
 
-/**
- * 2-4 mushrooms with red caps. Pure decoration — no collider, no shadow on
- * the small ones. Cheap atmosphere fill for forest tiles.
- */
+/** 2-4 red-cap mushrooms. Decoration only — no collider/shadow. Forest-tile fill. */
 function addMushrooms(
   chunk: IChunkData,
   materials: IMaterials,
@@ -119,6 +117,7 @@ function addMushrooms(
   r3: number,
 ) {
   const count = 2 + Math.floor(r2 * 3);
+
   for (let i = 0; i < count; i++) {
     const mr = pseudoRandom(Math.floor(x * 100), Math.floor(z * 100), 800 + i);
     const mx = x + (mr - 0.5) * 3;
@@ -137,10 +136,7 @@ function addMushrooms(
   }
 }
 
-/**
- * Reeds + occasional cattail along the water's edge. Pure decoration. Called
- * from the city generator when a tile is land but borders water.
- */
+/** Reeds + occasional cattail at water's edge. Decoration only. From city generator on land tile bordering water. */
 export function placeShoreDecor(
   chunk: IChunkData,
   materials: IMaterials,
@@ -153,6 +149,7 @@ export function placeShoreDecor(
   const r = pseudoRandom(globalTileX, globalTileZ, 900);
   if (r < 0.4) return; /* bare sand on some shore tiles for breathing room */
   const count = 3 + Math.floor(r * 4);
+
   for (let i = 0; i < count; i++) {
     const rx = pseudoRandom(globalTileX, globalTileZ, 910 + i);
     const rz = pseudoRandom(globalTileX, globalTileZ, 920 + i);
@@ -163,6 +160,7 @@ export function placeShoreDecor(
     reed.scale.set(0.08, h, 0.08);
     reed.position.set(lx, h / 2, lz);
     chunk.group.add(reed);
+
     /* Occasional cattail head — dark brown sphere on a stalk. */
     if (rz > 0.7) {
       const head = new THREE.Mesh(geometries.cylinder, materials.cattail);
@@ -176,7 +174,7 @@ export function placeShoreDecor(
 export function placeWaterDecor(
   chunk: IChunkData,
   materials: IMaterials,
-  geometries: IGeometries,
+  _geometries: IGeometries,
   globalTileX: number,
   globalTileZ: number,
   worldX: number,
@@ -184,8 +182,10 @@ export function placeWaterDecor(
 ) {
   /* No physics wall — cars can drive into water (handled by game logic) Lily pads */
   const lilyR = pseudoRandom(globalTileX, globalTileZ, 600);
+
   if (lilyR > 0.5) {
     const count = 1 + Math.floor(lilyR * 3);
+
     for (let lp = 0; lp < count; lp++) {
       const lx = worldX + (pseudoRandom(globalTileX, globalTileZ, 610 + lp) - 0.5) * 7;
       const lz = worldZ + (pseudoRandom(globalTileX, globalTileZ, 620 + lp) - 0.5) * 7;

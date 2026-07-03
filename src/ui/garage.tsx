@@ -18,12 +18,14 @@ export function Garage() {
   const back = () => {
     screen.value = gameState.value === "start" ? "howToPlay" : "none";
   };
+
   const progress = {
     best: bestScore.value,
     totalRuns: totalRuns.value,
     copsDrowned: copsDrowned.value,
     selectedSkin: selectedSkin.value,
   };
+
   return (
     <div class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
       <div class="w-full h-full md:h-auto md:max-h-[90vh] md:w-[720px] md:max-w-[92vw] bg-[var(--bg-1)] pointer-events-auto flex flex-col">
@@ -40,6 +42,7 @@ export function Garage() {
           {CAR_SKINS.map((s) => {
             const unlocked = isUnlocked(s, progress);
             const isSelected = selectedSkin.value === s.id;
+
             return (
               <button
                 disabled={!unlocked}

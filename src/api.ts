@@ -6,16 +6,19 @@ const DEV = import.meta.env.DEV;
 
 export async function fetchLeaderboard() {
   leaderboardLoading.value = true;
+
   if (DEV) {
     leaderboardEntries.value = [];
     leaderboardLoading.value = false;
     return;
   }
+
   const [, entries] = await attemptAsync(async () => {
     const res = await fetch("/.netlify/functions/leaderboard");
     if (!res.ok) return [] as ILeaderboardEntry[];
     return (await res.json()) as ILeaderboardEntry[];
   });
+
   leaderboardEntries.value = entries ?? [];
   leaderboardLoading.value = false;
 }
@@ -28,6 +31,7 @@ export async function submitScore(
 ): Promise<boolean> {
   if (finalScore <= 0) return false;
   if (DEV) return true;
+
   const [, res] = await attemptAsync(() =>
     fetch("/.netlify/functions/submit-score", {
       method: "POST",
@@ -40,6 +44,7 @@ export async function submitScore(
       }),
     }),
   );
+
   return !!res?.ok;
 }
 
@@ -58,6 +63,7 @@ export async function uploadRecording(
     playerName,
     score: String(Math.floor(score)),
   });
+
   const url = `/api/upload-recording?${params.toString()}`;
 
   const [, res] = await attemptAsync(() =>
@@ -67,10 +73,12 @@ export async function uploadRecording(
       body: recording,
     }),
   );
+
   if (!res) {
     console.warn("[recorder] Upload network error");
     return null;
   }
+
   if (!res.ok) {
     const [, text] = await attemptAsync(() => res.text());
     console.warn(`[recorder] Upload rejected ${res.status}: ${text ?? ""}`);
@@ -98,6 +106,7 @@ const ADJECTIVES = [
   "Rogue",
   "Neon",
 ];
+
 const NOUNS = [
   "Racer",
   "Driver",
@@ -125,10 +134,12 @@ function generateAnonName(): string {
 
 export function getPlayerName(): string {
   let name = storageGet(StorageKey.PlayerName);
+
   if (!name) {
     name = generateAnonName();
     storageSet(StorageKey.PlayerName, name);
   }
+
   return name;
 }
 
@@ -149,17 +160,21 @@ export function setPlayerName(raw: string): string {
     .slice(0, 20)
     .replace(/[^a-zA-Z0-9 _-]/g, "")
     .trim();
+
   let final: string;
+
   if (!cleaned) {
     final = generateAnonName();
   } else if (cleaned.length < MIN_UNIQUE_NAME_LEN) {
     const tag = Math.floor(Math.random() * 10000)
       .toString()
       .padStart(4, "0");
+
     final = `${cleaned}${tag}`.slice(0, 20);
   } else {
     final = cleaned;
   }
+
   storageSet(StorageKey.PlayerName, final);
   return final;
 }

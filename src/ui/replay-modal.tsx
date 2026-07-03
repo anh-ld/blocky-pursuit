@@ -23,17 +23,20 @@ export function ReplayModal() {
 
   useEffect(() => {
     if (!url) return;
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
         replayUrl.value = null;
       }
     };
+
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [url]);
 
   if (!url) return null;
+
   const close = () => {
     replayUrl.value = null;
   };

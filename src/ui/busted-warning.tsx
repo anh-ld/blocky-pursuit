@@ -7,6 +7,7 @@ export function BustedWarning() {
   if (p <= 0) return null;
   const opacity = 0.25 + p * 0.55;
   const secondsLeft = (1 - p).toFixed(1);
+
   return (
     <div class="absolute inset-0 z-[15] pointer-events-none flex items-start justify-center">
       <div

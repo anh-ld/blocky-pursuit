@@ -207,11 +207,7 @@ const POOLS: Record<string, { voice: IRadioLine["voice"]; lines: string[] }> = {
   },
 };
 
-/**
- * Push a chatter line for a gameplay event. Throttled and deduped — calls
- * that arrive too fast or too soon after the same event are silently
- * dropped instead of crowding the feed.
- */
+/** Push chatter line for event. Throttled + deduped — too-fast/too-soon calls dropped. */
 export function pushChatter(event: string): void {
   const pool = POOLS[event];
   if (!pool) return;

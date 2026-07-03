@@ -43,6 +43,7 @@ const REPAIR_MAT = emissiveMat(0x66ff77, 0.85);
 const SCORE_MAT = emissiveMat(0xffdd44, 0.9);
 const TIME_MAT = emissiveMat(0x66aaff, 0.75);
 const MAGNET_MAT = emissiveMat(0xff5555, 0.8);
+
 /* Ghost gets translucent treatment to read as "intangible". */
 const GHOST_MAT = new THREE.MeshStandardMaterial({
   color: 0xeeeeff,
@@ -52,6 +53,7 @@ const GHOST_MAT = new THREE.MeshStandardMaterial({
   transparent: true,
   opacity: 0.55,
 });
+
 const TANK_MAT = emissiveMat(0xcc2222, 0.85);
 
 /* Geometries (one per kind, shared) */
@@ -73,6 +75,7 @@ const TANK_GEO = new THREE.TetrahedronGeometry(0.9, 0);
 
 /* Rarity glow rings (shared) — flat ring under pickup. Two materials (rare/epic) share one geometry. */
 const RARITY_RING_GEO = new THREE.RingGeometry(1.05, 1.35, 24);
+
 const RARE_RING_MAT = new THREE.MeshBasicMaterial({
   color: 0x66ddff,
   transparent: true,
@@ -80,6 +83,7 @@ const RARE_RING_MAT = new THREE.MeshBasicMaterial({
   side: THREE.DoubleSide,
   depthWrite: false,
 });
+
 const EPIC_RING_MAT = new THREE.MeshBasicMaterial({
   color: 0xffcc22,
   transparent: true,
@@ -170,6 +174,7 @@ export class Pickup {
     this.age += dt;
     this.mesh.rotation.y += dt * 2;
     this.mesh.position.y = 1.5 + Math.sin(this.age * 3) * 0.3;
+
     if (this.ringMesh) {
       /* Counter parent bob so ring stays anchored to ground (world y ≈ 0.05) while pickup floats above. */
       /* Ring also breathes scale for a heartbeat. Spinning invisible on a flat smooth circle. */

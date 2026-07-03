@@ -36,14 +36,17 @@ let flashEl: HTMLDivElement | null = null;
 export function initScreenFlash(parent: HTMLElement) {
   if (flashEl) return;
   flashEl = document.createElement("div");
+
   flashEl.style.cssText =
     "position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:20;transition:opacity 90ms ease-out;mix-blend-mode:screen";
+
   parent.appendChild(flashEl);
 }
 
 export function triggerScreenFlash(strength: number = 0.5) {
   if (!flashEl) return;
   flashEl.style.opacity = String(strength);
+
   setTimeout(() => {
     if (flashEl) flashEl.style.opacity = "0";
   }, 90);
@@ -91,6 +94,7 @@ const PARTICLE_GEO = new THREE.IcosahedronGeometry(0.16, 0);
 const SPARK_MAT = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
 const SPLASH_MAT = new THREE.MeshBasicMaterial({ color: 0x66ccff });
 const SPEED_LINE_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
 const CONFETTI_MATS = [
   new THREE.MeshBasicMaterial({ color: 0xff4466 }),
   new THREE.MeshBasicMaterial({ color: 0xffcc22 }),
@@ -100,6 +104,7 @@ const CONFETTI_MATS = [
 
 export function initEffects(scene: THREE.Scene) {
   particleScene = scene;
+
   /* Build pools once. Meshes start hidden and parented to the scene so future emits never touch the scene graph. */
   if (particles.length === 0) {
     for (let i = 0; i < POOL_SIZE; i++) {
@@ -108,6 +113,7 @@ export function initEffects(scene: THREE.Scene) {
       scene.add(mesh);
       particles.push({ mesh, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0, active: false });
     }
+
     for (let i = 0; i < RING_POOL_SIZE; i++) {
       const mat = RING_BASE_MAT.clone();
       const mesh = new THREE.Mesh(RING_GEO, mat);
@@ -146,11 +152,13 @@ function acquire(
     p.active = true;
     return true;
   }
+
   return false;
 }
 
 function emit(x: number, y: number, z: number, mat: THREE.Material, count: number, spread: number, life: number) {
   if (!particleScene) return;
+
   for (let i = 0; i < count; i++) {
     const ok = acquire(
       x,
@@ -162,6 +170,7 @@ function emit(x: number, y: number, z: number, mat: THREE.Material, count: numbe
       (Math.random() - 0.5) * spread,
       life,
     );
+
     if (!ok) return;
   }
 }
@@ -180,6 +189,7 @@ export function spawnSpeedLine(x: number, y: number, z: number, headingX: number
   if (!particleScene) return;
   /* Start slightly behind the car, kick backward fast so it shoots past the camera. Tiny vertical jitter prevents stacking. */
   const back = -8;
+
   const ok = acquire(
     x + headingX * 0.5,
     y + 0.5 + (Math.random() - 0.5) * 0.6,
@@ -190,11 +200,13 @@ export function spawnSpeedLine(x: number, y: number, z: number, headingX: number
     headingZ * back,
     0.25,
   );
+
   if (!ok) return;
 }
 
 export function spawnConfetti(x: number, y: number, z: number) {
   if (!particleScene) return;
+
   for (let i = 0; i < 20; i++) {
     const mat = CONFETTI_MATS[i % CONFETTI_MATS.length];
     const ok = acquire(x, y, z, mat, (Math.random() - 0.5) * 6, Math.random() * 6 + 2, (Math.random() - 0.5) * 6, 0.8);
@@ -211,13 +223,16 @@ type IRingSlot = {
   maxRadius: number;
   active: boolean;
 };
+
 const RING_GEO = new THREE.RingGeometry(0.95, 1.0, 48);
+
 /* Template for the shared color/flags; per-slot materials clone this so concurrent rings fade independently. */
 const RING_BASE_MAT = new THREE.MeshBasicMaterial({
   color: 0x66ddff,
   transparent: true,
   side: THREE.DoubleSide,
 });
+
 const RING_POOL_SIZE = 4;
 const ringPool: IRingSlot[] = [];
 
@@ -239,11 +254,13 @@ function updateRings(dt: number) {
     if (!r.active) continue;
     r.age += dt;
     const t = r.age / r.life;
+
     if (t >= 1) {
       r.mesh.visible = false;
       r.active = false;
       continue;
     }
+
     const scale = r.maxRadius * t;
     r.mesh.scale.set(scale, scale, scale);
     r.mat.opacity = 1 - t;
@@ -258,6 +275,7 @@ export function clearParticles() {
     p.mesh.visible = false;
     p.active = false;
   }
+
   for (const r of ringPool) {
     r.mesh.visible = false;
     r.active = false;
@@ -267,16 +285,19 @@ export function clearParticles() {
 export function updateEffects(dt: number) {
   if (!particleScene) return;
   updateRings(dt);
+
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
     if (!p.active) continue;
     p.life -= dt;
+
     if (p.life <= 0) {
       /* Release back to the pool: hide, mark inactive. Mesh stays parented. */
       p.mesh.visible = false;
       p.active = false;
       continue;
     }
+
     p.vy -= 18 * dt; /* gravity */
     p.mesh.position.x += p.vx * dt;
     p.mesh.position.y += p.vy * dt;

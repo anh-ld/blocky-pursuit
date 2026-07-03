@@ -109,6 +109,7 @@ type IBeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
+
 let deferredPrompt: IBeforeInstallPromptEvent | null = null;
 
 /* Single controller so all global listeners can be torn down together. */
@@ -124,9 +125,11 @@ window.addEventListener(
   },
   { signal: listenerSignal },
 );
+
 if (window.matchMedia("(display-mode: standalone)").matches) {
   canInstallPwa.value = false;
 }
+
 async function installPwa() {
   if (!deferredPrompt) return;
 
@@ -142,6 +145,7 @@ async function installPwa() {
     console.error("[installPwa]", err);
     return;
   }
+
   if (result!.outcome === "accepted") canInstallPwa.value = false;
 }
 
@@ -152,6 +156,7 @@ const ctx = bootstrap({
   getPlayerName: () => playerName.value || "player",
   getSelectedSkinId: () => selectedSkin.value,
 });
+
 const { scene, camera, renderer, world, cityGenerator, car, portals } = ctx;
 
 /* selectSkin/setWeather: bootstrap handles scene mutations; main writes the signal so persisted state stays in sync. */
@@ -159,6 +164,7 @@ function selectSkin(skinId: string) {
   setSelectedSkin(skinId);
   ctx.selectSkin(skinId);
 }
+
 function setWeather(w: typeof weather.value) {
   weather.value = w;
   ctx.setWeather(w);
@@ -227,6 +233,7 @@ window.addEventListener(
   (e) => {
     attempt(() => {
       if (e.code !== "Space" && e.key !== " ") return;
+
       if (currentState === "playing") {
         e.preventDefault();
         pauseGame();
@@ -309,6 +316,7 @@ function startGame() {
   startRecording(renderer.domElement).catch(() => {
     /* Silently fail — recording is non-blocking */
   });
+
   /* Background-load all voice files so radio calls are instant. Idempotent — fetches once/app. */
   void preloadRadioVoices();
 }
@@ -341,10 +349,12 @@ async function handleRecordingUpload(sessionId: string | undefined, myName: stri
   }
 
   const blob = await stopRecording();
+
   if (!blob) {
     console.log("[recorder] stopRecording returned null, skip");
     return null;
   }
+
   const sizeKB = (blob.size / 1024).toFixed(0);
 
   /* Hard size ceiling (MAX_UPLOAD_SIZE in screen-recorder.ts). HW H.264 overshoots bitrate hint sometimes → drop unreliable. */
@@ -386,6 +396,7 @@ function finishGameOver(reason: string) {
 
   /* Explosion + signoff flow through WorldFx; compute isNewBest here so the panel reads the right value. */
   isNewBest.value = saveBest(Math.floor(run.score));
+
   worldFx.dispatch({
     kind: "playerDied",
     position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
@@ -413,6 +424,7 @@ function finishGameOver(reason: string) {
     const scoreAtSubmit = Math.floor(run.score);
 
     const submitted = await submitScore(nameAtSubmit, scoreAtSubmit, undefined, sid);
+
     if (!submitted) {
       await fetchLeaderboard();
       return;
@@ -459,6 +471,7 @@ let spawnTimersRebased = true;
 
 function tickPlaying(dt: number, timeInSeconds: number) {
   const [err] = attempt(() => _tickPlayingInner(dt, timeInSeconds));
+
   if (err) {
     console.error("[tickPlaying] fatal loop error", err);
     attempt(() => gameOver("WRECKED"));
@@ -489,6 +502,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     y: car.body.position.y,
     z: car.body.position.z,
   });
+
   if (leveled) frameEvents.push(leveled);
 
   /* Engine pitch follows speed */
@@ -502,8 +516,10 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
 
   /* Combo lifeline: window is `comboInDanger` (ratio < 0.25); per-frame scheduler decides when to fire. */
   const comboRatio = run.comboTimer / COMBO_DECAY;
+
   if (run.comboCount >= 5 && comboRatio > 0 && comboRatio < 0.25) {
     _comboTickAccum += dt;
+
     if (_comboTickAccum >= COMBO_TICK_INTERVAL) {
       _comboTickAccum = 0;
       frameEvents.push({ kind: "comboTick", urgency: 1 - comboRatio / 0.25 });
@@ -511,9 +527,11 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   } else {
     _comboTickAccum = 0;
   }
+
   if (_prevComboCount >= 10 && run.comboCount === 0) {
     frameEvents.push({ kind: "comboLost" });
   }
+
   _prevComboCount = run.comboCount;
 
   /* Entity systems — they emit FX events into the buffer; the conductor drains after the tick. */
@@ -531,6 +549,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     /* Water check (player drowning) — splash is FX; goes through the dying slow-mo, not the per-frame event drain. */
     const carTileX = Math.floor(car.body.position.x / TILE_SIZE);
     const carTileZ = Math.floor(car.body.position.z / TILE_SIZE);
+
     if (!isRoad(carTileX, carTileZ) && isWater(carTileX, carTileZ)) {
       playSplash();
       gameOver("DROWNED");
@@ -548,9 +567,11 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   /* Speed streak heal: reward sustained top-speed driving */
   if (car.body.velocity.length() >= car.maxSpeed * SPEED_STREAK_MIN_RATIO) {
     run.speedStreakTimer += dt;
+
     if (run.speedStreakTimer >= SPEED_STREAK_THRESHOLD) {
       run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_SPEED_STREAK);
       run.speedStreakTimer = 0;
+
       spawnPopup(
         car.body.position.x,
         car.body.position.y + 2,
@@ -572,6 +593,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   while (run.nextMilestoneIdx < SCORE_MILESTONES.length && run.score >= SCORE_MILESTONES[run.nextMilestoneIdx]) {
     const value = SCORE_MILESTONES[run.nextMilestoneIdx];
     run.nextMilestoneIdx++;
+
     frameEvents.push({
       kind: "scoreMilestone",
       position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
@@ -583,12 +605,14 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   if (nearestCopDist >= ESCAPE_DIST) {
     if (run.escapeArmed) {
       run.escapeTimer += dt;
+
       if (run.escapeTimer >= ESCAPE_TIME) {
         run.escapeArmed = false;
         run.escapeTimer = 0;
         run.score += ESCAPE_REWARD;
         run.copScore += ESCAPE_REWARD;
         run.hp = Math.min(MAX_HP, run.hp + ESCAPE_HEAL);
+
         frameEvents.push({
           kind: "escaped",
           position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
@@ -607,6 +631,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
     _heartbeatAccum += dt;
     const danger = 1 - run.hp / LOW_HP_THRESHOLD; /* 0..1 */
     const interval = 1.1 - danger * 0.65; /* 1.1s → 0.45s */
+
     if (_heartbeatAccum >= interval) {
       _heartbeatAccum = 0;
       frameEvents.push({ kind: "lowHpHeartbeat", danger });
@@ -618,6 +643,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
   /* Siren — gated on `state "playing"`. Suppressed during dying. Event carries intensity. */
   const sirenIntensity =
     currentState === "playing" && nearestCopDist < SIREN_MAX_RANGE ? 1 - nearestCopDist / SIREN_MAX_RANGE : 0;
+
   frameEvents.push({ kind: "siren", intensity: sirenIntensity });
 
   /* Per-frame display-side FX (skids, speed lines) — driven from car sample, not a per-frame event. */
@@ -626,6 +652,7 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
 
   /* Vibe Jam portal check: redirect if the car drove through one */
   const portalDest = portals.update(car.mesh.position);
+
   if (portalDest) {
     stopEngine();
     stopSiren();
@@ -646,9 +673,11 @@ function animate(time: number) {
 
   const timeInSeconds = time / 1000;
   let dt = timeStep;
+
   if (lastCallTime) {
     dt = Math.min(timeInSeconds - lastCallTime, 1 / 30);
   }
+
   lastCallTime = timeInSeconds;
 
   /* Particles + skids keep running (death animation plays out); popups freeze on game-over (no stale text). */
@@ -676,6 +705,7 @@ function animate(time: number) {
     /* Real-dt dying-phase countdown. On expiry mark for screenshot (consumed AFTER render). */
     if (currentState === "dying") {
       dyingTimer -= dt;
+
       if (dyingTimer <= 0) {
         dyingTimer = 0;
         pendingScreenshot = true;
@@ -697,11 +727,13 @@ function animate(time: number) {
   /* Camera follow car. Follow offset shrinks with cameraD → camera physically pulls in as it zooms. */
   const followScale = ctx.getCameraD() / BASE_CAMERA_D;
   const followOffset = 50 * followScale;
+
   camera.position.set(
     car.mesh.position.x + followOffset,
     car.mesh.position.y + followOffset,
     car.mesh.position.z + followOffset,
   );
+
   applyShake(camera, dt);
 
   /* Move directional light to follow the player */
@@ -715,6 +747,7 @@ function animate(time: number) {
     pendingScreenshot = false;
     const [err, url] = attempt(() => renderer.domElement.toDataURL("image/png"));
     if (!err && url) wreckScreenshot.value = url;
+
     if (dyingReason) {
       const reason = dyingReason;
       dyingReason = null;
@@ -763,6 +796,7 @@ requestAnimationFrame(animate);
 if (portals.cameFromPortal) {
   startGame();
   const spawn = portals.returnSpawnPos;
+
   if (spawn) {
     car.body.position.set(spawn.x, 1, spawn.z);
     car.body.velocity.set(0, 0, 0);

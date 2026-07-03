@@ -11,10 +11,12 @@ const BUILDING_SEGMENTS = 2;
 export function getBuildingGeometry(width: number, height: number, depth: number): THREE.BufferGeometry {
   const key = `${Math.round(width * 2) / 2}_${Math.round(height * 2) / 2}_${Math.round(depth * 2) / 2}`;
   let geo = _buildingGeoCache.get(key);
+
   if (!geo) {
     geo = new RoundedBoxGeometry(width, height, depth, BUILDING_SEGMENTS, BUILDING_RADIUS);
     _buildingGeoCache.set(key, geo);
   }
+
   return geo;
 }
 

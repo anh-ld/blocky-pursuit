@@ -3,6 +3,7 @@ import { IconArrowLeft, IconArrowRight } from "./icons";
 
 export function MobileControls() {
   const playing = gameState.value === "playing";
+
   return (
     <div class={`${playing ? "flex" : "hidden"} md:hidden w-full justify-between px-4 pb-5 pt-2 pointer-events-auto`}>
       <button

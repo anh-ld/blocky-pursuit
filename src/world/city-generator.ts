@@ -44,14 +44,17 @@ function makeAnhLeTexture(): THREE.CanvasTexture {
   const innerR = 6;
   cctx.fillStyle = "#ffcd00"; /* Vietnam yellow */
   cctx.beginPath();
+
   for (let i = 0; i < 10; i++) {
     const r = i % 2 === 0 ? outerR : innerR;
     const angle = (i * Math.PI) / 5 - Math.PI / 2;
     const px = sx + Math.cos(angle) * r;
     const py = sy + Math.sin(angle) * r;
+
     if (i === 0) cctx.moveTo(px, py);
     else cctx.lineTo(px, py);
   }
+
   cctx.closePath();
   cctx.fill();
 
@@ -64,6 +67,7 @@ function makeAnhLeTexture(): THREE.CanvasTexture {
   const letterSpacing = 6;
   let cursorX = flagX + flagW + 14;
   const cursorY = c.height / 2 + 2;
+
   for (const ch of text) {
     cctx.fillText(ch, cursorX, cursorY);
     cursorX += cctx.measureText(ch).width + letterSpacing;
@@ -74,9 +78,11 @@ function makeAnhLeTexture(): THREE.CanvasTexture {
   tex.magFilter = THREE.LinearFilter;
   return tex;
 }
+
 const ANH_LE_TEX = makeAnhLeTexture();
 /* Plane aspect roughly matches the canvas (320:64 ≈ 5:1) so the flag and text don't get squashed. */
 const ANH_LE_GEO = new THREE.PlaneGeometry(8, 1.6);
+
 const ANH_LE_MAT = new THREE.MeshBasicMaterial({
   map: ANH_LE_TEX,
   transparent: true,
@@ -166,6 +172,7 @@ export class CityGenerator {
         /* Ground tile — pick material based on zone + role */
         let groundMat = this.materials.grass;
         let tileY = 0.01;
+
         if (isRoadTile) {
           groundMat = this.materials.road;
         } else if (isWaterTile) {
@@ -177,6 +184,7 @@ export class CityGenerator {
         } else if (zone === Zone.NATURE) {
           /* Ground variation: grass shades + occasional sand/dirt patches. */
           const v = pseudoRandom(globalTileX, globalTileZ, 50);
+
           if (v < 0.08) groundMat = this.materials.dirt;
           else if (v < 0.16) groundMat = this.materials.sand;
           else if (v < 0.42) groundMat = this.materials.grassDark;
@@ -248,13 +256,16 @@ export class CityGenerator {
     if (isNS && isEW) return;
 
     const dashR = pseudoRandom(tileX, tileZ, 100);
+
     if (dashR > 0.3) {
       const dashMesh = new THREE.Mesh(this.geometries.building, this.materials.roadMark);
+
       if (isNS) {
         dashMesh.scale.set(0.3, 0.02, 4);
       } else {
         dashMesh.scale.set(4, 0.02, 0.3);
       }
+
       dashMesh.position.set(worldX, 0.03, worldZ);
       chunk.group.add(dashMesh);
     }
@@ -275,9 +286,11 @@ export class CityGenerator {
     for (const [key, chunk] of this.chunks.entries()) {
       this.unloadChunk(key, chunk);
     }
+
     for (const geo of Object.values(this.geometries)) {
       geo.dispose();
     }
+
     for (const val of Object.values(this.materials)) {
       if (Array.isArray(val)) {
         for (const m of val) m.dispose();
@@ -285,6 +298,7 @@ export class CityGenerator {
         val.dispose();
       }
     }
+
     disposeBuildingGeometries();
   }
 
@@ -293,9 +307,11 @@ export class CityGenerator {
     /* All geometries/materials are shared instances owned by this.geometries / this.materials — do NOT dispose them here. */
     /* Clearing children releases Mesh JS objects for GC. */
     chunk.group.clear();
+
     for (const body of chunk.bodies) {
       this.world.removeBody(body);
     }
+
     this.chunks.delete(key);
   }
 }

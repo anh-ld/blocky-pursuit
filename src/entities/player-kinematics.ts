@@ -1,6 +1,4 @@
-/* Short-window heading history for the cop chase. Stores a few recent player
- * yaws so the chase loop can estimate angular velocity without the noise of
- * a single-frame derivative. Sample at the same tick as cop-system.update. */
+/* Recent player-yaw history for chase. Estimates angular velocity, less noisy than single-frame derivative. Sample at cop-system.update tick. */
 const SAMPLE_INTERVAL = 0.2;
 const HISTORY_SIZE = 4;
 

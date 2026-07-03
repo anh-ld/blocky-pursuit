@@ -34,11 +34,13 @@ type IScoreEntry = {
 
 export default async function handler(req: Request) {
   const [err, response] = await attemptAsync(() => handleUpload(req));
+
   if (err) {
     const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     console.error("[upload-recording] crashed:", err);
     return new Response(`Server error — ${msg}`, { status: 500 });
   }
+
   return response;
 }
 
@@ -55,13 +57,17 @@ async function handleUpload(req: Request): Promise<Response> {
   if (!sessionId || !playerName || !score) {
     return new Response("Missing required query params", { status: 400 });
   }
+
   if (!SESSION_ID_RE.test(sessionId)) {
     return new Response("Invalid sessionId", { status: 400 });
   }
+
   if (!SCORE_RE.test(score)) {
     return new Response("Invalid score", { status: 400 });
   }
+
   const numericScore = Number(score);
+
   if (!Number.isFinite(numericScore) || numericScore <= 0 || numericScore > MAX_SCORE) {
     return new Response("Invalid score", { status: 400 });
   }
@@ -69,6 +75,7 @@ async function handleUpload(req: Request): Promise<Response> {
   // Reject oversized uploads on the header before buffering the body
   // into the isolate heap.
   const declaredLength = Number(req.headers.get("content-length"));
+
   if (Number.isFinite(declaredLength) && declaredLength > MAX_RECORDING_SIZE) {
     return new Response("Recording too large", { status: 413 });
   }
@@ -85,6 +92,7 @@ async function handleUpload(req: Request): Promise<Response> {
   if (recording.size === 0) {
     return new Response("Empty recording body", { status: 400 });
   }
+
   if (recording.size > MAX_RECORDING_SIZE) {
     return new Response("Recording too large", { status: 413 });
   }
@@ -94,12 +102,15 @@ async function handleUpload(req: Request): Promise<Response> {
   // sole idempotency key, so this stays consistent.
   const gateEntries: IScoreEntry[] = (gateRead?.data as IScoreEntry[] | undefined) ?? [];
   const candidateIndex = gateEntries.findIndex((e) => e.sessionId === sessionId);
+
   if (candidateIndex < 0) {
     return new Response("Score entry not found for session", { status: 409 });
   }
+
   if (candidateIndex >= QUALIFY_BOARD_SIZE) {
     return new Response("Score did not qualify for replay upload", { status: 403 });
   }
+
   if (gateEntries[candidateIndex]?.recordingUrl) {
     return new Response("Replay already uploaded for this session", { status: 409 });
   }
@@ -114,6 +125,7 @@ async function handleUpload(req: Request): Promise<Response> {
   const safeName = String(playerName)
     .slice(0, 20)
     .replace(/[^a-zA-Z0-9 _-]/g, "");
+
   const flooredScore = Math.floor(numericScore);
   const blobKey = `recordings/${Date.now()}-${crypto.randomUUID()}.webm`;
   const recordingUrl = `/.netlify/functions/play-recording?key=${encodeURIComponent(blobKey)}`;
@@ -133,6 +145,7 @@ async function handleUpload(req: Request): Promise<Response> {
   // different key, so the top-scores etag from the gate is still
   // valid for the first attempt. Saves one strong-consistency RTT.
   let read = gateRead;
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const entries: IScoreEntry[] = (read?.data as IScoreEntry[] | undefined) ?? [];
     const etag = read?.etag;
@@ -140,12 +153,14 @@ async function handleUpload(req: Request): Promise<Response> {
     const idx = entries.findIndex((e) => e.sessionId === sessionId);
     if (idx < 0) break;
     if (idx >= QUALIFY_BOARD_SIZE) break;
+
     if (entries[idx]?.recordingUrl) {
       return Response.json({ ok: true, key: blobKey, url: entries[idx]!.recordingUrl });
     }
 
     entries[idx] = { ...entries[idx]!, recordingUrl };
     const { modified } = await store.setJSON("top-scores", entries, etag ? { onlyIfMatch: etag } : { onlyIfNew: true });
+
     if (modified) {
       return Response.json({ ok: true, key: blobKey, url: recordingUrl });
     }

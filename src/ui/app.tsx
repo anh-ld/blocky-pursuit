@@ -21,8 +21,10 @@ export function App() {
   const state = gameState.value;
   const sc = screen.value;
   const showHowToPlay = state === "start" && sc === "howToPlay";
+
   const showGameOver =
     state === "gameover" && sc !== "leaderboard" && sc !== "recordings" && sc !== "feedback" && sc !== "preGame";
+
   const showPaused = state === "paused";
   const darken = state !== "playing";
 

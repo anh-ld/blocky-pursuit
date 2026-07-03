@@ -11,6 +11,7 @@ const _roofGeoCache = new Map<string, THREE.ExtrudeGeometry>();
 function getRoofGeometry(width: number, depth: number, roofH: number): THREE.ExtrudeGeometry {
   const key = `${Math.round(width * 2) / 2}_${Math.round(depth * 2) / 2}_${Math.round(roofH * 2) / 2}`;
   let geo = _roofGeoCache.get(key);
+
   if (!geo) {
     const roofW = width / 2 + 0.3;
     const shape = new THREE.Shape();
@@ -21,6 +22,7 @@ function getRoofGeometry(width: number, depth: number, roofH: number): THREE.Ext
     geo = new THREE.ExtrudeGeometry(shape, { depth: depth + 0.6, bevelEnabled: false });
     _roofGeoCache.set(key, geo);
   }
+
   return geo;
 }
 

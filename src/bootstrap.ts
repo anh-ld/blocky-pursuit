@@ -110,6 +110,9 @@ export function bootstrap(opts: IBootstrapOpts): IBootstrap {
     gravity: new CANNON.Vec3(0, -30, 0),
     allowSleep: false,
   });
+  
+  /* SAP broadphase: ~O(n) vs the O(n²) default, given hundreds of static building bodies */
+  world.broadphase = new CANNON.SAPBroadphase(world);
   const groundShape = new CANNON.Plane();
   const groundBody = new CANNON.Body({ mass: 0 });
   groundBody.addShape(groundShape);
@@ -158,12 +161,14 @@ export function bootstrap(opts: IBootstrapOpts): IBootstrap {
     camera.bottom = -cameraD;
     camera.updateProjectionMatrix();
   }
+
   function resizeRenderer() {
     const w = gameArea.clientWidth;
     const h = gameArea.clientHeight;
     renderer.setSize(w, h);
     applyCameraZoom();
   }
+
   resizeRenderer();
 
   /* Scene operations */
@@ -172,6 +177,7 @@ export function bootstrap(opts: IBootstrapOpts): IBootstrap {
     /* Keep nitro ghost trail in sync with active car color → silhouettes match the driven body paint. */
     setGhostTrailColor(getSkin(skinId).bodyColor);
   }
+
   function setWeather(w: IWeather) {
     applyWeather(scene, ambientLight, directionalLight, w);
     setRainEnabled(rain, w === "rain");

@@ -25,6 +25,7 @@ export function ControlsGuide() {
       <div class="flex items-stretch h-7">
         {WEATHERS.map((w) => {
           const active = currentWeather === w.id;
+
           return (
             <button
               key={w.id}

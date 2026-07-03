@@ -77,16 +77,16 @@ export class CopSystem {
     this.lastSwatSpawn = timeInSeconds - SWAT_RESPAWN_DELAY;
   }
 
-  /** EMP-style AOE — used by PickupSystem when an EMP is collected.
-   *  Per-cop FX flow through the events buffer; the per-blast chatter stays
-   *  inline (single-shot, not per-cop). */
+  /** EMP AOE. Called by PickupSystem on EMP pickup. Per-cop FX via events buffer; per-blast chatter inline (single-shot). */
   empBlast(car: Car, run: RunState, events: FrameEventBuffer): number {
     let kills = 0;
     const mult = run.activeScoreMult;
+
     for (let ci = this.cops.length - 1; ci >= 0; ci--) {
       const c = this.cops[ci];
       /* SWAT shrugs off EMP — must be drowned, rammed (tank), or out-driven. Keeps them threatening even with pickups up. */
       if (c.isSwat) continue;
+
       if (c.body.position.distanceTo(car.body.position) < EMP_KILL_RADIUS) {
         const reward = SCORE_EMP_KILL * mult;
         run.score += reward;
@@ -94,6 +94,7 @@ export class CopSystem {
         run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_EMP_KILL);
         run.drownedThisRun++;
         kills++;
+
         events.push({
           kind: "copKilled",
           position: { x: c.body.position.x, y: c.body.position.y, z: c.body.position.z },
@@ -102,10 +103,12 @@ export class CopSystem {
           cause: "emp",
           score: reward,
         });
+
         c.destroy();
         this.cops.splice(ci, 1);
       }
     }
+
     if (kills > 0) pushChatter("emp");
     return kills;
   }
@@ -118,9 +121,11 @@ export class CopSystem {
     /* Endgame heat shaves spawn interval past max level so survivor runs keep escalating (not plateau at LV10 cadence). */
     const heatTier = getHeat(run.score, run.level);
     const effectiveInterval = Math.max(HEAT_INTERVAL_FLOOR, levelDef.spawnInterval - heatTier * HEAT_INTERVAL_SHAVE);
+
     if (timeInSeconds - this.lastSpawnTime > effectiveInterval) {
       const isBounty =
         levelDef.bountyRate > 0 && !this.cops.some((c) => c.isBounty) && Math.random() < levelDef.bountyRate;
+
       spawnCop({
         scene: this.scene,
         world: this.world,
@@ -131,6 +136,7 @@ export class CopSystem {
         playerVelocity: car.body.velocity,
         isBounty,
       });
+
       this.lastSpawnTime = timeInSeconds;
       pushChatter("cop_spawn");
     }
@@ -151,6 +157,7 @@ export class CopSystem {
         playerVelocity: car.body.velocity,
         isSwat: true,
       });
+
       this.lastSwatSpawn = timeInSeconds;
       /* Telegraph the spawn — popup floats above the player (not the SWAT) so it's always visible regardless of cop position. */
       spawnPopup(car.body.position.x, car.body.position.y + 5, car.body.position.z, "⚠ SWAT", "#ff4444", 1.6, 12);
@@ -205,10 +212,12 @@ export class CopSystem {
         const comboReward = run.comboCount * COMBO_INSTANT_REWARD_PER_COUNT * mult;
         run.score += comboReward;
         run.comboScore += comboReward;
+
         /* First-ever combo: explain the mechanic so new players discover the main score lever (not stumble into it). */
         if (run.comboCount === 1 && shouldShowComboTip()) {
           markComboTipSeen();
           spawnPopup(car.body.position.x, car.body.position.y + 4, car.body.position.z, "COMBO!", "#ff66cc", 2.4, 10);
+
           spawnPopup(
             car.body.position.x,
             car.body.position.y + 2.5,
@@ -219,6 +228,7 @@ export class CopSystem {
             14,
           );
         }
+
         if (run.comboCount % COMBO_MILESTONE === 0) {
           spawnPopup(
             car.body.position.x,
@@ -227,13 +237,16 @@ export class CopSystem {
             `x${run.comboCount}`,
             "#ff66cc",
           );
+
           /* Combo ladder: rising pitch every milestone so the player hears their multiplier climb in addition to seeing it. */
           events.push({
             kind: "comboMilestone",
             tier: run.comboCount / COMBO_MILESTONE,
           });
+
           pushChatter("near_miss");
         }
+
         /* Big-combo juice: time slow + flash + extra shake at the big milestone */
         if (run.comboCount > 0 && run.comboCount % COMBO_BIG_MILESTONE === 0) {
           triggerTimeSlow();
@@ -261,6 +274,7 @@ export class CopSystem {
             run.copScore += reward;
             run.hp = Math.min(MAX_HP, run.hp + baseHeal);
             run.drownedThisRun++;
+
             events.push({
               kind: "copKilled",
               position: { x: cop.body.position.x, y: cop.body.position.y, z: cop.body.position.z },
@@ -269,17 +283,20 @@ export class CopSystem {
               cause: "tank",
               score: reward,
             });
+
             cop.destroy();
             this.cops.splice(i, 1);
             continue;
           } else if (run.shieldActive) {
             run.shieldActive = false;
             spawnConfetti(car.body.position.x, car.body.position.y + 1, car.body.position.z);
+
             events.push({
               kind: "pickupCollected",
               position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
               pickup: "shield",
             });
+
             cop.damageCooldown = COP_DAMAGE_COOLDOWN;
           } else {
             const prevDamageTier = cop.damageTier;
@@ -287,24 +304,29 @@ export class CopSystem {
             const damage = (2 + massRatio * impactSpeed * 0.3) * car.damageMul;
             run.hp -= damage;
             cop.damageCooldown = COP_DAMAGE_COOLDOWN;
+
             events.push({
               kind: "playerHit",
               position: { x: car.body.position.x, y: car.body.position.y, z: car.body.position.z },
               impactSpeed,
               damageMul: car.damageMul,
             });
+
             run.hitPauseTimer = COP_HIT_PAUSE;
             /* Combo reset on a real hit */
             run.comboCount = 0;
             run.comboTimer = 0;
+
             /* Damage direction: angle from player → cop (world XZ). UI renders red arc on matching edge so player learns to evade. */
             damageDirAngle.value = Math.atan2(
               cop.body.position.z - car.body.position.z,
               cop.body.position.x - car.body.position.x,
             );
+
             damageDirSeq.value++;
             pushChatter("damage");
             const nextDamageTier = cop.applyDamage(impactSpeed);
+
             if (nextDamageTier > prevDamageTier) {
               spawnPopup(
                 cop.body.position.x,
@@ -326,6 +348,7 @@ export class CopSystem {
       /* Cops die in water — bonus score + heal */
       const tx = Math.floor(cop.body.position.x / TILE_SIZE);
       const tz = Math.floor(cop.body.position.z / TILE_SIZE);
+
       if (!isRoad(tx, tz) && isWater(tx, tz)) {
         const chain = run.recordDrown();
         let baseScore = cop.isSwat ? SWAT_KILL_SCORE : SCORE_DROWNED_COP;
@@ -339,6 +362,7 @@ export class CopSystem {
         run.copScore += reward;
         run.hp = Math.min(MAX_HP, run.hp + HP_HEAL_DROWNED_COP + (chain - 1) * 5);
         run.drownedThisRun++;
+
         events.push({
           kind: "copDrowned",
           position: { x: cop.body.position.x, y: cop.body.position.y, z: cop.body.position.z },
@@ -346,6 +370,7 @@ export class CopSystem {
           isBounty: cop.isBounty,
           chain,
         });
+
         cop.destroy();
         this.cops.splice(i, 1);
       }

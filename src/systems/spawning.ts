@@ -29,6 +29,7 @@ export function spawnCop(args: ISpawnCopArgs) {
   /* 60% of the time, spawn AHEAD of the player's travel direction — prevents the "infinite straight road" exploit */
   let angle: number;
   const speed = playerVelocity.length();
+
   if (speed > 5 && Math.random() < 0.6) {
     const headingAngle = Math.atan2(playerVelocity.z, playerVelocity.x);
     angle = headingAngle + (Math.random() - 0.5) * (Math.PI / 2);
@@ -44,6 +45,7 @@ export function spawnCop(args: ISpawnCopArgs) {
 
   /* Snap to nearest road (preserves original behavior including in-place tile mutation) */
   let foundRoad = false;
+
   for (let r = 0; r < 5; r++) {
     for (let dx = -r; dx <= r; dx++) {
       for (let dz = -r; dz <= r; dz++) {
@@ -54,8 +56,10 @@ export function spawnCop(args: ISpawnCopArgs) {
           break;
         }
       }
+
       if (foundRoad) break;
     }
+
     if (foundRoad) break;
   }
 
@@ -89,6 +93,7 @@ export function spawnCivilian(args: ISpawnCivilianArgs) {
   let tileZ = Math.floor(z / TILE_SIZE);
 
   let foundRoad = false;
+
   for (let r = 0; r < 5; r++) {
     for (let dx = -r; dx <= r; dx++) {
       for (let dz = -r; dz <= r; dz++) {
@@ -99,8 +104,10 @@ export function spawnCivilian(args: ISpawnCivilianArgs) {
           break;
         }
       }
+
       if (foundRoad) break;
     }
+
     if (foundRoad) break;
   }
 

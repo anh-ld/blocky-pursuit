@@ -33,10 +33,12 @@ function makeSaturationCurve(amount: number): Float32Array<ArrayBuffer> {
   const buffer = new ArrayBuffer(samples * 4);
   const curve = new Float32Array(buffer);
   const norm = Math.tanh(amount);
+
   for (let i = 0; i < samples; i++) {
     const x = (i * 2) / samples - 1;
     curve[i] = Math.tanh(amount * x) / norm;
   }
+
   return curve;
 }
 
@@ -114,6 +116,7 @@ function ensureFx(): IRadioFx | null {
 async function loadManifest(): Promise<IManifest | null> {
   if (_manifest) return _manifest;
   if (_manifestPromise) return _manifestPromise;
+
   _manifestPromise = (async () => {
     try {
       const res = await fetch(MANIFEST_URL);
@@ -125,6 +128,7 @@ async function loadManifest(): Promise<IManifest | null> {
       return null;
     }
   })();
+
   return _manifestPromise;
 }
 
@@ -153,15 +157,12 @@ async function loadBuffer(event: string, idx: number): Promise<AudioBuffer | nul
       return null;
     }
   })();
+
   _inFlight.set(key, promise);
   return promise;
 }
 
-/**
- * Background-preload every voice file in batches. Called once after the
- * first run begins so the player gets all subsequent lines instantly. The
- * batch size keeps us from opening 95 parallel HTTP requests at once.
- */
+/** Batch-preload all voice files. Called once after first run. Batches cap parallel HTTP requests. */
 let _preloadStarted = false;
 export async function preloadRadioVoices(): Promise<void> {
   if (_preloadStarted) return;
@@ -170,24 +171,20 @@ export async function preloadRadioVoices(): Promise<void> {
   if (!manifest) return;
 
   const tasks: Array<{ event: string; idx: number }> = [];
+
   for (const [event, entry] of Object.entries(manifest)) {
     for (let i = 0; i < entry.count; i++) tasks.push({ event, idx: i });
   }
+
   const BATCH = 6;
+
   for (let i = 0; i < tasks.length; i += BATCH) {
     const slice = tasks.slice(i, i + BATCH);
     await Promise.all(slice.map((t) => loadBuffer(t.event, t.idx)));
   }
 }
 
-/**
- * Pick a random voice line for the given event and play it through the
- * radio FX chain. Half-duplex — cancels any line currently playing so the
- * channel only has one voice on it at a time. Mute-aware.
- *
- * Returns true if playback started, false if the event is unknown, the
- * audio context isn't ready, or the player is muted.
- */
+/** Random voice line for event → radio FX chain. Half-duplex (cancels current). Mute-aware. True if started; false if unknown event, no audio ctx, or muted. */
 export async function playRadioVoice(event: string): Promise<boolean> {
   if (isMuted()) return false;
   const manifest = await loadManifest();
@@ -206,17 +203,20 @@ export async function playRadioVoice(event: string): Promise<boolean> {
   /* Cancel any previously playing line. */
   if (_activeSource && _activeGain) {
     const t = ctx.currentTime;
+
     try {
       _activeGain.gain.cancelScheduledValues(t);
       _activeGain.gain.setValueAtTime(_activeGain.gain.value, t);
       _activeGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
       const oldSrc = _activeSource;
+
       setTimeout(() => {
         try {
           oldSrc.stop();
         } catch {
           /* already stopped */
         }
+
         try {
           oldSrc.disconnect();
         } catch {
@@ -226,6 +226,7 @@ export async function playRadioVoice(event: string): Promise<boolean> {
     } catch {
       /* noop */
     }
+
     _activeSource = null;
     _activeGain = null;
   }
@@ -237,22 +238,26 @@ export async function playRadioVoice(event: string): Promise<boolean> {
   src.buffer = buf;
   src.connect(env);
   env.connect(fx.input);
+
   src.onended = () => {
     if (_activeSource === src) {
       _activeSource = null;
       _activeGain = null;
     }
+
     try {
       src.disconnect();
     } catch {
       /* noop */
     }
+
     try {
       env.disconnect();
     } catch {
       /* noop */
     }
   };
+
   src.start();
   _activeSource = src;
   _activeGain = env;
@@ -262,16 +267,19 @@ export async function playRadioVoice(event: string): Promise<boolean> {
 /** Stop the currently playing line — used on game-over and pause. */
 export function stopRadioVoice(): void {
   if (!_activeSource) return;
+
   try {
     _activeSource.stop();
   } catch {
     /* noop */
   }
+
   try {
     _activeSource.disconnect();
   } catch {
     /* noop */
   }
+
   _activeSource = null;
   _activeGain = null;
 }

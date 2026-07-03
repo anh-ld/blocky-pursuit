@@ -1,11 +1,12 @@
-import type { JSX } from "preact";
+import type { JSX, SVGAttributes } from "preact";
 
 /* Hand-drawn chunky SVG icons. Blocky/voxel aesthetic, no library defaults, no Lucide thin strokes. */
 
-type IconProps = JSX.SVGAttributes<SVGSVGElement> & { size?: number };
+type IconProps = SVGAttributes<SVGSVGElement> & { size?: number };
 
 function svg(props: IconProps, children: JSX.Element): JSX.Element {
   const { size = 16, ...rest } = props;
+
   return (
     <svg
       width={size}
@@ -68,12 +69,6 @@ export const IconWater = (p: IconProps) =>
   );
 
 export const IconBolt = (p: IconProps) => svg(p, <path d="M9 1L3 9h4l-1 6 6-8H8z" fill="currentColor" />);
-
-export const IconHeart = (p: IconProps) =>
-  svg(
-    { ...p, fill: p.fill ?? "currentColor" },
-    <path d="M8 14L2.5 8.5C1 7 1.5 4 4 3.5c1.5-.3 3 .5 4 2 1-1.5 2.5-2.3 4-2 2.5.5 3 3.5 1.5 5z" />,
-  );
 
 export const IconShield = (p: IconProps) =>
   svg({ ...p, fill: "currentColor" }, <path d="M8 1.5L2.5 4v5c0 3 2.5 5 5.5 5.5 3-.5 5.5-2.5 5.5-5.5V4z" />);

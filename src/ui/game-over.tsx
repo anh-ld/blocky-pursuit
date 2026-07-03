@@ -38,18 +38,22 @@ function formatTime(seconds: number) {
 
 function useCountUp(target: number, duration: number): number {
   const [value, setValue] = useState(0);
+
   useEffect(() => {
     let raf = 0;
     const start = performance.now();
+
     const tick = (now: number) => {
       const k = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - k, 3);
       setValue(target * eased);
       if (k < 1) raf = requestAnimationFrame(tick);
     };
+
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [target, duration]);
+
   return value;
 }
 
@@ -74,6 +78,7 @@ function buildShareData(): IShareCardData {
 async function shareRun() {
   const text = `I scored ${Math.floor(score.value)} in Blocky Pursuit — survived ${formatTime(survivalTime.value)} with a x${runBiggestCombo.value} combo as ${playerName.value}. Can you beat me?`;
   const url = window.location.href;
+
   await attemptAsync(async () => {
     if (navigator.share) {
       await navigator.share({ title: "Blocky Pursuit", text, url });
@@ -99,8 +104,10 @@ export function GameOver() {
   const [cardBusy, setCardBusy] = useState(false);
   const [cardStatus, setCardStatus] = useState<"" | "copied" | "saved" | "error">("");
   const [previewUrl, setPreviewUrl] = useState<string>("");
+
   useEffect(() => {
     let cancelled = false;
+
     buildShareCardDataUrl(buildShareData())
       .then((url) => {
         if (!cancelled) setPreviewUrl(url);
@@ -108,22 +115,27 @@ export function GameOver() {
       .catch((err) => {
         console.warn("[game-over] preview build failed", err);
       });
+
     return () => {
       cancelled = true;
     };
   }, []);
+
   const handleRetry = () => {
     haptics.pickup();
     actions.startGame();
   };
+
   const handleBack = () => {
     gameState.value = "start";
     screen.value = "howToPlay";
   };
+
   const flashStatus = (s: typeof cardStatus) => {
     setCardStatus(s);
     setTimeout(() => setCardStatus(""), 1600);
   };
+
   const handleDownloadCard = async () => {
     if (cardBusy) return;
     setCardBusy(true);
@@ -131,11 +143,13 @@ export function GameOver() {
     setCardBusy(false);
     flashStatus(err ? "error" : "saved");
   };
+
   const handleCopyCard = async () => {
     if (cardBusy) return;
     setCardBusy(true);
     const [err, ok] = await attemptAsync(() => copyShareCardToClipboard(buildShareData()));
     setCardBusy(false);
+
     if (err || !ok) {
       await attemptAsync(() => downloadShareCard(buildShareData()));
       flashStatus("saved");
@@ -253,6 +267,7 @@ function Stat({ label, value, tint }: { label: string; value: string; tint?: str
 
 function Bar({ label, value, total, tint }: { label: string; value: number; total: number; tint: string }) {
   const pct = Math.round((value / total) * 100);
+
   return (
     <div class="flex items-center gap-2">
       <span class="font-mono-ui text-[9px] text-[var(--text-dim)] uppercase tracking-wider w-12 shrink-0">{label}</span>

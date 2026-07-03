@@ -8,7 +8,7 @@ import {
   shieldUp,
   combo,
   comboTimerRatio,
-  comboMultiplier,
+  comboInDanger,
   scoreMultRemaining,
   timeWarpRemaining,
   magnetRemaining,
@@ -50,7 +50,6 @@ export function Hud() {
   const shield = shieldUp.value;
   const c = combo.value;
   const cRatio = comboTimerRatio.value;
-  const cMult = comboMultiplier.value;
   const scoreMult = scoreMultRemaining.value;
   const timeWarp = timeWarpRemaining.value;
   const magnet = magnetRemaining.value;
@@ -59,6 +58,7 @@ export function Hud() {
   const h = heat.value;
   /* Tier changes at milestones — `key` on combo number remounts → pop animation retriggers. */
   const comboTier = Math.floor(c / COMBO_MILESTONE);
+
   return (
     <div class="flex items-center gap-1.5 min-w-0">
       {/* HP — single thin bar, color carries health state */}

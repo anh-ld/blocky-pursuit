@@ -48,6 +48,7 @@ export class CivilianSystem {
         maxCivilians: MAX_CIVILIANS,
         playerPosition: car.mesh.position,
       });
+
       this.lastSpawnTime = timeInSeconds;
     }
 
@@ -66,12 +67,14 @@ export class CivilianSystem {
 
       /* Flee: when player roars past at speed, push civilians away so city reacts. Cheap dist check + single applyForce — no AI. */
       const playerSpeed = car.body.velocity.length();
+
       if (distToPlayer < FLEE_RADIUS && playerSpeed > FLEE_MIN_PLAYER_SPEED && civ.stunTimer <= 0) {
         const dx = civ.body.position.x - car.body.position.x;
         const dz = civ.body.position.z - car.body.position.z;
         const inv = 1 / Math.max(0.001, distToPlayer);
         _fleeForce.set(dx * inv * FLEE_FORCE, 0, dz * inv * FLEE_FORCE);
         civ.body.applyForce(_fleeForce, civ.body.position);
+
         if (!civ.hasPanicked) {
           civ.hasPanicked = true;
           spawnPopup(civ.body.position.x, civ.body.position.y + 2, civ.body.position.z, "!!", "#ffeb3b");
@@ -81,6 +84,7 @@ export class CivilianSystem {
       /* Stun on collision — require actual impact velocity (not just proximity) so brushing past at low speed doesn't stun. */
       if (distToPlayer < 5 && civ.stunTimer <= 0) {
         car.body.velocity.vsub(civ.body.velocity, _civCollideRelVel);
+
         if (_civCollideRelVel.length() > STUN_IMPACT_THRESHOLD) {
           civ.stun();
           run.score += 5;
@@ -91,6 +95,7 @@ export class CivilianSystem {
       /* Civilians die in water — silent removal */
       const tx = Math.floor(civ.body.position.x / TILE_SIZE);
       const tz = Math.floor(civ.body.position.z / TILE_SIZE);
+
       if (!isRoad(tx, tz) && isWater(tx, tz)) {
         civ.destroy();
         this.civilians.splice(i, 1);

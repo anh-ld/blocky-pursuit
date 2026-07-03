@@ -69,6 +69,7 @@ export class Car {
     /* Physics (Cannon-es) */
     const unit = CAR_UNIT;
     const shape = new CANNON.Box(new CANNON.Vec3(unit * 2, unit * 1.5, unit * 4));
+
     this.body = new CANNON.Body({
       mass: 100,
       position: new CANNON.Vec3(0, 1, 0),
@@ -78,6 +79,7 @@ export class Car {
       sleepTimeLimit: 1,
       allowSleep: false,
     });
+
     /* Add shape with offset so center of mass is lower */
     this.body.addShape(shape, new CANNON.Vec3(0, unit, 0));
     /* Disable rotation on X and Z axes — only Y rotation, prevents flipping */
@@ -139,9 +141,11 @@ export class Car {
         "touchstart",
         (e: TouchEvent) => {
           e.preventDefault();
+
           for (let i = 0; i < e.changedTouches.length; i++) {
             activeTouches[key].add(e.changedTouches[i].identifier);
           }
+
           this.keys[key] = true;
         },
         { passive: false },
@@ -149,9 +153,11 @@ export class Car {
 
       const release = (e: TouchEvent) => {
         e.preventDefault();
+
         for (let i = 0; i < e.changedTouches.length; i++) {
           activeTouches[key].delete(e.changedTouches[i].identifier);
         }
+
         if (activeTouches[key].size === 0) {
           this.keys[key] = false;
         }
@@ -173,6 +179,7 @@ export class Car {
         this.keys.right = false;
       }
     };
+
     window.addEventListener("touchend", this._onWindowTouchEnd);
   }
 
@@ -180,6 +187,7 @@ export class Car {
   dispose() {
     window.removeEventListener("keydown", this._onKeyDown);
     window.removeEventListener("keyup", this._onKeyUp);
+
     if (this._onWindowTouchEnd) {
       window.removeEventListener("touchend", this._onWindowTouchEnd);
       this._onWindowTouchEnd = null;
@@ -188,9 +196,11 @@ export class Car {
 
   handleKeyDown(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
+
     if (["arrowleft", "arrowright", "a", "d", " "].includes(key)) {
       e.preventDefault();
     }
+
     if (key === "a" || key === "arrowleft") this.keys.left = true;
     if (key === "d" || key === "arrowright") this.keys.right = true;
   }
@@ -206,9 +216,11 @@ export class Car {
     const skin = getSkin(skinId);
     /* Rebuild visuals */
     this.scene.remove(this.mesh);
+
     this.mesh.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.geometry) mesh.geometry.dispose();
+
       if (mesh.material) {
         if (Array.isArray(mesh.material)) {
           for (const m of mesh.material) m.dispose();
@@ -217,6 +229,7 @@ export class Car {
         }
       }
     });
+
     const handles = buildCarMesh(skinId);
     this.mesh = handles.group;
     this.bodyMat = handles.bodyMat;
@@ -225,12 +238,14 @@ export class Car {
     /* Sync fresh group to physics body NOW — else mesh sits at (0,0,0) until next update(). */
     /* On gameover update() never runs, so camera (which follows mesh) snaps to origin → empty map. */
     this.mesh.position.set(this.body.position.x, this.body.position.y, this.body.position.z);
+
     this.mesh.quaternion.set(
       this.body.quaternion.x,
       this.body.quaternion.y,
       this.body.quaternion.z,
       this.body.quaternion.w,
     );
+
     this.scene.add(this.mesh);
     /* Per-skin specs */
     this.applySpecs(skin);
@@ -287,6 +302,7 @@ export class Car {
     /* Tick down bounce-back timer; start recovery when it expires */
     if (this.bounceBackTimer > 0) {
       this.bounceBackTimer -= dt;
+
       if (this.bounceBackTimer <= 0) {
         this.recoveryTimer = this.recoveryDuration;
       }
@@ -307,6 +323,7 @@ export class Car {
 
     /* Sync visuals */
     this.mesh.position.set(this.body.position.x, this.body.position.y, this.body.position.z);
+
     this.mesh.quaternion.set(
       this.body.quaternion.x,
       this.body.quaternion.y,
@@ -319,6 +336,7 @@ export class Car {
   sampleDisplay(): ICarDisplaySample {
     const q = this.body.quaternion;
     this.body.pointToWorldFrame(this._rearLocal, this._rearWorld);
+
     return {
       position: { x: this.body.position.x, y: this.body.position.y, z: this.body.position.z },
       heading: Math.atan2(2 * (q.w * q.y), 1 - 2 * q.y * q.y),

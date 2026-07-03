@@ -52,7 +52,7 @@ export function massForWeight(weight: number): number {
 }
 
 /* "Perceived" acceleration = force/mass. Bar uses this so a heavy+strong car still reads as moderate. */
-export function perceivedAccel(specs: ICarSpecs): number {
+function perceivedAccel(specs: ICarSpecs): number {
   return specs.acceleration / massForWeight(specs.weight);
 }
 
@@ -469,6 +469,7 @@ export function loadProgress(): IProgress {
   /* Migrate any obsolete skin id (e.g. old "redstar" cars) back to default. */
   const savedId = parsed.selectedSkin || DEFAULT_SKIN_ID;
   const skinExists = CAR_SKINS.some((s) => s.id === savedId);
+
   return {
     best: parsed.best || 0,
     totalRuns: parsed.totalRuns || 0,

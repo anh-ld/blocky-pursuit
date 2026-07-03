@@ -72,13 +72,16 @@ export class WorldFx {
 
   copKilled(ev: Extract<FrameEvent, { kind: "copKilled" }>) {
     const { position, isSwat, cause, score } = ev;
+
     if (cause === "tank") {
       spawnSparks(position.x, position.y + 1, position.z);
       spawnConfetti(position.x, position.y + 2, position.z);
+
       if (isSwat) {
         spawnConfetti(position.x, position.y + 3, position.z);
         triggerScreenFlash(0.45);
       }
+
       spawnPopup(position.x, position.y + 3, position.z, `+${Math.round(score)}`, "#ff6666");
       playCrash();
       haptics.hit();
@@ -100,6 +103,7 @@ export class WorldFx {
     playSplash();
     spawnSplash(position.x, position.y, position.z);
     spawnConfetti(position.x, position.y + 2, position.z);
+
     if (chain > 1) {
       const label = chain === 2 ? "DOUBLE DROWN!" : chain === 3 ? "TRIPLE DROWN!" : "MEGA DROWN!";
       const color = chain === 2 ? "#66ccff" : chain === 3 ? "#3399ff" : "#0066ff";
@@ -110,11 +114,13 @@ export class WorldFx {
       spawnPopup(popX, popY, popZ, label, color, 1.8, 12);
       playComboTier(Math.min(5, chain));
     }
+
     if (isSwat) {
       spawnConfetti(position.x, position.y + 3, position.z);
       triggerScreenFlash(0.45);
       triggerShake(0.5);
     }
+
     spawnPopup(
       position.x,
       position.y + 3,
@@ -122,9 +128,11 @@ export class WorldFx {
       `+${Math.round(HP_HEAL_DROWNED_COP * (isSwat ? 3 : 1) + (chain - 1) * 5)}`,
       isBounty ? "#ffd54a" : isSwat ? "#ff4444" : "#ffcc22",
     );
+
     if (isBounty) {
       spawnPopup(position.x, position.y + 4.4, position.z, "WANTED", "#ffd54a", 1.2, 11);
     }
+
     pushChatter(isSwat ? "swat_drown" : "cop_drown");
   }
 
@@ -141,16 +149,19 @@ export class WorldFx {
     const { position, reason, isNewBest } = ev;
     triggerScreenFlash(0.95);
     triggerShake(1.1);
+
     for (let i = 0; i < 3; i++) {
       const ox = (Math.random() - 0.5) * 4;
       const oz = (Math.random() - 0.5) * 4;
       spawnConfetti(position.x + ox, position.y + 1.5, position.z + oz);
       spawnSparks(position.x + ox, position.y + 1, position.z + oz);
     }
+
     spawnSparks(position.x, position.y + 2, position.z);
     if (reason === "DROWNED") spawnSplash(position.x, position.y, position.z);
     playGameOver();
     haptics.death();
+
     if (isNewBest) {
       for (let i = 0; i < 5; i++) {
         const ox = (Math.random() - 0.5) * 6;
@@ -158,6 +169,7 @@ export class WorldFx {
         spawnConfetti(position.x + ox, position.y + 1.5, position.z + oz);
       }
     }
+
     if (reason === "DROWNED") pushChatter("drowned_self");
     else if (reason === "BUSTED") pushChatter("busted");
     else pushChatter("wrecked");
@@ -218,6 +230,7 @@ export class WorldFx {
     } else {
       stopSiren();
     }
+
     setBgmDuck(ev.intensity);
   }
 
@@ -227,12 +240,14 @@ export class WorldFx {
     if (!c) return;
     const isDrifting = c.lateralSpeed > 4;
     const isBoosting = nitroActive && c.speed > c.baseMaxSpeed * 0.6;
+
     if (isDrifting || isBoosting) {
       const offX = Math.cos(c.heading) * 1.25;
       const offZ = -Math.sin(c.heading) * 1.25;
       spawnSkid(c.rearCenter.x + offX, c.rearCenter.z + offZ, c.heading);
       spawnSkid(c.rearCenter.x - offX, c.rearCenter.z - offZ, c.heading);
     }
+
     if (nitroActive && c.speed > c.maxSpeed * 0.8) {
       const fx = -Math.cos(c.heading);
       const fz = Math.sin(c.heading);

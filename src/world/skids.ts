@@ -13,6 +13,7 @@ const skids: ISkid[] = [];
 const MAX_SKIDS = 200;
 
 const SKID_GEO = new THREE.PlaneGeometry(0.45, 0.9);
+
 const SKID_MAT = new THREE.MeshBasicMaterial({
   color: 0x111111,
   transparent: true,
@@ -26,10 +27,12 @@ export function initSkids(scene: THREE.Scene) {
 
 export function spawnSkid(x: number, z: number, headingY: number) {
   if (!skidScene) return;
+
   if (skids.length >= MAX_SKIDS) {
     const oldest = skids.shift()!;
     skidScene.remove(oldest.mesh);
   }
+
   /* Material is shared — fade handled by life timer. Leave material at full opacity; remove on expiry. */
   const mesh = new THREE.Mesh(SKID_GEO, SKID_MAT);
   mesh.position.set(x, 0.04, z);
@@ -41,9 +44,11 @@ export function spawnSkid(x: number, z: number, headingY: number) {
 
 export function updateSkids(dt: number) {
   if (!skidScene) return;
+
   for (let i = skids.length - 1; i >= 0; i--) {
     const s = skids[i];
     s.age += dt;
+
     if (s.age >= s.life) {
       skidScene.remove(s.mesh);
       skids.splice(i, 1);

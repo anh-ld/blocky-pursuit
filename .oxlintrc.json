@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["./scripts/oxlint-plugin/index.js"],
+  "rules": {
+    "blocky-pursuit/padding-line-between-statements": [
+      "error",
+      {
+        "blankLine": "always",
+        "prev": "*",
+        "next": ["multiline-block-like", "multiline-const", "multiline-let", "multiline-var", "multiline-expression"]
+      },
+      {
+        "blankLine": "always",
+        "prev": ["multiline-block-like", "multiline-const", "multiline-let", "multiline-var", "multiline-expression"],
+        "next": "*"
+      }
+    ]
+  }
+}

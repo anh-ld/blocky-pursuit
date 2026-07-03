@@ -19,9 +19,11 @@ export function HowToPlay() {
     fetchLeaderboard();
     screen.value = "leaderboard";
   };
+
   const openFeedback = () => {
     screen.value = "feedback";
   };
+
   const openGarage = () => {
     screen.value = "garage";
   };
@@ -32,6 +34,7 @@ export function HowToPlay() {
     copsDrowned: copsDrowned.value,
     selectedSkin: "",
   };
+
   const unlockedCount = CAR_SKINS.filter((s) => isUnlocked(s, progress)).length;
   const showCareer = totalRuns.value > 0;
 

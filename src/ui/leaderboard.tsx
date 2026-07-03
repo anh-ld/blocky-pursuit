@@ -9,9 +9,11 @@ export function Leaderboard() {
   const back = () => {
     screen.value = gameState.value === "start" ? "howToPlay" : "none";
   };
+
   const playRecording = (url: string) => {
     replayUrl.value = url;
   };
+
   const openRecordings = () => {
     fetchLeaderboard();
     screen.value = "recordings";
@@ -42,6 +44,7 @@ export function Leaderboard() {
               {entries.slice(0, 10).map((e, i) => {
                 const isMe = e.name === me;
                 const tint = RANK_TINT[i] ?? "var(--text-mute)";
+
                 return (
                   <div
                     key={`${e.name}-${i}`}

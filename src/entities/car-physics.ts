@@ -15,6 +15,7 @@ export function installCarPhysics(car: Car) {
   /* Listen for collisions with static objects (buildings, walls) */
   body.addEventListener("collide", (event: { body: CANNON.Body }) => {
     const other = event.body;
+
     if (other.mass === 0 && other.shapes[0] instanceof CANNON.Box) {
       car.bounceBackTimer = car.bounceBackDuration;
     }
@@ -47,6 +48,7 @@ export function installCarPhysics(car: Car) {
     } else {
       /* Forward: peak torque at low speed, tapering toward top speed */
       let forceScale: number;
+
       if (forwardSpeed < 0) {
         forceScale = 0.8;
       } else {
@@ -79,12 +81,14 @@ export function installCarPhysics(car: Car) {
 
     /* Cap max speed */
     const speed = body.velocity.length();
+
     if (speed > car.maxSpeed) {
       body.velocity.scale(car.maxSpeed / speed, body.velocity);
     }
 
     /* Steering — direct heading rotation. Authority drops with speed; high stabilityFactor retains more at top. */
     body.angularVelocity.y = 0;
+
     if (speed > 0.5) {
       const dir = _localVel.z < 0 ? 1 : -1;
       const speedRatio = Math.min(speed / car.maxSpeed, 1);

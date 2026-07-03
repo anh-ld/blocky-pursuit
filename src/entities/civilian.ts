@@ -37,7 +37,8 @@ const CIV_SIDEWIN_GEO = new THREE.BoxGeometry(CIV_UNIT * 0.15, CIV_UNIT * 1, CIV
 const CIV_REARWIN_GEO = new THREE.BoxGeometry(CIV_UNIT * 2.4, CIV_UNIT * 1, CIV_UNIT * 0.15);
 const CIV_HEADLIGHT_GEO = new THREE.BoxGeometry(CIV_UNIT * 0.6, CIV_UNIT * 0.4, CIV_UNIT * 0.3);
 const CIV_TAILLIGHT_GEO = new THREE.BoxGeometry(CIV_UNIT * 0.6, CIV_UNIT * 0.4, CIV_UNIT * 0.3);
-const CIV_WHEEL_GEO = new THREE.BoxGeometry(CIV_UNIT, CIV_UNIT, CIV_UNIT);
+const CIV_WHEEL_GEO = new THREE.CylinderGeometry(CIV_UNIT * 0.76, CIV_UNIT * 0.76, CIV_UNIT * 0.8, 14);
+CIV_WHEEL_GEO.rotateZ(Math.PI / 2);
 
 /* Per-step scratch Vec3s reused across preStep. Physics runs single-threaded, values don't outlive one call. */
 const _civForward = new CANNON.Vec3(0, 0, -1);

@@ -1,8 +1,13 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { getSkin, type ICarSkin } from "./car-skins";
 
 /* Voxel unit shared by both player and cop meshes. */
 export const CAR_UNIT = 0.5;
+
+/* Shared wheel geometry: cylinder with its axis along X so the round face shows on the car's left/right side. Radius 0.38 keeps the wheel from filling the wheel well. */
+const WHEEL_GEO = new THREE.CylinderGeometry(0.38, 0.38, 0.4, 14);
+WHEEL_GEO.rotateZ(Math.PI / 2);
 
 export type ICarMeshHandles = {
   group: THREE.Group;
@@ -19,15 +24,15 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
   const s = skin.shape;
   const matProps = { roughness: 0.8, flatShading: true };
 
-  /* Chassis */
-  const bodyGeo = new THREE.BoxGeometry(unit * s.bodyW, unit * s.bodyH, unit * s.bodyL);
+  /* Chassis — rounded box reads as a smoothed-out car body, kills the lego silhouette. */
+  const bodyGeo = new RoundedBoxGeometry(unit * s.bodyW, unit * s.bodyH, unit * s.bodyL, 2, unit * 0.18);
   const bodyMat = new THREE.MeshStandardMaterial({ color: skin.bodyColor, ...matProps });
   const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
   bodyMesh.position.y = unit * (0.5 + s.bodyH / 2);
   group.add(bodyMesh);
 
-  /* Cabin */
-  const cabinGeo = new THREE.BoxGeometry(unit * s.cabinW, unit * s.cabinH, unit * s.cabinL);
+  /* Cabin — rounded box; sits on the smoothed chassis, reads as one continuous body. */
+  const cabinGeo = new RoundedBoxGeometry(unit * s.cabinW, unit * s.cabinH, unit * s.cabinL, 2, unit * 0.15);
   const cabinMat = new THREE.MeshStandardMaterial({
     color: skin.cabinColor,
     roughness: 0.3,
@@ -155,8 +160,7 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
   tlRight.position.set(hlX, hlY, tlZ);
   group.add(tlRight);
 
-  /* Wheels (4 corners, scaled to body size) */
-  const wheelGeo = new THREE.BoxGeometry(unit, unit, unit);
+  /* Wheels (4 corners, scaled to body size) — shared cylinder, scaled per car. */
   const wheelMat = new THREE.MeshStandardMaterial({ color: skin.wheelColor, ...matProps });
   const wx = unit * (s.bodyW / 2 + 0.05);
   const wz = unit * (s.bodyL / 2 - 1.2);
@@ -167,7 +171,7 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     [wx, unit * 0.5, -wz],
   ];
   for (const pos of wheelPositions) {
-    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    const wheel = new THREE.Mesh(WHEEL_GEO, wheelMat);
     wheel.position.set(pos[0], pos[1], pos[2]);
     group.add(wheel);
   }

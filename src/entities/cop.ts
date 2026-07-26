@@ -544,7 +544,6 @@ export class Cop {
 
       this.body.vectorToWorldFrame(_localVel, this.body.velocity);
 
-      /* Cap max speed */
       const speed = this.body.velocity.length();
 
       if (speed > activeMaxSpeed) {

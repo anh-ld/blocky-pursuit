@@ -204,28 +204,16 @@ export async function playRadioVoice(event: string): Promise<boolean> {
   if (_activeSource && _activeGain) {
     const t = ctx.currentTime;
 
-    try {
-      _activeGain.gain.cancelScheduledValues(t);
-      _activeGain.gain.setValueAtTime(_activeGain.gain.value, t);
-      _activeGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
-      const oldSrc = _activeSource;
+    _activeGain.gain.cancelScheduledValues(t);
+    _activeGain.gain.setValueAtTime(_activeGain.gain.value, t);
+    _activeGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+    const oldSrc = _activeSource;
 
-      setTimeout(() => {
-        try {
-          oldSrc.stop();
-        } catch {
-          /* already stopped */
-        }
-
-        try {
-          oldSrc.disconnect();
-        } catch {
-          /* noop */
-        }
-      }, 60);
-    } catch {
-      /* noop */
-    }
+    /* Outlive the 40 ms fade before tearing the node down. */
+    setTimeout(() => {
+      oldSrc.stop();
+      oldSrc.disconnect();
+    }, 60);
 
     _activeSource = null;
     _activeGain = null;
@@ -268,17 +256,8 @@ export async function playRadioVoice(event: string): Promise<boolean> {
 export function stopRadioVoice(): void {
   if (!_activeSource) return;
 
-  try {
-    _activeSource.stop();
-  } catch {
-    /* noop */
-  }
-
-  try {
-    _activeSource.disconnect();
-  } catch {
-    /* noop */
-  }
+  _activeSource.stop();
+  _activeSource.disconnect();
 
   _activeSource = null;
   _activeGain = null;

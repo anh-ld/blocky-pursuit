@@ -93,7 +93,7 @@ test("a turning player is led around the arc, not along the tangent", () => {
   assert.ok(Math.abs(turning.x - straight.x) > 5);
 });
 
-/** Closed-loop chase mirroring cop.ts steering. Returns the closest the cop ever got. */
+/* Closed-loop chase mirroring cop.ts steering. Returns the closest the cop ever got. */
 function simulateChase(opts: { predictAhead: number; interceptPower: number; playerOmega: number }): number {
   const DT = 1 / 60;
   const TURN_SPEED = 3.0;

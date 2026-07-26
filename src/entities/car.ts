@@ -87,7 +87,6 @@ export class Car {
     this.body.wakeUp();
     world.addBody(this.body);
 
-    /* Controls */
     this.keys = { left: false, right: false };
 
     /* Tuning — initialized to satisfy definite-assignment; real values written in applySpecs() below. */
@@ -214,7 +213,6 @@ export class Car {
   /** Apply a new skin. Rebuilds the mesh because each car has its own shape. */
   applySkin(skinId: string) {
     const skin = getSkin(skinId);
-    /* Rebuild visuals */
     this.scene.remove(this.mesh);
 
     this.mesh.traverse((obj) => {
@@ -319,7 +317,6 @@ export class Car {
       this.bodyMat.emissive.copy(this.bodyBaseEmissive);
     }
 
-    /* Sync visuals */
     this.mesh.position.set(this.body.position.x, this.body.position.y, this.body.position.z);
 
     this.mesh.quaternion.set(

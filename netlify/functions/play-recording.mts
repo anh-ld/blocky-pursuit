@@ -1,9 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import type { Context } from "@netlify/functions";
 
-/**
- * Streams a recording back from blob storage for playback.
- */
+/* Streams a recording back from blob storage for playback. */
 export default async function handler(req: Request, _context: Context) {
   const url = new URL(req.url);
   const key = url.searchParams.get("key");
@@ -21,9 +19,7 @@ export default async function handler(req: Request, _context: Context) {
       return new Response("Recording not found", { status: 404 });
     }
 
-    // Newer recordings are MP4/H.264 (HW encoded). Older ones are webm.
-    // The actual container is stored in metadata; default to webm so
-    // legacy uploads keep working.
+    /* Container lives in metadata — default to webm so legacy pre-MP4 uploads keep playing. */
     const stored = result.metadata?.mimeType;
     const mimeType = stored === "video/mp4" || stored === "video/webm" ? stored : "video/webm";
 

@@ -261,7 +261,6 @@ function startGame() {
   discardRecording();
   dyingSessionId = null;
 
-  /* Reset Player */
   car.body.position.set(0, 1, 0);
   car.body.velocity.set(0, 0, 0);
   car.body.angularVelocity.set(0, 0, 0);
@@ -270,7 +269,6 @@ function startGame() {
   car.setNitroMultiplier(1);
   car.setRandomDirection();
 
-  /* Reset all per-run state */
   run.reset(car);
 
   /* Camera teleport + reset wreck-zoom in case the previous run died. */
@@ -320,7 +318,7 @@ function startGame() {
   void preloadRadioVoices();
 }
 
-/* Recording helpers Session ID captured at gameOver time. */
+/* Session ID captured at gameOver time. */
 let dyingSessionId: string | null = null;
 
 /* Recordings kept for any run in top 50 — bigger archive than displayed top 10, upload stays cheap. */

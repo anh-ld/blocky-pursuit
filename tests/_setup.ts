@@ -1,6 +1,5 @@
-/* Headless DOM stub. Several world modules build a CanvasTexture at import time, which is enough to
-   break `import` under bun. This is only here to let those modules load — nothing draws, and no test
-   should assert on anything that goes through it. */
+/* Headless DOM stub — world modules build a CanvasTexture at import time, which breaks `import` under bun. */
+/* Nothing draws; no test should assert on anything that goes through it. */
 
 const noop = () => {};
 
@@ -23,8 +22,7 @@ if (typeof globalThis.document === "undefined") {
   } as unknown as Document;
 }
 
-/* In-memory localStorage — the real one is absent headless, and without it every saved-progress or
-   saved-name read comes back empty, which hides the persistence half of those modules. */
+/* In-memory localStorage — absent headless, and empty reads would hide the persistence half of those modules. */
 if (typeof globalThis.localStorage === "undefined") {
   const store = new Map<string, string>();
   globalThis.localStorage = {
@@ -39,8 +37,7 @@ if (typeof globalThis.localStorage === "undefined") {
   } as Storage;
 }
 
-/* Radio voice lines fetch a manifest on the first chatter line. Nothing asserts on it — this just
-   keeps a failed network call from drowning out real test output. */
+/* Radio chatter fetches a manifest nothing asserts on — keep the failed call out of test output. */
 globalThis.fetch = (() => Promise.reject(new Error("network disabled in tests"))) as typeof fetch;
 
 if (typeof globalThis.window === "undefined") {

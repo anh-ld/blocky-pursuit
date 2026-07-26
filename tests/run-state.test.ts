@@ -8,7 +8,7 @@ import { MAX_HP, SCORE_BASE_TILE, COMBO_MULT_PER_COUNT, COMBO_MULT_MAX } from ".
 
 const MAX_SPEED = 40;
 
-/** Minimal stand-in for the physics car — RunState only reads position, velocity and maxSpeed. */
+/* Minimal stand-in for the physics car — RunState only reads position, velocity and maxSpeed. */
 function fakeCar(x = 0, z = 0, speed = MAX_SPEED) {
   return {
     maxSpeed: MAX_SPEED,

@@ -78,7 +78,6 @@ export function installCarPhysics(car: Car) {
 
     body.vectorToWorldFrame(_localVel, body.velocity);
 
-    /* Cap max speed */
     const speed = body.velocity.length();
 
     if (speed > car.maxSpeed) {

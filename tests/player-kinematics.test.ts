@@ -3,13 +3,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PlayerKinematics } from "../src/entities/player-kinematics.ts";
 
-/** Quaternion for a yaw rotation, matching the y-axis-only form the car body uses. */
+/* Quaternion for a yaw rotation, matching the y-axis-only form the car body uses. */
 const yawQuat = (yaw: number) => ({ w: Math.cos(yaw / 2), x: 0, y: Math.sin(yaw / 2), z: 0 });
 
 /* Comfortably above the 0.2 s sample interval — exactly 0.2 lands on float drift and drops samples. */
 const STEP = 0.25;
 
-/** Feed samples one sample interval apart and read back the estimate. */
+/* Feed samples one sample interval apart and read back the estimate. */
 function drive(yaws: number[]) {
   const k = new PlayerKinematics();
   yaws.forEach((yaw, i) => k.update(i * STEP, yawQuat(yaw)));

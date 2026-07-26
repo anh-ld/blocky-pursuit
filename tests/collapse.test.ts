@@ -8,7 +8,7 @@ const matA = new THREE.MeshStandardMaterial({ color: 0x112233 });
 const matB = new THREE.MeshStandardMaterial({ color: 0x445566 });
 const matC = new THREE.MeshStandardMaterial({ color: 0x778899 });
 
-/** Total triangles and union bounding box across every mesh in a group. */
+/* Total triangles and union bounding box across every mesh in a group. */
 function census(group: THREE.Group) {
   let meshes = 0;
   let tris = 0;
@@ -29,7 +29,7 @@ function census(group: THREE.Group) {
   return { meshes, tris, box };
 }
 
-/** Three boxes on matA, two on matB, one lone sphere. */
+/* Three boxes on matA, two on matB, one lone sphere. */
 function buildGroup() {
   const group = new THREE.Group();
   const geo = new THREE.BoxGeometry(2, 2, 2);

@@ -1,5 +1,4 @@
-/* The cop tier table is the chase difficulty curve. A typo here (a cop slower than the player,
-   a tier that skips a capability) makes the game trivially exploitable and nothing throws. */
+/* Cop tiers are the difficulty curve — a slower-than-player cop or a skipped capability throws nothing. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";

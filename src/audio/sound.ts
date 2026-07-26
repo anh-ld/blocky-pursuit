@@ -49,7 +49,7 @@ export function initAudio() {
   muted = storageGet(StorageKey.Muted) === "1";
   if (muted) masterGain.gain.value = 0;
 
-  /* Kick off engine sample preload (fire-and-forget) */
+  /* Fire-and-forget — the loop starts before the samples land. */
   loadEngineBuffers();
 }
 
@@ -264,7 +264,7 @@ export function stopSiren() {
   sirenNodes = null;
 }
 
-/* One-shot SFX SFX peaks are intentionally loud (close to clip) so they cut through BGM. */
+/* One-shot SFX — peaks sit close to clip so they cut through the BGM. */
 export function playCrash() {
   if (!ctx || !masterGain) return;
   const buf = noiseBuffer(0.35);

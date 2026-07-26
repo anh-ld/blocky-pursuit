@@ -1,5 +1,4 @@
-/* The name the client stores must survive the leaderboard function's own sanitizer untouched —
-   if the two rules drift, submits silently store a different name than the player typed. */
+/* Client and leaderboard sanitizers must agree — drift silently stores a name the player never typed. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { setPlayerName, getPlayerName } from "../src/api.ts";

@@ -10,7 +10,7 @@ import { FrameEventBuffer } from "../src/systems/frame-events.ts";
 import type { Car } from "../src/entities/car.ts";
 import { EMP_KILL_RADIUS, SCORE_EMP_KILL, HP_HEAL_EMP_KILL, MAX_HP, SCORE_MULT_VALUE } from "../src/constants.ts";
 
-/** empBlast only reads the car's body position. */
+/* empBlast only reads the car's body position. */
 const fakeCar = () => ({ body: { position: new CANNON.Vec3(0, 1, 0) } }) as unknown as Car;
 
 function system() {

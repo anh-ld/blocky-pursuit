@@ -2,7 +2,7 @@ import { getStore } from "@netlify/blobs";
 import type { Context } from "@netlify/functions";
 import { attemptAsync } from "es-toolkit";
 
-// Generous ceiling — covers hours of perfect play; blocks obviously bogus submissions.
+/* Generous ceiling — covers hours of perfect play, blocks obviously bogus submissions. */
 const MAX_SCORE = 500_000;
 const MAX_RETRIES = 5;
 
@@ -19,7 +19,7 @@ const SESSION_ID_RE = /^[a-z0-9-]{8,64}$/;
 function normalizeRecordingUrl(input: unknown): string | undefined {
   if (typeof input !== "string") return undefined;
   if (input.length === 0 || input.length > 500) return undefined;
-  // Reject absolute/external URLs; only allow app-local function endpoint.
+  /* Reject absolute/external URLs — app-local replay endpoint only. */
   if (!input.startsWith("/")) return undefined;
 
   const url = new URL(input, "http://local.test");
@@ -71,7 +71,6 @@ export default async function handler(req: Request, _context: Context) {
     newEntry.sessionId = sessionId;
   }
 
-  // Attach recording URL only if it matches expected local replay endpoint.
   const normalizedRecordingUrl = normalizeRecordingUrl(recordingUrl);
 
   if (normalizedRecordingUrl) {
@@ -80,14 +79,13 @@ export default async function handler(req: Request, _context: Context) {
 
   const store = getStore("leaderboard");
 
-  // Compare-and-swap loop: re-read and retry if another invocation wrote first.
+  /* Compare-and-swap loop — re-read and retry if another invocation wrote first. */
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const result = await store.getWithMetadata("top-scores", { type: "json" });
     const entries: IScoreEntry[] = (result?.data as IScoreEntry[] | undefined) ?? [];
     const etag = result?.etag;
 
-    // Idempotent behavior for retries and two-step replay attachment:
-    // if a session already exists, update it instead of creating duplicates.
+    /* Update an existing session rather than duplicating it — retries and two-step replay attachment. */
     const existingIndex = sessionId ? entries.findIndex((e) => e.sessionId === sessionId) : -1;
 
     if (existingIndex >= 0) {
@@ -95,7 +93,7 @@ export default async function handler(req: Request, _context: Context) {
       existing.name = newEntry.name;
       existing.score = newEntry.score;
 
-      // Preserve existing timestamp so ranking order remains stable.
+      /* ts left untouched — rewriting it would reshuffle ranking ties. */
       if (normalizedRecordingUrl) {
         existing.recordingUrl = normalizedRecordingUrl;
       }
@@ -103,15 +101,14 @@ export default async function handler(req: Request, _context: Context) {
       entries.push(newEntry);
     }
 
-    // Keep top 50 (more than displayed, gives buffer)
+    /* Keep top 50 — the UI shows 10, the rest is qualification buffer. */
     entries.sort((a, b) => b.score - a.score);
     entries.splice(50);
 
-    // First-ever write has no etag — use onlyIfNew to avoid clobbering a racing creator.
+    /* First-ever write has no etag — onlyIfNew avoids clobbering a racing creator. */
     const { modified } = await store.setJSON("top-scores", entries, etag ? { onlyIfMatch: etag } : { onlyIfNew: true });
 
     if (modified) return Response.json({ ok: true });
-    // Lost the race — re-read and retry.
   }
 
   return new Response("Conflict, please retry", { status: 409 });

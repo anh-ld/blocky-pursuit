@@ -13,10 +13,14 @@ Endless run, no win condition — score is everything.
 | **Boot**      | Load → How-to-Play overlay → "Start" → Pre-Game (pick car + weather) → Run begins                 |
 | **Run**       | Auto-drive forward, steer, score by driving fast on roads, build combos, grab pickups, evade cops |
 | **End**       | One of: `WRECKED` (HP→0), `DROWNED` (drove into water), `BUSTED` (cornered + stopped)             |
-| **Game Over** | Score submitted, run summary shown, "Retry" returns to Pre-Game                                   |
+| **Game Over** | Score submitted, run summary + share card shown, "Retry" returns to Pre-Game                      |
 
-State machine: `start → playing ⇄ paused → gameover → playing`
-(`src/main.ts:203`)
+State machine: `start → playing ⇄ paused → gameover → playing` (`src/main.ts`)
+
+Side screens reachable from the menu: **Leaderboard**, **Recordings**
+(replays of top runs — see §16a), **Feedback**, **Pre-Game**. Arriving
+via the Vibe Jam portal (`?portal=true`) skips every menu and drops
+straight into a run (see §16b).
 
 **Pause:** `Space` (also pauses on tab hidden). Engine, siren, BGM all stop.
 The pause overlay is a 3-button modal: **Resume**, **Restart Run**, and
@@ -36,18 +40,18 @@ can be abandoned without crashing on purpose.
 
 The car **drives itself**. You only steer. Steering authority drops with
 speed; cars with high `stability` keep more authority at top speed.
-(`src/entities/car-physics.ts:90`)
+(`src/entities/car-physics.ts`)
 
 ---
 
 ## 3. Player Car
 
-- **Starting HP:** `100` (`src/systems/run-state.ts:31`)
+- **Starting HP:** `100` (`src/systems/run-state.ts`)
 - **Auto-drive force curve:** peak at standstill, tapers toward top speed.
 - **Lateral grip ("drift"):** per-skin `gripFactor` 0.72–0.95. Lower = grippier.
 - **Bounce-back on building hit:** ~1.25 s reverse + ~1.0 s recovery during
   which throttle is reduced and steering is loosened so you can re-aim.
-  (`src/entities/car.ts:73`, `src/entities/car-physics.ts:36`)
+  (`src/entities/car.ts`, `src/entities/car-physics.ts`)
 - **Top speed cap** is enforced every physics step.
 
 ### Skins (Garage)
@@ -71,7 +75,7 @@ Stats: `topSpeed` (game units), `acceleration` (raw force), `handling`
 (turn rate), and 0–100 sliders for `grip / stability / braking / weight /
 endurance`. Endurance reduces collision damage (`damageMul = 1 −
 endurance/200`). Weight → cannon body mass `80 + weight·0.6`.
-(`src/entities/car-skins.ts:112`)
+(`src/entities/car-skins.ts`)
 
 ---
 
@@ -79,7 +83,7 @@ endurance/200`). Weight → cannon body mass `80 + weight·0.6`.
 
 - **Tile size:** 10 units. **Chunk:** 60 × 60 (6 × 6 tiles). City is
   generated procedurally around the player and streamed as you move.
-  (`src/world/terrain.ts:1`)
+  (`src/world/terrain.ts`)
 - **Zones** (procedural noise):
   - **Downtown** — dense road grid, tall buildings.
   - **Suburbs** — sparser roads.
@@ -87,7 +91,7 @@ endurance/200`). Weight → cannon body mass `80 + weight·0.6`.
 - **Roads** are the only safe surface. Off-road tiles are walkable but
   give no score and may be water.
 - **Periodic roadblocks** every ~40 tiles break infinite straight roads;
-  intersections are never blocked. (`src/world/terrain.ts:53`)
+  intersections are never blocked. (`src/world/terrain.ts`)
 - **Water tiles** instantly drown anything that enters them.
 
 ---
@@ -106,30 +110,32 @@ points = 1.5 × (1 + speedRatio) × comboMult
 
 where `speedRatio = velocity / maxSpeed` (clamped 0–1) and
 `comboMult = min(1 + 0.1·combo, 3)`.
-(`src/systems/run-state.ts:80`)
+(`src/systems/run-state.ts`)
 
 ### Other score sources
 
-| Event                                                  | Reward                                      |
-| ------------------------------------------------------ | ------------------------------------------- |
-| Drown a cop                                            | **+30 score**, **+10 HP** (base)            |
-| **Drown Chain** (successive drownings < 4 s)           | **Score × Chain**, **+5 extra HP** per link |
-| Drown / tank a **SWAT mini-boss**                      | **+80 score**, **+25 HP**                   |
-| EMP-killed cop                                         | **+30 score**, **+10 HP** (each)            |
-| Stun a civilian (impact > 6)                           | **+5 score**                                |
-| Each near-miss in a combo                              | **+ combo·2** instant bonus                 |
-| **Escape** (no cop within 60 u for 1.5 s)              | **+50 score**, **+5 HP**                    |
-| **Score milestone** (1k / 5k / 10k / 25k / 50k / 100k) | popup + flash + sting                       |
+| Event                                                  | Reward                                          |
+| ------------------------------------------------------ | ----------------------------------------------- |
+| Drown a cop                                            | **+30 score**, **+10 HP** (base)                |
+| Drown a **bounty** cop                                 | **base score × 5** (drown only — see §7)        |
+| **Drown Chain** (successive drownings < 4 s)           | **× chain·0.5** score, **+5 extra HP** per link |
+| Drown / tank a **SWAT mini-boss**                      | **+80 score**, **+25 HP**                       |
+| EMP-killed cop                                         | **+30 score**, **+10 HP** (each)                |
+| Stun a civilian (impact > 6)                           | **+5 score**                                    |
+| Each near-miss in a combo                              | **+ combo·2** instant bonus                     |
+| **Escape** (no cop within 60 u for 1.5 s)              | **+50 score**, **+5 HP**                        |
+| **Score milestone** (1k / 5k / 10k / 25k / 50k / 100k) | popup + flash + sting                           |
 
 ### Drown Chain
 
 Drowning multiple cops in a short window triggers an escalating reward
 multiplier. Each successive drowning within **4 s** of the last adds to
-the chain:
+the chain. The score bonus is `chain × 0.5` (so x2 is HP-only, x3 = 1.5×,
+x4 = 2×, …), and each link adds **+5 HP** on top of the base +10:
 
-- **x2 Drown**: "DOUBLE DROWN!" + blue popup + extra score + 15 HP total.
-- **x3 Drown**: "TRIPLE DROWN!" + azure popup + extra score + 20 HP total.
-- **x4+ Drown**: "MEGA DROWN!" + deep blue popup + massive score + 25+ HP.
+- **x2 Drown**: "DOUBLE DROWN!" + blue popup + 15 HP total (no score bonus yet).
+- **x3 Drown**: "TRIPLE DROWN!" + azure popup + **1.5×** score + 20 HP total.
+- **x4+ Drown**: "MEGA DROWN!" + deep blue popup + **2×+** score + 25+ HP.
   The chain resets if no cop is drowned for 4 seconds. It is the single
   fastest way to heal and score-climb at high heat levels.
 
@@ -146,7 +152,7 @@ the chain:
 - Every 10 combos → **time-slow** + screen flash + extra shake.
 - The **first** combo of a player's career also spawns a tutorial popup
   ("COMBO! Skim past cops — don't touch!"), persisted via `bp:tutorial`.
-  (`src/systems/cop-system.ts:96`, `src/systems/tutorial.ts`)
+  (`src/systems/cop-system.ts`, `src/systems/tutorial.ts`)
 - **Combo lifeline:** at chain ≥ 5, when the decay timer falls below 25 %,
   the HUD combo chip turns red and pulses, and a high-pitched "tick" plays
   every 0.18 s. If a chain of **10 +** is allowed to expire, a soft "lost
@@ -180,25 +186,33 @@ during 2× yields `1.5 × 2 × 2.2 × 2 = 13.2` points per tile.
 
 ## 6. Levels
 
-Levels are score-gated. Reaching one **heals +15 HP** and plays a level-up
-cue. Cop count and spawn cadence rise with level; cop AI tier rises until
-level 6. Starting at level 4, the AI unlocks strategic behaviors:
+Levels are score-gated. Reaching one **heals** (amount ramps with the
+danger curve) and plays a level-up cue. Cop count and spawn cadence rise
+with level; cop AI tier rises until level 6. Starting at level 4, the AI
+unlocks strategic behaviors. **Bounty cops** (§7) start appearing at
+level 2; **SWAT mini-bosses** unlock at level 7.
 
-| Lvl  | Score req. | Max cops | Spawn (s) | AI Unlock                   |
-| ---- | ---------- | -------- | --------- | --------------------------- |
-| 1    | 0          | 3        | 4.0       | Rookie                      |
-| 2    | 100        | 5        | 3.0       | Enforcer                    |
-| 3    | 300        | 6        | 2.5       | Advanced Enforcer           |
-| 4    | 600        | 7        | 2.0       | **Interceptor (Lead Role)** |
-| 5    | 1 000      | 8        | 1.5       | **PIT Maneuver**            |
-| 6    | 1 500      | 9        | 1.3       | **Master (Water Fear)**     |
-| 7-10 | 2.2k-5.5k  | 10-13    | 1.1-0.8   | Elite / SWAT                |
+| Lvl | Score req. | Max cops | Spawn (s) | Heal | AI Unlock                   |
+| --- | ---------- | -------- | --------- | ---- | --------------------------- |
+| 1   | 0          | 3        | 4.0       | +15  | Rookie                      |
+| 2   | 100        | 5        | 3.0       | +15  | Enforcer (bounty cops on)   |
+| 3   | 300        | 6        | 2.5       | +15  | Advanced Enforcer           |
+| 4   | 600        | 7        | 2.0       | +15  | **Interceptor (Lead Role)** |
+| 5   | 1 000      | 8        | 1.5       | +15  | **PIT Maneuver**            |
+| 6   | 1 500      | 9        | 1.3       | +15  | **Master (Water Fear)**     |
+| 7   | 2 200      | 10       | 1.1       | +20  | **SWAT unlocks**            |
+| 8   | 3 000      | 11       | 1.0       | +20  | Elite                       |
+| 9   | 4 000      | 12       | 0.9       | +20  | Elite                       |
+| 10  | 5 500      | 13       | 0.8       | +25  | Peak intensity              |
+
+Cop stats cap at the level-6 config — past LV6 the challenge comes from
+count, cadence, and SWAT, not from faster individual cops.
 
 Past level 10 the run enters **heat mode**: every additional **1 500
 score** above 5 500 = **+1 heat tier**. Each tier shaves cop spawn
 interval by **0.05 s** (floor **0.4 s**) so survivor runs keep escalating
 instead of plateauing at LV10's 0.8 s cadence. The HUD shows a 🔥N chip
-once heat > 0. (`src/systems/leveling.ts:14`)
+once heat > 0. (`src/systems/leveling.ts`)
 
 ---
 
@@ -206,24 +220,26 @@ once heat > 0. (`src/systems/leveling.ts:14`)
 
 6 AI tiers, scaling with level:
 
-| Tier | Lvl | Mass | Speed | Ram | Turn | Predict | Flank? | Special                 |
-| ---- | --- | ---- | ----- | --- | ---- | ------- | ------ | ----------------------- |
-| 1    | 1   | 100  | 44    | 52  | 2.2  | 0.5 s   | no     | -                       |
-| 2    | 2   | 115  | 46    | 55  | 2.5  | 0.8 s   | no     | -                       |
-| 3    | 3   | 130  | 48    | 58  | 2.8  | 1.2 s   | yes    | -                       |
-| 4    | 4   | 150  | 50    | 60  | 3.0  | 1.5 s   | yes    | **Lead (4.0x Predict)** |
-| 5    | 5   | 175  | 52    | 63  | 3.2  | 1.8 s   | yes    | **PIT Impulse**         |
-| 6    | 6   | 210  | 54    | 66  | 3.4  | 2.0 s   | yes    | **Avoid Water**         |
+| Tier | Lvl | Mass | Speed | Ram | Turn | Predict | Flank? | Special                       |
+| ---- | --- | ---- | ----- | --- | ---- | ------- | ------ | ----------------------------- |
+| 1    | 1   | 100  | 44    | 52  | 2.2  | 0.5 s   | no     | -                             |
+| 2    | 2   | 115  | 46    | 55  | 2.5  | 0.8 s   | no     | -                             |
+| 3    | 3   | 130  | 48    | 58  | 2.8  | 1.2 s   | yes    | -                             |
+| 4    | 4   | 150  | 50    | 60  | 3.0  | 1.5 s   | yes    | **Lead (3.5x Predict)**       |
+| 5    | 5   | 175  | 52    | 63  | 3.2  | 1.8 s   | yes    | **PIT + 3.5x Predict**        |
+| 6    | 6   | 210  | 54    | 66  | 3.4  | 2.0 s   | yes    | **4.0x Predict, Avoid Water** |
 
-Cops outclass the base player on top speed — you escape with combos,
-weather, weight, and pickups, not raw straight-line speed.
-(`src/entities/cop.ts:81`)
+A cop's config is `clamp(level, 1, 6)` — level 7+ cops reuse the tier-6
+stats. Cops outclass the base player on top speed — you escape with
+combos, weather, weight, and pickups, not raw straight-line speed.
+(`src/entities/cop.ts`)
 
 ### Behaviors
 
 - **Predict** the player's future position by `predictAhead` seconds.
 - **Lead Role (Lvl 4+)**: One cop in the swarm is designated as the
-  Interceptor. It uses **4.0x higher prediction** to cut off your path.
+  Interceptor. It uses **3.5x higher prediction** (4.0x at level 6) to
+  cut off your path.
 - **PIT Maneuver (Lvl 5+)**: If a cop gets parallel to you, it will apply
   a sideways impulse to spin you out. **4 s cooldown**.
 - **Water Fear (Lvl 6+)**: Cops will brake and steer away if they detect
@@ -245,7 +261,7 @@ damage = (2 + (cop.mass/100) × impactSpeed × 0.3) × car.damageMul
 
 1 s damage cooldown per cop, then it can hit again.
 **Combo resets** on a real hit. Hit pause `0.05 s` plus screen shake.
-(`src/systems/cop-system.ts:123`)
+(`src/systems/cop-system.ts`)
 
 ### Killing cops
 
@@ -266,6 +282,31 @@ to EMP**. A `⚠ SWAT` popup spawns over the player when one appears so the
 threat telegraphs. Killing one (drown or tank-ram) pays **+80 score**,
 **+25 HP**, and triggers an extra confetti burst + screen flash + heavier
 shake. (`src/systems/cop-system.ts`, `src/entities/cop.ts`)
+
+### Bounty cops
+
+From **level 2**, each regular spawn has a **16 %** chance to roll the
+**bounty** variant, capped at **one alive at a time**. A bounty cop wears
+a bobbing **gold marker** on its roof and is otherwise a normal cop of
+its tier. **Drowning** it multiplies the kill score by **5** (30 → 150,
+before combo/2× multipliers). EMP and Tank kills do _not_ get the bounty
+multiplier — the gold marker means "lure this one into water".
+(`BOUNTY_MULTIPLIER`, `src/systems/cop-system.ts`)
+
+### Cop damage model
+
+Cops take damage too. Every impact above speed **8** adds
+`impactSpeed − 8` damage points, crossing two tiers:
+
+| Tier | Points | Speed × | Force × | Turn × | Visual         |
+| ---- | ------ | ------- | ------- | ------ | -------------- |
+| 1    | ≥ 20   | 0.86    | 0.82    | 0.88   | dark hood dent |
+| 2    | ≥ 40   | 0.68    | 0.60    | 0.70   | dent (heavier) |
+
+Damaged cops also bounce back longer after a hit (`+0.2 s` per tier). So
+body-checking a chasing cop into a building or into you at speed
+permanently degrades it for the rest of its life — it never repairs, only
+despawns. (`src/entities/cop.ts`)
 
 ---
 
@@ -296,7 +337,7 @@ collects each kind, a tutorial popup explains it (persisted via
 | Kind             | Shape                         | Color    | Rarity | Weight | Effect                                                                                                      | Duration       |
 | ---------------- | ----------------------------- | -------- | ------ | ------ | ----------------------------------------------------------------------------------------------------------- | -------------- |
 | ⚡ **Nitro**     | Cone                          | Orange   | common | 30     | Top-speed × **1.55** + ghost trail                                                                          | **3 s**        |
-| 🛡 **Shield**    | Icosahedron                   | Cyan     | common | 30     | Absorbs the next cop hit                                                                                    | until consumed |
+| 🛡 **Shield**     | Icosahedron                   | Cyan     | common | 30     | Absorbs the next cop hit                                                                                    | until consumed |
 | ➕ **Repair**    | Greek cross                   | Green    | common | 30     | **+40 HP** instant heal (clamped to 100)                                                                    | instant        |
 | 💰 **2X Score**  | Stacked cubes                 | Gold     | rare   | 10     | All score (tile + combo + cop kills) × **2**                                                                | **8 s**        |
 | 🧲 **Magnet**    | 3/4 torus arc                 | Red      | rare   | 10     | Pickup magnet **range × 3** and **pull × 3**                                                                | **8 s**        |
@@ -349,7 +390,7 @@ particles, AND your driving stats**.
 | --------- | -------- | -------- | ------------------------- | ------------ |
 | ☀ Sunny   | 1.05     | 1.05     | 0.00                      | —            |
 | ☁ Foggy   | 0.95     | 1.00     | 0.00                      | (short fog)  |
-| 🌧 Rainy  | 0.92     | 0.90     | +0.04 (slippery)          | rain streaks |
+| 🌧 Rainy   | 0.92     | 0.90     | +0.04 (slippery)          | rain streaks |
 | 🌅 Sunset | 1.00     | 1.00     | 0.00                      | —            |
 | ❄ Snowy   | **0.80** | **0.75** | **+0.07** (very slippery) | snowflakes   |
 
@@ -382,7 +423,7 @@ modifiers (e.g. _"−20% speed · −25% accel · very slippery"_) via
 | Speed-streak: 5 s sustained at ≥ 90 % top speed | **+5 HP** (then resets)                     |
 | Passive regen: no cop within **30 units**       | **+1 HP / s**                               |
 
-HP is capped at **100**. (`src/main.ts:386`)
+HP is capped at **100**. (`src/main.ts`)
 
 ### Fail conditions
 
@@ -390,7 +431,7 @@ HP is capped at **100**. (`src/main.ts:386`)
 - **DROWNED** — car enters a water tile (instant).
 - **BUSTED** — `≥ 2` cops within 8 units AND speed `< 2` for **3 s**
   continuous. The "busted timer" decays at 2× when you're moving or alone,
-  so brief stalls are forgiven. (`src/main.ts:401`)
+  so brief stalls are forgiven. (`src/main.ts`)
 
 ### Busted warning
 
@@ -465,8 +506,10 @@ In the play area itself:
 - **Low-HP warning** vignette + heartbeat audio — see §11.
 - **Damage direction indicator** red edge flash — see §11.
 
+- **Radio feed** — up to 3 dispatch bubbles — see §15b.
+
 Cops within 40 units trigger a siren whose volume scales with how close
-the nearest one is. (`src/main.ts:426`)
+the nearest one is. (`src/main.ts`)
 
 ---
 
@@ -484,8 +527,15 @@ Shows:
   they earned the total
 - **Retry** → Pre-Game
 - **Share Score** → Web Share API or clipboard fallback
+- **Share card** — a 1200×630 PNG (Twitter/OG ratio) rendered on 2D
+  canvas with the score, best, reason, survival time, drowned count,
+  best combo and the car used. Previewed inline on the panel, with
+  **Download** and **Copy to clipboard** buttons (copy falls back to
+  download when the clipboard image API is unavailable).
+  (`src/systems/share-card.ts`)
 
-Score is submitted to the Netlify leaderboard function on game over.
+Score is submitted to the Netlify leaderboard function on game over, and
+the run's recording is uploaded if the score qualifies (§16a).
 
 ---
 
@@ -505,7 +555,7 @@ shorter than 6 characters get a 4-digit numeric tag appended (`"A"` →
 `"A4821"`) so the leaderboard stays unique. (`src/api.ts: setPlayerName`)
 
 Skin unlocks are derived from the persisted `best`, `totalRuns`, and
-`copsDrowned` counters. (`src/entities/car-skins.ts:357`)
+`copsDrowned` counters. (`src/entities/car-skins.ts`)
 
 Once `totalRuns ≥ 1`, the **How-to-Play** overlay also shows a career
 strip with `Best · Runs · Drowned · Cars X/N` so progression is visible
@@ -541,6 +591,8 @@ between runs, not only on the game-over panel.
   scheduled by `main.ts` at an interval that scales 1.1 s → 0.45 s with
   how close to dying the player is. Sits in the very low end so it
   doesn't fight other sounds.
+- **Radio:** a hiss loop runs for the whole run, with voiced dispatch
+  lines layered on top — see §15b.
 - **Mute:** persisted across sessions (`bp:muted`).
 - **Haptics** (mobile): semantic helpers via the Vibration API — pickup,
   hit, level-up, combo milestone, death. Auto-disabled when muted or when
@@ -583,6 +635,35 @@ Polish layers on top of the gameplay loop:
 
 ---
 
+## 15b. Cop Radio Chatter
+
+A procedural police-radio feed narrates the run. Gameplay events push a
+line from a per-event pool; the line renders as a text bubble in the HUD
+and is spoken through pre-generated OpenAI TTS run through a Web Audio
+"radio FX" chain (band-pass + static). A radio hiss loop plays underneath
+for the whole run.
+
+| Event                                 | Voice    | Fired by                        |
+| ------------------------------------- | -------- | ------------------------------- |
+| `start`                               | dispatch | run begins                      |
+| `cop_spawn`                           | unit     | a regular cop spawns            |
+| `swat_spawn`                          | swat     | SWAT mini-boss spawns           |
+| `near_miss` / `combo_big`             | unit     | combo tick / 10-combo milestone |
+| `damage`                              | unit     | a cop lands a hit               |
+| `cop_drown` / `swat_drown`            | unit     | a cop / SWAT drowns             |
+| `emp` / `emp_kill` / `tank_kill`      | unit     | pickup kills                    |
+| `escape`                              | dispatch | escape reward fires             |
+| `level_up`                            | dispatch | level threshold crossed         |
+| `wrecked` / `busted` / `drowned_self` | dispatch | fail conditions                 |
+
+At most **3** bubbles are visible, each living **4.5 s**. Lines are
+throttled to one per **350 ms** globally, and the same event can't repeat
+within **1.2 s**. Voice files are preloaded in the background on first
+run so lines fire instantly.
+(`src/world/radio.ts`, `src/world/radio-voice.ts`, `src/ui/radio.tsx`)
+
+---
+
 ## 16. Mobile / PWA
 
 - Two on-screen steering buttons (left / right) with multi-touch support.
@@ -594,57 +675,112 @@ Polish layers on top of the gameplay loop:
 
 ---
 
+## 16a. Recordings & Replays
+
+Every run is **auto-recorded** from the game canvas, and the clip is
+uploaded only if the score qualifies for the leaderboard's top 50.
+
+- Capture: a small **960 × 540** canvas is blitted from the live (HiDPI)
+  game canvas at **24 fps** and fed to `MediaRecorder`.
+- Codec: **H.264 only** — no software fallback. VP8/VP9 competes with
+  WebGL and stutters; hardware H.264 is effectively free.
+- Bitrate ceiling **1 Mbps**, chunked every **4 s**, hard cap **2 min**
+  per run.
+- On game over: if `score ≤ cachedQualificationThreshold` the recording is
+  discarded before the blob is even assembled. Otherwise it's finalized
+  and POSTed to a Netlify **edge** function; blobs over **11 MB** are
+  dropped (server cap is 12 MB).
+- The **Recordings** screen lists the top-50 entries that have a
+  `recordingUrl` and plays them back in a modal.
+  (`src/systems/screen-recorder.ts`, `src/ui/recordings.tsx`,
+  `src/ui/replay-modal.tsx`)
+
+---
+
+## 16b. Portals (Vibe Jam webring)
+
+Minimum-spec Vibe Jam 2026 portal support:
+
+- An **EXIT** portal is always present in the world; driving into it
+  (within **4.2** units) redirects to `jam.pieter.com/portal/2026`
+  carrying the player's name, color, speed and a `ref` back to this game.
+- Arriving with `?portal=true` **skips every menu** and starts a run
+  immediately; `?username=` is adopted so identity survives the hop.
+- Arriving with a `ref` also spawns a **RETURN** portal that sends the
+  player back to the referring game with the original params, and the car
+  spawns at it facing the city.
+  (`src/world/portals.ts`)
+
+---
+
 ## 17. Constants Cheat Sheet
 
-| Constant                  | Value                         | File                                |
-| ------------------------- | ----------------------------- | ----------------------------------- |
-| `TILE_SIZE`               | 10                            | `src/world/terrain.ts:2`            |
-| `CHUNK_SIZE`              | 60                            | `src/world/terrain.ts:1`            |
-| `BUSTED_TIME_THRESHOLD`   | 3 s                           | `src/main.ts:197`                   |
-| `BUSTED_COP_COUNT`        | 2                             | `src/main.ts:198`                   |
-| `SPEED_STREAK_THRESHOLD`  | 5 s                           | `src/main.ts:199`                   |
-| `SPEED_STREAK_MIN_RATIO`  | 0.9                           | `src/main.ts:200`                   |
-| `COMBO_DECAY`             | 3 s                           | `src/systems/run-state.ts:25`       |
-| `MAX_PICKUPS`             | 4                             | `src/systems/pickup-system.ts:12`   |
-| `SPAWN_INTERVAL` (pickup) | 6 s                           | `src/systems/pickup-system.ts:13`   |
-| `NITRO_DURATION`          | 3 s                           | `src/constants.ts`                  |
-| `NITRO_SPEED_MULT`        | 1.55                          | `src/constants.ts`                  |
-| `REPAIR_HEAL`             | 40 HP                         | `src/constants.ts`                  |
-| `SCORE_MULT_DURATION`     | 8 s                           | `src/constants.ts`                  |
-| `SCORE_MULT_VALUE`        | 2                             | `src/constants.ts`                  |
-| `TIME_WARP_DURATION`      | 5 s                           | `src/constants.ts`                  |
-| `TIME_WARP_FACTOR`        | 0.5                           | `src/constants.ts`                  |
-| `MAGNET_DURATION`         | 8 s                           | `src/constants.ts`                  |
-| `MAGNET_RANGE_MULT`       | 3                             | `src/constants.ts`                  |
-| `MAGNET_PULL_MULT`        | 3                             | `src/constants.ts`                  |
-| `GHOST_DURATION`          | 3 s                           | `src/constants.ts`                  |
-| `TANK_DURATION`           | 5 s                           | `src/constants.ts`                  |
-| `TANK_KILL_SCORE`         | 25                            | `src/constants.ts`                  |
-| `MAX_CIVILIANS`           | 8                             | `src/systems/civilian-system.ts:10` |
-| `CIVILIAN_SPAWN_INTERVAL` | 2 s                           | `src/systems/civilian-system.ts:11` |
-| `STUN_IMPACT_THRESHOLD`   | 6                             | `src/systems/civilian-system.ts:12` |
-| `FLEE_RADIUS`             | 8                             | `src/systems/civilian-system.ts:13` |
-| `FLEE_MIN_PLAYER_SPEED`   | 20                            | `src/systems/civilian-system.ts:14` |
-| `FLEE_FORCE`              | 1200                          | `src/systems/civilian-system.ts:15` |
-| Cop despawn distance      | 100                           | `src/systems/cop-system.ts:90`      |
-| Cop damage cooldown       | 1 s                           | `src/systems/cop-system.ts:139`     |
-| `DEATH_MOMENT_MS`         | 700                           | `src/main.ts`                       |
-| Particle pool size        | 256                           | `src/world/effects.ts`              |
-| `SCORE_MILESTONES`        | [1k, 5k, 10k, 25k, 50k, 100k] | `src/constants.ts`                  |
-| `ESCAPE_DIST`             | 60                            | `src/constants.ts`                  |
-| `ESCAPE_TIME`             | 1.5 s                         | `src/constants.ts`                  |
-| `ESCAPE_REWARD`           | +50 score                     | `src/constants.ts`                  |
-| `ESCAPE_HEAL`             | +5 HP                         | `src/constants.ts`                  |
-| `LOW_HP_THRESHOLD`        | 30                            | `src/constants.ts`                  |
-| `HEAT_STEP_SCORE`         | 1500                          | `src/systems/leveling.ts`           |
-| `HEAT_INTERVAL_SHAVE`     | 0.05 s                        | `src/systems/leveling.ts`           |
-| `HEAT_INTERVAL_FLOOR`     | 0.4 s                         | `src/systems/leveling.ts`           |
-| `SWAT_MIN_LEVEL`          | 5                             | `src/systems/cop-system.ts`         |
-| `SWAT_RESPAWN_DELAY`      | 25 s                          | `src/systems/cop-system.ts`         |
-| `SWAT_KILL_SCORE`         | 80                            | `src/systems/cop-system.ts`         |
-| `SWAT_KILL_HEAL`          | +25 HP                        | `src/systems/cop-system.ts`         |
-| Ghost trail pool          | 6                             | `src/world/ghost-trail.ts`          |
-| Ghost trail life          | 0.4 s                         | `src/world/ghost-trail.ts`          |
+| Constant                  | Value                         | File                             |
+| ------------------------- | ----------------------------- | -------------------------------- |
+| `TILE_SIZE`               | 10                            | `src/world/terrain.ts`           |
+| `CHUNK_SIZE`              | 60                            | `src/world/terrain.ts`           |
+| `BUSTED_TIME_THRESHOLD`   | 3 s                           | `src/constants.ts`               |
+| `BUSTED_COP_COUNT`        | 2                             | `src/constants.ts`               |
+| `BUSTED_NEARBY_RADIUS`    | 8                             | `src/constants.ts`               |
+| `BUSTED_STOPPED_SPEED`    | 2                             | `src/constants.ts`               |
+| `SPEED_STREAK_THRESHOLD`  | 5 s                           | `src/constants.ts`               |
+| `SPEED_STREAK_MIN_RATIO`  | 0.9                           | `src/constants.ts`               |
+| `COMBO_DECAY`             | 3 s                           | `src/systems/run-state.ts`       |
+| `COMBO_ARM_DIST`          | 18                            | `src/constants.ts`               |
+| `COMBO_ENTER_DIST`        | 12                            | `src/constants.ts`               |
+| `COMBO_MIN_DIST`          | 6                             | `src/constants.ts`               |
+| `PICKUP_MAX`              | 4                             | `src/constants.ts`               |
+| `PICKUP_SPAWN_INTERVAL`   | 6 s                           | `src/constants.ts`               |
+| `PICKUP_DESPAWN_DIST`     | 80                            | `src/constants.ts`               |
+| `PICKUP_MAX_AGE`          | 25 s                          | `src/constants.ts`               |
+| `PICKUP_MAGNET_RANGE`     | 6                             | `src/constants.ts`               |
+| `NITRO_DURATION`          | 3 s                           | `src/constants.ts`               |
+| `NITRO_SPEED_MULT`        | 1.55                          | `src/constants.ts`               |
+| `EMP_KILL_RADIUS`         | 30                            | `src/constants.ts`               |
+| `REPAIR_HEAL`             | 40 HP                         | `src/constants.ts`               |
+| `SCORE_MULT_DURATION`     | 8 s                           | `src/constants.ts`               |
+| `SCORE_MULT_VALUE`        | 2                             | `src/constants.ts`               |
+| `TIME_WARP_DURATION`      | 5 s                           | `src/constants.ts`               |
+| `TIME_WARP_FACTOR`        | 0.5                           | `src/constants.ts`               |
+| `MAGNET_DURATION`         | 8 s                           | `src/constants.ts`               |
+| `MAGNET_RANGE_MULT`       | 3                             | `src/constants.ts`               |
+| `MAGNET_PULL_MULT`        | 3                             | `src/constants.ts`               |
+| `GHOST_DURATION`          | 3 s                           | `src/constants.ts`               |
+| `TANK_DURATION`           | 5 s                           | `src/constants.ts`               |
+| `TANK_KILL_SCORE`         | 25                            | `src/constants.ts`               |
+| `MAX_CIVILIANS`           | 8                             | `src/systems/civilian-system.ts` |
+| `CIVILIAN_SPAWN_INTERVAL` | 2 s                           | `src/systems/civilian-system.ts` |
+| `STUN_IMPACT_THRESHOLD`   | 6                             | `src/systems/civilian-system.ts` |
+| `FLEE_RADIUS`             | 8                             | `src/systems/civilian-system.ts` |
+| `FLEE_MIN_PLAYER_SPEED`   | 20                            | `src/systems/civilian-system.ts` |
+| `FLEE_FORCE`              | 1200                          | `src/systems/civilian-system.ts` |
+| `COP_DESPAWN_DIST`        | 100                           | `src/constants.ts`               |
+| `COP_DAMAGE_COOLDOWN`     | 1 s                           | `src/constants.ts`               |
+| `COP_COLLISION_RADIUS`    | 5                             | `src/constants.ts`               |
+| `COP_MIN_IMPACT_SPEED`    | 3                             | `src/constants.ts`               |
+| `SIREN_MAX_RANGE`         | 40                            | `src/constants.ts`               |
+| `DEATH_MOMENT_MS`         | 700                           | `src/constants.ts`               |
+| Particle pool size        | 256                           | `src/world/effects.ts`           |
+| `SCORE_MILESTONES`        | [1k, 5k, 10k, 25k, 50k, 100k] | `src/constants.ts`               |
+| `ESCAPE_DIST`             | 60                            | `src/constants.ts`               |
+| `ESCAPE_TIME`             | 1.5 s                         | `src/constants.ts`               |
+| `ESCAPE_REWARD`           | +50 score                     | `src/constants.ts`               |
+| `ESCAPE_HEAL`             | +5 HP                         | `src/constants.ts`               |
+| `LOW_HP_THRESHOLD`        | 30                            | `src/constants.ts`               |
+| `HEAT_STEP_SCORE`         | 1500                          | `src/systems/leveling.ts`        |
+| `HEAT_INTERVAL_SHAVE`     | 0.05 s                        | `src/systems/leveling.ts`        |
+| `HEAT_INTERVAL_FLOOR`     | 0.4 s                         | `src/systems/leveling.ts`        |
+| SWAT unlock               | `swatEnabled` from LV7        | `src/systems/leveling.ts`        |
+| `SWAT_RESPAWN_DELAY`      | 25 s                          | `src/systems/cop-system.ts`      |
+| `SWAT_KILL_SCORE`         | 80                            | `src/systems/cop-system.ts`      |
+| `SWAT_KILL_HEAL`          | +25 HP                        | `src/systems/cop-system.ts`      |
+| `BOUNTY_MULTIPLIER`       | 5                             | `src/systems/cop-system.ts`      |
+| `bountyRate`              | 0.16 (LV2+)                   | `src/systems/leveling.ts`        |
+| Cop damage tiers          | 20 / 40 points                | `src/entities/cop.ts`            |
+| Recording capture         | 960×540 @ 24 fps, 1 Mbps      | `src/systems/screen-recorder.ts` |
+| `MAX_UPLOAD_SIZE`         | 11 MB                         | `src/systems/screen-recorder.ts` |
+| Ghost trail pool          | 6                             | `src/world/ghost-trail.ts`       |
+| Ghost trail life          | 0.4 s                         | `src/world/ghost-trail.ts`       |
 
 ---
 
@@ -678,7 +814,7 @@ Polish layers on top of the gameplay loop:
   resets the busted timer at 2× the tick rate, so any motion bails you out.
 - **Snowy = hardcore mode.** −20% top speed, −25% accel, almost no grip.
   Sunny is the easiest weather; snowy is the hardest.
-- **Hunt SWAT for the big payouts.** From level 5 a mini-boss spawns
+- **Hunt SWAT for the big payouts.** From level 7 a mini-boss spawns
   every 25 s. Drowning or tank-ramming it is **+80 score / +25 HP** —
   by far the best single cop kill in the game. The ⚠ SWAT popup is your
   cue to start looking for water or pop a Tank.
@@ -703,6 +839,12 @@ Polish layers on top of the gameplay loop:
 - **Heat past LV10.** Cop spawn cadence keeps shaving every +1500 score
   past 5500. Endgame survivor runs feel relentless on purpose — Time
   Warp and Ghost become essential, not optional.
+- **Gold marker = drown it.** A bounty cop pays **5×** its drown score
+  (150 before multipliers), but only if it goes in the water — EMP and
+  Tank kills pay the normal rate. Spot the marker, then plan a river run.
+- **Beat cops up before you drown them.** Damaged cops lose up to 32 % of
+  their speed and 40 % of their force permanently. A cop you've slammed
+  twice is much easier to shake — or to steer into a river.
 - **Combo lifeline = ride the red.** When the combo HUD chip turns red
   and starts ticking, you're seconds from losing the chain. The smartest
   play is to find any cop within 12 units and threaten a near-miss to

@@ -52,7 +52,6 @@ export function triggerScreenFlash(strength: number = 0.5) {
   }, 90);
 }
 
-/* Camera shake */
 let shakeIntensity = 0;
 let shakeTime = 0;
 
@@ -89,7 +88,7 @@ type IParticle = {
 let particleScene: THREE.Scene | null = null;
 let particles: IParticle[] = [];
 
-/* Single shared particle geometry. Icosahedron (0 subdivisions) = 20 faces, reads as a smooth ball at gameplay distance. Diameter 0.32 ≈ old 0.3 cube. */
+/* Shared particle geometry. 20 faces reads as a smooth ball at gameplay distance. */
 const PARTICLE_GEO = new THREE.IcosahedronGeometry(0.16, 0);
 const SPARK_MAT = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
 const SPLASH_MAT = new THREE.MeshBasicMaterial({ color: 0x66ccff });

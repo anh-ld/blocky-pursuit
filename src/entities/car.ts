@@ -4,7 +4,7 @@ import { getSkin, massForWeight, type ICarSkin } from "./car-skins";
 import { buildCarMesh, CAR_UNIT } from "./car-mesh";
 import { installCarPhysics } from "./car-physics";
 
-/* Read-only snapshot of car state needed by display-side FX (skids, speed lines). Single source of truth — replaces per-frame heading + rear-anchor math in the conductor. */
+/* Read-only car state for display-side FX (skids, speed lines). */
 export type ICarDisplaySample = {
   position: { x: number; y: number; z: number };
   /* Yaw in radians, derived from the cannon quaternion. */
@@ -247,7 +247,6 @@ export class Car {
     );
 
     this.scene.add(this.mesh);
-    /* Per-skin specs */
     this.applySpecs(skin);
   }
 
@@ -308,7 +307,6 @@ export class Car {
       }
     }
 
-    /* Tick down recovery timer */
     if (this.recoveryTimer > 0) {
       this.recoveryTimer -= dt;
     }

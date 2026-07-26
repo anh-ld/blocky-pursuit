@@ -191,9 +191,9 @@ export function placeWaterDecor(
       const lz = worldZ + (pseudoRandom(globalTileX, globalTileZ, 620 + lp) - 0.5) * 7;
       const size = 0.4 + pseudoRandom(globalTileX, globalTileZ, 630 + lp) * 0.5;
       const pad = new THREE.Mesh(LILY_PAD_GEO, materials.lilypad);
-      /* Old box: scale (size, 0.05, size) on unit cube. New cylinder: radius 1, height 0.1. Scale X/Z by size, Y by 0.5 so the disc stays a disc. */
+      /* Y by 0.5 on a radius-1 height-0.1 cylinder keeps the disc a disc. */
       pad.scale.set(size, 0.5, size);
-      /* Sit on the new sunken water surface (-0.18) instead of ground level. */
+      /* Sits on the sunken water surface (-0.18), not ground level. */
       pad.position.set(lx, -0.13, lz);
       chunk.group.add(pad);
 

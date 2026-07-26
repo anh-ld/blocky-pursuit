@@ -146,15 +146,9 @@ export function getPlayerName(): string {
 /* Names < this are collision-prone on shared leaderboard — append random 4-digit tag. */
 const MIN_UNIQUE_NAME_LEN = 6;
 
-/**
- * Sanitize and persist a user-edited name. Mirrors the server-side rules in
- * netlify/functions/submit-score.mts so what the player types is exactly what
- * the leaderboard will accept (no surprise rejections at submit time).
- *
- * - Strips disallowed characters, caps at 20 chars, trims whitespace
- * - Empty → fresh anonymous name
- * - Too short (< 6 chars) → append a 4-digit tag so "Al" becomes "Al4821"
- */
+/* Mirrors netlify/functions/submit-score.mts so submit never rejects what the player typed. */
+/* Strips disallowed chars, caps at 20; empty → anonymous; < 6 chars → 4-digit tag. */
+/** Sanitize and persist a user-edited name. */
 export function setPlayerName(raw: string): string {
   const cleaned = raw
     .slice(0, 20)

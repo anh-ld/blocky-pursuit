@@ -1,4 +1,4 @@
-/* Cached rounded-box geometry for buildings. Buckets (w, h, d) to 0.5u → at most ~30-50 entries per session across all chunk sizes; one BufferGeometry per bucket. Mirrors the _roofGeoCache pattern in zones/suburbs.ts. */
+/* Cached rounded-box building geometry, bucketed (w, h, d) to 0.5u → ~30-50 entries. */
 
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";

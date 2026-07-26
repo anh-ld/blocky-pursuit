@@ -44,7 +44,6 @@ export type PlayerDiedEvent = {
   isNewBest: boolean;
 };
 
-/** A pickup was collected. */
 export type PickupCollectedEvent = {
   kind: "pickupCollected";
   position: Vec3Like;

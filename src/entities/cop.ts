@@ -1,11 +1,25 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { isRoad, isWater, TILE_SIZE } from "../world/terrain";
+import { spawnPopup } from "../world/popups";
 import { PlayerKinematics } from "./player-kinematics";
+import { computeAim, type IAimInput, type IAimOut } from "./cop-aim";
+import { collapseGroup } from "../world/collapse";
 
-/* Chase curvature/lead tuning. ω < threshold = "straight" (perpendicular lead); ω >= = "turning" (arc projection). STRAIGHT_LEAD_K = perpendicular scale; higher = harder escape. */
-const TURN_THRESHOLD = 0.05;
-const STRAIGHT_LEAD_K = 0.3;
+/* Steering integrates against the fixed physics step, not the render frame. */
+const PHYSICS_DT = 1 / 60;
+
+/* The wind-up is what makes the slam answerable — a beat to break parallel. */
+const PIT_WINDUP = 0.35;
+const PIT_COOLDOWN = 4.0;
+const PIT_FORCE = 2500;
+const PIT_RANGE = 7;
+const FLANK_DIST = 12;
+
+/* One PIT wind-up at a time, else a LV6 swarm slams from every side at once. */
+let pitWindupCount = 0;
+/* Alternates so flankers split evenly instead of clumping on a coin flip. */
+let flankToggle = 0;
 
 /* Shared materials (one set for all cop instances) */
 const UNIT = 0.5;
@@ -129,6 +143,23 @@ const _targetDir = new CANNON.Vec3();
 const _worldForward = new CANNON.Vec3();
 const _cross = new CANNON.Vec3();
 const _q = new CANNON.Quaternion();
+
+const _aimIn: IAimInput = {
+  playerX: 0,
+  playerZ: 0,
+  playerVx: 0,
+  playerVz: 0,
+  copX: 0,
+  copZ: 0,
+  copSpeed: 0,
+  omega: 0,
+  predictAhead: 0,
+  interceptPower: 1,
+  flankDist: 0,
+  flankSide: 1,
+};
+
+const _aimOut: IAimOut = { x: 0, z: 0 };
 /* Constants — never mutated, so a single shared instance is fine. */
 const COP_FORWARD = new CANNON.Vec3(0, 0, -1);
 const COP_FORCE_OFFSET = new CANNON.Vec3(0, 0, 0);
@@ -260,11 +291,15 @@ export class Cop {
   isBounty: boolean;
   bountyMarker: THREE.Mesh;
   damageMarker: THREE.Mesh;
+  /* Instance-owned, unlike the module-shared source geometries. */
+  merged: THREE.BufferGeometry[] = [];
   damageTier: number;
   damagePoints: number;
   /* AI Roles */
   role: "chaser" | "lead" = "chaser";
   pitCooldown = 0;
+  /* > 0 while telegraphed, not yet fired. Committed once set. */
+  pitWindup = 0;
   preStepCallback: () => void;
 
   constructor(
@@ -279,7 +314,7 @@ export class Cop {
     this.world = world;
     this.level = Math.max(1, Math.min(6, level));
     this.config = COP_LEVEL_CONFIGS[this.level];
-    this.flankSide = Math.random() < 0.5 ? 1 : -1;
+    this.flankSide = flankToggle++ % 2 === 0 ? 1 : -1;
     this.damageCooldown = 0;
     this.nearMissArmed = false;
     this.isSwat = isSwat;
@@ -295,7 +330,6 @@ export class Cop {
 
     const tier = isSwat ? SWAT_TIER : tierForLevel(this.level);
 
-    /* Chassis (Body) */
     const bodyMesh = new THREE.Mesh(COP_BODY_GEO, tier.bodyMat);
     bodyMesh.position.y = unit;
     this.mesh.add(bodyMesh);
@@ -318,9 +352,10 @@ export class Cop {
     this.bountyMarker = new THREE.Mesh(BOUNTY_MARKER_GEO, BOUNTY_MARKER_MAT);
     this.bountyMarker.position.set(0, unit * 4.1, unit * 1.5);
     this.bountyMarker.visible = this.isBounty;
+    /* Bobs every frame. */
+    this.bountyMarker.userData.noCollapse = true;
     this.mesh.add(this.bountyMarker);
 
-    /* Front grille */
     const grille = new THREE.Mesh(COP_GRILLE_GEO, COP_GRILLE_MAT);
     grille.position.set(0, unit * 0.9, -unit * 4.1);
     this.mesh.add(grille);
@@ -358,7 +393,12 @@ export class Cop {
     this.damageMarker = new THREE.Mesh(DAMAGE_MARKER_GEO, DAMAGE_MARKER_MAT);
     this.damageMarker.position.set(0, unit * 1.55, -unit * 0.9);
     this.damageMarker.visible = false;
+    /* Toggled and rescaled by applyDamage. */
+    this.damageMarker.userData.noCollapse = true;
     this.mesh.add(this.damageMarker);
+
+    /* Chassis parts are rigid; sirens animate via shared materials, not transforms. */
+    this.merged = collapseGroup(this.mesh);
 
     /* SWAT: scale-up for silhouette pop. Physics shape cop-sized — power is speed/mass, not a hitbox grow. */
     if (isSwat) this.mesh.scale.set(1.4, 1.4, 1.4);
@@ -414,7 +454,13 @@ export class Cop {
     this.body.addEventListener("collide", (event: { body: CANNON.Body }) => {
       const other = event.body;
 
-      if (other.mass === 0 && other.shapes[0] instanceof CANNON.Box) {
+      /* Min dwell: a wall scrape re-fires `collide` every step and pins the timer at full. */
+      if (
+        other.mass === 0 &&
+        other.shapes[0] instanceof CANNON.Box &&
+        this.bounceBackTimer <= 0 &&
+        this.recoveryTimer <= 0
+      ) {
         this.bounceBackTimer = this.bounceBackDuration;
       }
     });
@@ -483,7 +529,6 @@ export class Cop {
           forceScale *= 0.3 + 0.7 * recoveryProgress;
         }
 
-        /* Brakes if water in front */
         if (waterInFront) forceScale = -0.5;
 
         _force.set(0, 0, -activeForce * forceScale);
@@ -510,78 +555,49 @@ export class Cop {
       this.body.angularVelocity.y = 0;
 
       if (speed > 0.5) {
-        /* Calculate target point: base position + velocity prediction */
-        let aimX = this.targetPosition.x;
-        let aimZ = this.targetPosition.z;
+        _aimIn.playerX = this.targetPosition.x;
+        _aimIn.playerZ = this.targetPosition.z;
+        _aimIn.playerVx = this.targetVelocity?.x ?? 0;
+        _aimIn.playerVz = this.targetVelocity?.z ?? 0;
+        _aimIn.copX = this.body.position.x;
+        _aimIn.copZ = this.body.position.z;
+        _aimIn.copSpeed = activeMaxSpeed;
+        _aimIn.omega = this.kinematics?.angularVelocity() ?? 0;
+        _aimIn.predictAhead = this.config.predictAhead;
+        /* Only the lead interceptor leads out to the solved intercept. */
+        _aimIn.interceptPower = this.role === "lead" ? this.config.interceptPower : 1;
+        _aimIn.flankDist = this.config.flank ? FLANK_DIST : 0;
+        _aimIn.flankSide = this.flankSide;
 
-        /* Predict where player will be */
-        let pTime = this.config.predictAhead;
-        if (this.role === "lead") pTime *= this.config.interceptPower;
-
-        if (pTime > 0 && this.targetVelocity) {
-          aimX += this.targetVelocity.x * pTime;
-          aimZ += this.targetVelocity.z * pTime;
-
-          /* Curvature-aware lead: turning → arc project; |ω| < TURN_THRESHOLD → linear + perpendicular lead so a trailing cop curves in instead of running parallel. */
-          const v = Math.sqrt(this.targetVelocity.x ** 2 + this.targetVelocity.z ** 2);
-
-          if (v > 0.5) {
-            const omega = this.kinematics?.angularVelocity() ?? 0;
-
-            if (Math.abs(omega) >= TURN_THRESHOLD) {
-              /* Arc lead: integrate velocity rotating at omega over horizon. From velocity vector (no yaw); signed omega handles both directions; → linear tangent as omega → 0. */
-              const t = Math.min(pTime, 1.0); /* cap arc lead to prevent overshoot */
-              const phi = omega * t;
-              const s = Math.sin(phi);
-              const c = 1 - Math.cos(phi);
-              const vx = this.targetVelocity.x;
-              const vz = this.targetVelocity.z;
-              aimX = this.targetPosition.x + (vx * s + vz * c) / omega;
-              aimZ = this.targetPosition.z + (vz * s - vx * c) / omega;
-            } else {
-              /* Straight target: bias lead to cop's side so it cuts the corner. side aligns perpendicular with (cop → player). */
-              const perpX = -this.targetVelocity.z / v;
-              const perpZ = this.targetVelocity.x / v;
-              const side = Math.sign(perpX * -dxToPlayer + perpZ * -dzToPlayer) || 1;
-              const perpScale = distToPlayer * STRAIGHT_LEAD_K * side;
-              aimX += perpX * perpScale;
-              aimZ += perpZ * perpScale;
-            }
-          }
-        }
-
-        /* Flanking: offset aim perpendicular to player's heading */
-        if (this.config.flank && this.targetVelocity) {
-          const tvLen = Math.sqrt(this.targetVelocity.x ** 2 + this.targetVelocity.z ** 2);
-
-          if (tvLen > 1) {
-            const perpX = -this.targetVelocity.z / tvLen;
-            const perpZ = this.targetVelocity.x / tvLen;
-            const flankDist = 12;
-            aimX += perpX * flankDist * this.flankSide;
-            aimZ += perpZ * flankDist * this.flankSide;
-          }
-        }
-
-        _targetDir.set(aimX - this.body.position.x, 0, aimZ - this.body.position.z);
+        computeAim(_aimIn, _aimOut);
+        _targetDir.set(_aimOut.x - this.body.position.x, 0, _aimOut.z - this.body.position.z);
         _targetDir.normalize();
 
-        /* PIT Maneuver (Level 4+) */
-        if (this.config.canPit && this.pitCooldown <= 0 && distToPlayer < 7 && this.targetVelocity) {
-          /* Check if roughly parallel (dot product of headings) */
-          this.body.quaternion.vmult(COP_FORWARD, _worldForward);
+        /* PIT Maneuver (Level 5+) — telegraph now, slam after the wind-up. */
+        if (
+          this.config.canPit &&
+          this.pitCooldown <= 0 &&
+          this.pitWindup <= 0 &&
+          pitWindupCount === 0 &&
+          distToPlayer < PIT_RANGE &&
+          this.targetVelocity
+        ) {
+          /* Player velocity in the cop's frame — still running forward alongside it. */
           this.body.vectorToLocalFrame(this.targetVelocity, _localVel);
 
-          /* If player is parallel and moving in same direction */
           if (_localVel.z < -10) {
-            /* Apply sideways impulse toward player */
-            const toPlayerX = this.targetPosition.x - this.body.position.x;
-            const toPlayerZ = this.targetPosition.z - this.body.position.z;
-            const dirX = toPlayerX / distToPlayer;
-            const dirZ = toPlayerZ / distToPlayer;
-            const pitForce = 2500;
-            this.body.applyImpulse(new CANNON.Vec3(dirX * pitForce, 0, dirZ * pitForce), new CANNON.Vec3(0, 0, 0));
-            this.pitCooldown = 4.0; /* Don't spam PIT */
+            this.pitWindup = PIT_WINDUP;
+            pitWindupCount++;
+
+            spawnPopup(
+              this.body.position.x,
+              this.body.position.y + 3,
+              this.body.position.z,
+              "⚠ PIT",
+              "#ff4444",
+              PIT_WINDUP,
+              11,
+            );
           }
         }
 
@@ -592,16 +608,11 @@ export class Cop {
         _worldForward.cross(_targetDir, _cross);
         const dot = _worldForward.dot(_targetDir);
 
-        if (dot < 0.98) {
-          let steerAngle = 0;
-
-          if (_cross.y > 0) {
-            steerAngle = this.turnSpeed;
-          } else {
-            steerAngle = -this.turnSpeed;
-          }
-
-          _q.setFromEuler(0, steerAngle * (1 / 60), 0);
+        /* Never rotate past the aim point; bang-bang steering oscillated instead of settling. */
+        if (dot < 0.9999) {
+          const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+          const step = Math.min(this.turnSpeed * PHYSICS_DT, angle);
+          _q.setFromEuler(0, _cross.y > 0 ? step : -step, 0);
           this.body.quaternion = this.body.quaternion.mult(_q);
         }
       }
@@ -615,9 +626,26 @@ export class Cop {
     this.targetVelocity = targetVelocity || null;
     this.kinematics = kinematics || null;
 
-    /* Tick down damage cooldown */
     if (this.damageCooldown > 0) this.damageCooldown -= dt;
     if (this.pitCooldown > 0) this.pitCooldown -= dt;
+
+    /* Fires at the end of the wind-up; the telegraph was the player's beat to answer. */
+    if (this.pitWindup > 0) {
+      this.pitWindup -= dt;
+
+      if (this.pitWindup <= 0) {
+        pitWindupCount--;
+        this.pitCooldown = PIT_COOLDOWN;
+        const toX = targetPosition.x - this.body.position.x;
+        const toZ = targetPosition.z - this.body.position.z;
+        const len = Math.hypot(toX, toZ);
+
+        if (len > 0.001) {
+          _force.set((toX / len) * PIT_FORCE, 0, (toZ / len) * PIT_FORCE);
+          this.body.applyImpulse(_force, COP_FORCE_OFFSET);
+        }
+      }
+    }
 
     /* Tick down bounce-back timer; start recovery when it expires */
     if (this.bounceBackTimer > 0) {
@@ -628,7 +656,6 @@ export class Cop {
       }
     }
 
-    /* Tick down recovery timer */
     if (this.recoveryTimer > 0) {
       this.recoveryTimer -= dt;
     }
@@ -667,6 +694,13 @@ export class Cop {
   }
 
   destroy() {
+    /* Killed mid-windup — release the slot or no cop can ever PIT again. */
+    if (this.pitWindup > 0) pitWindupCount--;
+
+    for (const geo of this.merged) {
+      geo.dispose();
+    }
+
     this.scene.remove(this.mesh);
     this.world.removeBody(this.body);
     this.world.removeEventListener("preStep", this.preStepCallback);

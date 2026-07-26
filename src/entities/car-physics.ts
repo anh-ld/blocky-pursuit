@@ -40,7 +40,6 @@ export function installCarPhysics(car: Car) {
       _force.set(0, 0, car.forwardForce * reverseScale);
       body.applyLocalForce(_force, _forceOffset);
 
-      /* Cap reverse speed */
       if (reverseSpeed > maxReverseSpeed) {
         _localVel.z = maxReverseSpeed;
         body.vectorToWorldFrame(_localVel, body.velocity);

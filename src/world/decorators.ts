@@ -118,7 +118,7 @@ export function addFlowers(
     const fz = z + (pseudoRandom(Math.floor(x * 100), Math.floor(z * 100), 70 + f) - 0.5) * 4;
     const colorIdx = Math.floor(r3 * materials.flower.length);
     const flower = new THREE.Mesh(FLOWER_GEO, materials.flower[colorIdx]);
-    /* Old box: scale (0.4, 0.6, 0.4) on unit cube. New sphere: radius 0.3, scale matches the box's longest extent so the bloom doesn't shrink. */
+    /* Scaled off radius 0.3 so the bloom keeps its old extent. */
     flower.scale.set(0.4 / 0.3, 0.6 / 0.3, 0.4 / 0.3);
     flower.position.set(fx, 0.3, fz);
     chunk.group.add(flower);

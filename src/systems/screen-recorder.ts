@@ -159,7 +159,6 @@ export function discardRecording(): void {
   cleanup();
 }
 
-/** Current session ID. */
 export function getSessionId(): string | null {
   return recordingSessionId;
 }

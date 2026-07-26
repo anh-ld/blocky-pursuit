@@ -277,7 +277,6 @@ function startGame() {
   camera.position.set(50, 55, 50);
   ctx.setCameraD(BASE_CAMERA_D);
 
-  /* Reset systems */
   cops.reset();
   civilians.reset();
   pickups.reset();
@@ -505,7 +504,6 @@ function _tickPlayingInner(dt: number, timeInSeconds: number) {
 
   if (leveled) frameEvents.push(leveled);
 
-  /* Engine pitch follows speed */
   setEngineSpeed(Math.min(car.body.velocity.length() / car.maxSpeed, 1));
 
   /* Pure-state phases (scoring, combo decay, run stats) */
@@ -778,7 +776,7 @@ document.addEventListener(
   { signal: listenerSignal },
 );
 
-/* Release GPU buffers + window listeners on tab close; browser reclaims un-disposed materials via context destroy, but explicit disposes keep DevTools clean. */
+/* Release GPU buffers + listeners on tab close; keeps DevTools clean. */
 window.addEventListener(
   "pagehide",
   () => {

@@ -144,7 +144,6 @@ export class RunState {
     return this.drownChainCount;
   }
 
-  /** Decay the drown chain timer. */
   decayDrownChain(dt: number) {
     if (this.drownChainTimer <= 0) return;
     this.drownChainTimer -= dt;

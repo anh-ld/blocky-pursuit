@@ -5,7 +5,7 @@ import type { IChunkData } from "../city-generator";
 import { getBuildingGeometry } from "../building-geo";
 import { addTree, addFlowers, addWindows } from "../decorators";
 
-/* Roof geometry cache. Buckets (w, d, roofH) to 0.5u → at most 9*9*2 = 162 entries; materials live in IMaterials and dispose via CityGenerator.dispose(). Previous code allocated per house and never freed. */
+/* Roof cache, bucketed (w, d, roofH) to 0.5u → at most 162 entries. */
 const _roofGeoCache = new Map<string, THREE.ExtrudeGeometry>();
 
 function getRoofGeometry(width: number, depth: number, roofH: number): THREE.ExtrudeGeometry {
@@ -69,13 +69,11 @@ export function placeSuburbs(
     roofMesh.castShadow = true;
     chunk.group.add(roofMesh);
 
-    /* Door */
     const door = new THREE.Mesh(geometries.building, materials.trunk);
     door.scale.set(0.8, 1.4, 0.15);
     door.position.set(x, 0.7, z - depth / 2 - 0.08);
     chunk.group.add(door);
 
-    /* Driveway */
     const dw = new THREE.Mesh(geometries.building, materials.driveway);
     dw.scale.set(1.5, 0.04, 3);
     dw.position.set(x, 0.02, z - depth / 2 - 1.5);

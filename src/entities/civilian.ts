@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { TILE_SIZE, isRoad } from "../world/terrain";
+import { collapseGroup } from "../world/collapse";
 
 const CIVILIAN_COLORS = [0x4caf50, 0x2196f3, 0xffeb3b, 0xffffff, 0x9c27b0, 0xff9800];
 
@@ -65,6 +66,8 @@ export class Civilian {
   /* Per-instance materials (random body color → darker trim) — disposed in destroy() on despawn. */
   private bodyMat: THREE.MeshStandardMaterial;
   private stripeMat: THREE.MeshStandardMaterial;
+  /* Instance-owned, unlike the module-shared source geometries. */
+  private merged: THREE.BufferGeometry[] = [];
 
   constructor(scene: THREE.Scene, world: CANNON.World, position: THREE.Vector3) {
     this.scene = scene;
@@ -116,7 +119,6 @@ export class Civilian {
     windshield.position.set(0, unit * 2.8, -unit * 2.3);
     this.mesh.add(windshield);
 
-    /* Side windows */
     const sideWinL = new THREE.Mesh(CIV_SIDEWIN_GEO, CIV_GLASS_MAT);
     sideWinL.position.set(-unit * 1.85, unit * 2.8, -unit * 1.2);
     this.mesh.add(sideWinL);
@@ -124,7 +126,6 @@ export class Civilian {
     sideWinR.position.set(unit * 1.85, unit * 2.8, -unit * 1.2);
     this.mesh.add(sideWinR);
 
-    /* Rear window */
     const rearWin = new THREE.Mesh(CIV_REARWIN_GEO, CIV_GLASS_MAT);
     rearWin.position.set(0, unit * 2.8, unit * 3.3);
     this.mesh.add(rearWin);
@@ -158,6 +159,9 @@ export class Civilian {
       wheel.position.set(pos[0], pos[1], pos[2]);
       this.mesh.add(wheel);
     });
+
+    /* Rigid body — only the whole group is repositioned. */
+    this.merged = collapseGroup(this.mesh);
 
     scene.add(this.mesh);
 
@@ -273,7 +277,6 @@ export class Civilian {
       _civLocalVel.z *= 0.98;
       this.body.vectorToWorldFrame(_civLocalVel, this.body.velocity);
 
-      /* Cap speed */
       const speed = this.body.velocity.length();
 
       if (speed > this.maxSpeed) {
@@ -307,5 +310,9 @@ export class Civilian {
     /* Per-instance materials are uniquely colored, so they must be disposed here. Geometries are module-shared and stay alive. */
     this.bodyMat.dispose();
     this.stripeMat.dispose();
+
+    for (const geo of this.merged) {
+      geo.dispose();
+    }
   }
 }

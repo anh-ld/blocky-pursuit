@@ -27,7 +27,6 @@ export const WRECK_CAMERA_D = 15;
 export type IBootstrapOpts = {
   /** Skin id of the car the player picked in the garage at boot. */
   selectedSkinId: string;
-  /** Initial weather. */
   initialWeather: IWeather;
   /** Live read of the player name — used by portals for the webring exit. */
   getPlayerName: () => string;
@@ -68,7 +67,6 @@ export type IBootstrap = {
 };
 
 export function bootstrap(opts: IBootstrapOpts): IBootstrap {
-  /* Scene */
   const scene = new THREE.Scene();
 
   /* Isometric camera: `cameraD` = half-extent of orthographic frustum. Dying-phase wreck zoom lerps to WRECK_CAMERA_D. */
@@ -105,12 +103,11 @@ export function bootstrap(opts: IBootstrapOpts): IBootstrap {
   setRainEnabled(rain, opts.initialWeather === "rain");
   setSnowEnabled(snow, opts.initialWeather === "snowy");
 
-  /* Cannon-es physics world */
   const world = new CANNON.World({
     gravity: new CANNON.Vec3(0, -30, 0),
     allowSleep: false,
   });
-  
+
   /* SAP broadphase: ~O(n) vs the O(n²) default, given hundreds of static building bodies */
   world.broadphase = new CANNON.SAPBroadphase(world);
   const groundShape = new CANNON.Plane();
@@ -126,11 +123,9 @@ export function bootstrap(opts: IBootstrapOpts): IBootstrap {
   initGhostTrail(scene);
   initScreenFlash(gameArea);
 
-  /* City generation */
   const cityGenerator = new CityGenerator(scene, world);
   cityGenerator.update(new THREE.Vector3(0, 0, 0));
 
-  /* Player car */
   const car = new Car(scene, world, opts.selectedSkinId);
 
   /* Vibe Jam 2026 portals. Closures read opts.* → portal reflects current identity when webring exit fires. */

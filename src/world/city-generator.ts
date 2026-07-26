@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
+import { collapseGroup } from "./collapse";
 import {
   CHUNK_SIZE,
   TILE_SIZE,
@@ -94,6 +95,8 @@ export type IChunkData = {
   group: THREE.Group;
   bodies: CANNON.Body[];
   world: CANNON.World;
+  /* Chunk-owned, unlike this.geometries — must be disposed on unload. */
+  merged: THREE.BufferGeometry[];
 };
 
 export class CityGenerator {
@@ -148,6 +151,7 @@ export class CityGenerator {
       group: new THREE.Group(),
       bodies: [],
       world: this.world,
+      merged: [],
     };
 
     this.scene.add(chunk.group);
@@ -198,7 +202,6 @@ export class CityGenerator {
         tileMesh.receiveShadow = true;
         chunk.group.add(tileMesh);
 
-        /* Water */
         if (isWaterTile) {
           placeWaterDecor(chunk, this.materials, this.geometries, globalTileX, globalTileZ, worldX, worldZ);
           continue;
@@ -210,7 +213,6 @@ export class CityGenerator {
           continue;
         }
 
-        /* Road markings */
         if (isRoadTile) {
           this.addRoadMarkings(chunk, globalTileX, globalTileZ, worldX, worldZ);
           continue;
@@ -242,6 +244,7 @@ export class CityGenerator {
       }
     }
 
+    chunk.merged = collapseGroup(chunk.group);
     this.chunks.set(`${chunkX},${chunkZ}`, chunk);
   }
 
@@ -304,9 +307,16 @@ export class CityGenerator {
 
   unloadChunk(key: string, chunk: IChunkData) {
     this.scene.remove(chunk.group);
-    /* All geometries/materials are shared instances owned by this.geometries / this.materials — do NOT dispose them here. */
+    /* Source geometries/materials are shared instances owned by this.geometries / this.materials — do NOT dispose them here. */
     /* Clearing children releases Mesh JS objects for GC. */
     chunk.group.clear();
+
+    /* Chunk-owned: skipping this leaks a chunk of GPU buffers per unload. */
+    for (const geo of chunk.merged) {
+      geo.dispose();
+    }
+
+    chunk.merged.length = 0;
 
     for (const body of chunk.bodies) {
       this.world.removeBody(body);

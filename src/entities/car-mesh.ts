@@ -5,7 +5,7 @@ import { getSkin, type ICarSkin } from "./car-skins";
 /* Voxel unit shared by both player and cop meshes. */
 export const CAR_UNIT = 0.5;
 
-/* Shared wheel geometry: cylinder with its axis along X so the round face shows on the car's left/right side. Radius 0.38 keeps the wheel from filling the wheel well. */
+/* Axis along X so the round face shows on the car's sides; 0.38 clears the wheel well. */
 const WHEEL_GEO = new THREE.CylinderGeometry(0.38, 0.38, 0.4, 14);
 WHEEL_GEO.rotateZ(Math.PI / 2);
 
@@ -111,7 +111,6 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     group.add(stripe);
   }
 
-  /* Rear spoiler */
   if (s.hasSpoiler) {
     /* Two short uprights + one wide blade */
     const uprightGeo = new THREE.BoxGeometry(unit * 0.25, unit * s.spoilerH, unit * 0.25);
@@ -130,7 +129,6 @@ export function buildCarMesh(skinId: string): ICarMeshHandles {
     group.add(blade);
   }
 
-  /* Front grille */
   const grilleGeo = new THREE.BoxGeometry(unit * (s.bodyW * 0.8), unit * 0.6, unit * 0.2);
   const grilleMat = new THREE.MeshStandardMaterial({ color: 0x222222, flatShading: true });
   const grille = new THREE.Mesh(grilleGeo, grilleMat);

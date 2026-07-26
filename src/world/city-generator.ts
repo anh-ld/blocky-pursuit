@@ -227,18 +227,17 @@ export class CityGenerator {
 
         const offsetX = (r2 - 0.5) * 5;
         const offsetZ = (r5 - 0.5) * 5;
-        const finalX = worldX + offsetX;
-        const finalZ = worldZ + offsetZ;
 
         switch (zone) {
           case Zone.DOWNTOWN:
-            placeDowntown(chunk, this.materials, this.geometries, r1, r2, r3, r4, finalX, finalZ);
+            placeDowntown(chunk, this.materials, this.geometries, r1, r2, r3, r4, worldX, worldZ, offsetX, offsetZ);
             break;
           case Zone.SUBURBS:
-            placeSuburbs(chunk, this.materials, this.geometries, r1, r2, r3, r4, finalX, finalZ);
+            placeSuburbs(chunk, this.materials, this.geometries, r1, r2, r3, r4, worldX, worldZ, offsetX, offsetZ);
             break;
           case Zone.NATURE:
-            placeNature(chunk, this.materials, this.geometries, r1, r2, r3, finalX, finalZ);
+            /* Nature footprints clear the tile edge at max jitter — no clamp needed. */
+            placeNature(chunk, this.materials, this.geometries, r1, r2, r3, worldX + offsetX, worldZ + offsetZ);
             break;
         }
       }

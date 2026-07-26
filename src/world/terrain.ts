@@ -8,6 +8,12 @@ export const enum Zone {
   NATURE,
 }
 
+/* Clamp jitter so a footprint stays in its tile — overhang drops a collider on the neighbouring road. */
+export function fitToTile(center: number, offset: number, halfExtent: number): number {
+  const room = Math.max(0, TILE_SIZE / 2 - halfExtent);
+  return center + Math.max(-room, Math.min(room, offset));
+}
+
 export function pseudoRandom(x: number, z: number, index: number = 0): number {
   let t = x * 1337 + z * 31337 + index * 101;
   t = Math.imul(t ^ (t >>> 15), t | 1);

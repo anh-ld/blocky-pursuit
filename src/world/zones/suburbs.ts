@@ -3,6 +3,7 @@ import * as CANNON from "cannon-es";
 import type { IMaterials, IGeometries } from "../materials";
 import type { IChunkData } from "../city-generator";
 import { getBuildingGeometry } from "../building-geo";
+import { fitToTile } from "../terrain";
 import { addTree, addFlowers, addWindows } from "../decorators";
 
 /* Roof cache, bucketed (w, d, roofH) to 0.5u → at most 162 entries. */
@@ -34,14 +35,19 @@ export function placeSuburbs(
   r2: number,
   r3: number,
   r4: number,
-  x: number,
-  z: number,
+  cx: number,
+  cz: number,
+  ox: number,
+  oz: number,
 ) {
   /* 15% house */
   if (r1 > 0.85) {
     const height = 2 + r2 * 3;
     const width = 3 + r3 * 4;
     const depth = 3 + r4 * 4;
+    /* Only the house body clamps — roof and driveway are collider-free, spilling onto the kerb is fine. */
+    const x = fitToTile(cx, ox, width / 2);
+    const z = fitToTile(cz, oz, depth / 2);
 
     const colorIndex = Math.floor(r3 * materials.suburbColors.length);
     const mat = materials.suburbColors[colorIndex];
@@ -79,8 +85,8 @@ export function placeSuburbs(
     dw.position.set(x, 0.02, z - depth / 2 - 1.5);
     chunk.group.add(dw);
   } /* 22% tree */ else if (r1 > 0.63) {
-    addTree(chunk, materials, geometries, x, z, r2, r3, false);
+    addTree(chunk, materials, geometries, cx + ox, cz + oz, r2, r3, false);
   } /* 8% flowers */ else if (r1 > 0.55) {
-    addFlowers(chunk, materials, geometries, x, z, r2, r3);
+    addFlowers(chunk, materials, geometries, cx + ox, cz + oz, r2, r3);
   }
 }
